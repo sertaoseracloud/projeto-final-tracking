@@ -35,7 +35,19 @@ def main() -> None:
     flags = funil.flags_por_sessao(eventos, funil.ETAPAS_PREMIUM).join(atributos, "session_id")
     errado = funil.contar_etapas(flags.withColumn("canal", F.lit("(todos)")), ["canal", "plano"], funil.ETAPAS_PREMIUM)
     errado.filter(F.col("etapa").isin("begin_checkout", "add_shipping_info", "add_payment_info", "purchase")) \
-        .orderBy("plano", "ordem").select("plano", "etapa", "sessoes", "conv_etapa_anterior").show(40, truncate=False)
+        .orderBy("plano", "ordem").select("plano", "etapa", "sessoes", "conv_topo").show(40, truncate=False)
+
+    print("Funil sequencial por plano, entre as sessões com begin_checkout:")
+    seq = (funil.flags_por_sessao(eventos, ["begin_checkout", "add_shipping_info", "purchase"])
+           .join(atributos.select("session_id", "plano"), "session_id")
+           .filter((F.col("begin_checkout") == 1) & F.col("plano").isin("PLANO-BASICO", "PLANO-PRO", "PLANO-PREMIUM")))
+    seq.groupBy("plano").agg(
+        F.count("*").alias("checkout"),
+        F.sum("purchase").alias("compras"),
+        F.round(F.sum("purchase") / F.count("*"), 4).alias("conv_correta"),
+        F.round(F.sum(F.col("add_shipping_info") * F.col("purchase")) / F.count("*"), 4)
+        .alias("conv_com_frete_obrigatorio"),
+    ).orderBy("plano").show(truncate=False)
 
     titulo("2. Reembolso descontado na data do próprio refund")
     compras = receita.compras(eventos, itens, atributos)
@@ -66,6 +78,11 @@ def main() -> None:
     print(f"purchase na Bronze (com reenvios): {compras_bronze.count()}   "
           f"event_id distintos: {compras_bronze.select('event_id').distinct().count()}")
     print(f"linhas na Bronze: {bronze.count()}   event_id distintos: {bronze.select('event_id').distinct().count()}")
+    bruta = compras_bronze.agg(F.sum(F.col("params")["value"].cast("double"))).first()[0]
+    dedup = (compras_bronze.dropDuplicates(["event_id"])
+             .agg(F.sum(F.col("params")["value"].cast("double"))).first()[0])
+    print(f"receita bruta de purchase na Bronze, com reenvios: {round(bruta, 2)}   "
+          f"deduplicada por event_id: {round(dedup, 2)}   diferença: {round(bruta - dedup, 2)}")
 
     titulo("5. Sessões contadas pelo session_hint do navegador")
     print(f"session_hint distintos: {eventos.select('session_hint').distinct().count()}   "
