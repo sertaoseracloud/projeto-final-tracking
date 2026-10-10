@@ -1,7 +1,11 @@
-.venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+.venv/
+saida/
 dados/
+camadas/
 spark-warehouse/
 *.jsonl
+*.zip
 .env
