@@ -43,7 +43,7 @@ def test_bucket_vazio_orienta_a_rodar_o_gerador(monkeypatch):
 
 @pytest.fixture
 def bucket_local(tmp_path, monkeypatch):
-    pasta = tmp_path / "silver" / "eventos" / "year=2026" / "month=09" / "day=01"
+    pasta = tmp_path / "silver" / "event_name=page_view" / "year=2026" / "month=09" / "day=01"
     pasta.mkdir(parents=True)
     duckdb.sql(f"COPY (SELECT 'e' || i AS event_id FROM range(4) t(i)) TO '{pasta}/part-0.parquet' (FORMAT parquet)")
     objetos = [Objeto(p.relative_to(tmp_path).as_posix(), p.stat().st_size)
@@ -58,7 +58,7 @@ def test_app_monta_as_tres_abas_e_executa_sql(bucket_local):
     at = _rodar()
     assert not at.exception
     assert [t.label for t in at.tabs] == ["Arquivos", "Partições", "Consultas SQL"]
-    at.text_area(key="sql").input("SELECT count(*) AS n FROM silver_eventos").run()
+    at.text_area(key="sql").input("SELECT count(*) AS n FROM silver").run()
     at.button(key="executar").click().run()
     assert not at.exception
     assert at.dataframe[-1].value["n"].tolist() == [4]
@@ -66,7 +66,7 @@ def test_app_monta_as_tres_abas_e_executa_sql(bucket_local):
 
 def test_app_recusa_sql_de_escrita(bucket_local):
     at = _rodar()
-    at.text_area(key="sql").input("DROP VIEW silver_eventos").run()
+    at.text_area(key="sql").input("DROP VIEW silver").run()
     at.button(key="executar").click().run()
     assert any("só faz consultas de leitura" in w.value for w in at.warning)
 
@@ -91,7 +91,7 @@ def test_erro_inesperado_vira_mensagem_sem_stack_trace(monkeypatch):
 
 def test_resultado_continua_na_tela_apos_outra_interacao(bucket_local):
     at = _rodar()
-    at.text_area(key="sql").input("SELECT count(*) AS n FROM silver_eventos").run()
+    at.text_area(key="sql").input("SELECT count(*) AS n FROM silver").run()
     at.button(key="executar").click().run()
     assert at.dataframe[-1].value["n"].tolist() == [4]
     at.number_input(key="limite").set_value(7).run()
@@ -101,9 +101,9 @@ def test_resultado_continua_na_tela_apos_outra_interacao(bucket_local):
 
 def test_resultado_mostra_a_sql_que_o_gerou(bucket_local):
     at = _rodar()
-    at.text_area(key="sql").input("SELECT count(*) AS n FROM silver_eventos").run()
+    at.text_area(key="sql").input("SELECT count(*) AS n FROM silver").run()
     at.button(key="executar").click().run()
-    assert at.code[-1].value == "SELECT count(*) AS n FROM silver_eventos"
+    assert at.code[-1].value == "SELECT count(*) AS n FROM silver"
 
 
 def test_erro_de_sql_vem_explicado_em_portugues(bucket_local):
@@ -117,20 +117,20 @@ def test_erro_de_sql_vem_explicado_em_portugues(bucket_local):
 
 def test_navega_ate_o_arquivo_e_mostra_a_previa(bucket_local):
     at = _rodar()
-    for pasta in ("silver", "eventos", "year=2026", "month=09", "day=01"):
+    for pasta in ("silver", "event_name=page_view", "year=2026", "month=09", "day=01"):
         atual = at.session_state["pasta"] if "pasta" in at.session_state else ""
         at.button(key=f"pasta:{atual}{pasta}").click().run()
-    assert at.session_state["pasta"] == "silver/eventos/year=2026/month=09/day=01/"
+    assert at.session_state["pasta"] == "silver/event_name=page_view/year=2026/month=09/day=01/"
     at.selectbox(key="previa").select("part-0.parquet").run()
     assert not at.exception
     assert at.dataframe[1].value["event_id"].tolist() == ["e0", "e1", "e2", "e3"]
     at.button(key="voltar").click().run()
-    assert at.session_state["pasta"] == "silver/eventos/year=2026/month=09/"
+    assert at.session_state["pasta"] == "silver/event_name=page_view/year=2026/month=09/"
 
 
 def test_aba_particoes_lista_os_dias_e_conta_linhas(bucket_local):
     at = _rodar()
-    assert at.selectbox(key="dataset").value == "silver_eventos"
+    assert at.selectbox(key="dataset").value == "silver"
     at.button(key="contar").click().run()
     assert not at.exception
     contagens = [d.value for d in at.dataframe if "linhas" in d.value.columns]

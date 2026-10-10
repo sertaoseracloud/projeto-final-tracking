@@ -2,8 +2,11 @@ import json
 
 
 def _gravar_landing(tmp_path):
-    pasta = tmp_path / "landing" / "eventos" / "year=2026" / "month=09" / "day=01"
-    pasta.mkdir(parents=True)
+    def pasta(nome):
+        destino = tmp_path / "landing" / f"event_name={nome}" / "year=2026" / "month=09" / "day=01"
+        destino.mkdir(parents=True)
+        return destino
+
     compra = {
         "event_id": "e1", "event_name": "purchase", "event_ts": "2026-09-01T14:22:05.123Z",
         "user_pseudo_id": "anon-1", "user_id": None, "session_hint": "s-1",
@@ -16,9 +19,10 @@ def _gravar_landing(tmp_path):
     }
     rolagem = dict(compra, event_id="e2", event_name="scroll",
                    params={"percent_scrolled": 50, "outbound": True}, items=[])
-    texto = json.dumps(compra, ensure_ascii=False) + "\n" + json.dumps(rolagem) + "\n"
-    (pasta / "coletor-s42-001.jsonl").write_text(texto, encoding="utf-8")
-    return tmp_path / "landing" / "eventos"
+    (pasta("purchase") / "coletor-s42-001.jsonl").write_text(json.dumps(compra, ensure_ascii=False) + "\n",
+                                                             encoding="utf-8")
+    (pasta("scroll") / "coletor-s42-001.jsonl").write_text(json.dumps(rolagem) + "\n", encoding="utf-8")
+    return tmp_path / "landing"
 
 
 def test_le_a_landing_com_schema_fixo_e_params_como_texto(spark, job, tmp_path):
@@ -43,3 +47,9 @@ def test_proveniencia_traz_arquivo_instante_e_data_do_caminho(spark, job, tmp_pa
     tipos = dict(df.dtypes)
     assert (tipos["year"], tipos["month"], tipos["day"]) == ("string", "string", "string")
     assert "dt" not in df.columns
+
+
+def test_event_name_vem_da_pasta_da_particao(spark, job, tmp_path):
+    bronze = job("01_bronze_ingestao")
+    df = bronze.ler_landing(spark, _gravar_landing(tmp_path).as_uri())
+    assert sorted(r.event_name for r in df.collect()) == ["purchase", "scroll"]

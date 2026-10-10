@@ -26,23 +26,59 @@ A configuração da `SparkSession` que funciona com o floci está pronta em [`in
 Para saber se uma camada existe antes de ler, use o `FileSystem` do Hadoop pela JVM do Spark:
 
 ```python
-caminho = spark._jvm.org.apache.hadoop.fs.Path("s3a://datalake-tracking/silver/eventos")
-existe = caminho.getFileSystem(spark._jsc.hadoopConfiguration()).exists(caminho)
+caminho = spark._jvm.org.apache.hadoop.fs.Path("s3a://datalake-tracking/silver/event_name=*")
+existe = bool(caminho.getFileSystem(spark._jsc.hadoopConfiguration()).globStatus(caminho))
 ```
 
-Por que isso importa: o requisito R2 pede que cada job confira se a camada anterior existe. O trecho acima devolve `True` ou `False`; se for `False`, o job deve parar com uma mensagem dizendo qual job rodar antes.
+Por que isso importa: o requisito R2 pede que cada job confira se a camada anterior existe. O trecho acima devolve `True` ou `False`; se for `False`, o job deve parar com uma mensagem dizendo qual job rodar antes. O `*` é um **glob**, um "curinga": `event_name=*` casa com qualquer pasta que comece com `event_name=`. Por isso o trecho usa `globStatus` (que entende curingas) em vez de `exists`.
 
-## Partições por dia
+## Partições por nome do evento e por dia
 
-Uma **partição** é uma subpasta que agrupa os dados por um valor. Aqui o valor é o dia: todos os eventos de 3 de setembro de 2026 ficam em `year=2026/month=09/day=03/`. Assim, quem quer ler só um dia não precisa abrir os outros.
+Uma **partição** é uma subpasta que agrupa os dados por um valor. Aqui há dois níveis: primeiro o nome do evento, depois o dia. Todas as rolagens de 3 de setembro de 2026 ficam em `event_name=scroll/year=2026/month=09/day=03/`. Assim, quem quer ler só as compras, ou só um dia, não precisa abrir o resto.
 
-A landing, a Bronze e a Silver usam pastas `year=AAAA/month=MM/day=DD`. Ao ler uma pasta assim, o Spark descobre `year`, `month` e `day` como colunas e, por padrão, converte os valores em número: `month=09` vira `9`, e ao regravar a pasta sai `month=9`. Para manter os dois dígitos, desligue essa inferência na `SparkSession`:
+A landing, a Bronze e a Silver guardam os eventos assim, **direto na raiz da camada** (não existe pasta `eventos`):
+
+```text
+landing/event_name=scroll/year=2026/month=09/day=03/coletor-s42-001.jsonl
+bronze/event_name=scroll/year=2026/month=09/day=03/part-….parquet
+silver/event_name=scroll/year=2026/month=09/day=03/part-….parquet
+silver/itens/year=2026/month=09/day=03/part-….parquet      ← vizinha das pastas event_name=
+silver/eventos_rejeitados/part-….parquet                   ← vizinha também
+```
+
+### Os dois dígitos do mês
+
+Ao ler pastas `k=v`, o Spark descobre `event_name`, `year`, `month` e `day` como colunas e, por padrão, converte os valores que parecem número: `month=09` vira `9`, e ao regravar sai `month=9`. Para manter tudo como texto, desligue essa inferência na `SparkSession`:
 
 ```python
 .config("spark.sql.sources.partitionColumnTypeInference.enabled", "false")
 ```
 
-Na gravação, use `.partitionBy("year", "month", "day")` com as três colunas como texto. O `partitionBy` diz ao Spark para criar uma subpasta por combinação de valores dessas colunas.
+### Ler só os eventos
+
+Se você ler a raiz `s3a://datalake-tracking/silver/` direto, o Spark encontra `event_name=…` ao lado de `itens/` e `eventos_rejeitados/` e para com o erro *Conflicting directory structures*. Leia só as pastas `event_name=` com um glob e diga ao Spark onde fica a raiz das partições (`basePath`), para ele devolver `event_name` como coluna:
+
+```python
+raiz = "s3a://datalake-tracking/silver"
+eventos = spark.read.option("basePath", raiz).parquet(f"{raiz}/event_name=*")
+```
+
+A landing é igual, com `.json(...)` no lugar de `.parquet(...)`. O `event_name` que vem do caminho é o mesmo que está dentro de cada evento.
+
+### Gravar sem apagar as vizinhas
+
+Na gravação, use `.partitionBy("event_name", "year", "month", "day")` com as quatro colunas como texto. O `partitionBy` cria uma subpasta por combinação de valores dessas colunas.
+
+Cuidado com o `mode("overwrite")` na Silver: por padrão ele **apaga a pasta inteira** antes de gravar, e `silver/` inteira inclui `itens/` e `eventos_rejeitados/`. Use o modo **dinâmico**, que troca só as partições que estão no DataFrame:
+
+```python
+(silver.write.mode("overwrite")
+    .option("partitionOverwriteMode", "dynamic")
+    .partitionBy("event_name", "year", "month", "day")
+    .parquet("s3a://datalake-tracking/silver"))
+```
+
+Na Bronze, que é append-only (R4), use `mode("append")` com o mesmo `partitionBy`.
 
 ## Antes de começar
 

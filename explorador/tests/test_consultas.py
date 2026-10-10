@@ -6,21 +6,26 @@ from explorador import consultas, particoes
 
 @pytest.fixture
 def lago(tmp_path):
-    """Monta um mini-bucket local: Silver particionada, landing JSONL e uma Gold."""
+    """Monta um mini-bucket local: Silver particionada por event_name com itens/ ao lado,
+    landing JSONL e uma Gold."""
     con = duckdb.connect()
     for dia in ("01", "02"):
-        pasta = tmp_path / "silver" / "eventos" / "year=2026" / "month=09" / f"day={dia}"
+        pasta = tmp_path / "silver" / "event_name=page_view" / "year=2026" / "month=09" / f"day={dia}"
         pasta.mkdir(parents=True)
-        con.sql(f"COPY (SELECT 'e{dia}-' || i AS event_id, 'page_view' AS event_name FROM range(3) t(i)) "
+        con.sql(f"COPY (SELECT 'e{dia}-' || i AS event_id FROM range(3) t(i)) "
                 f"TO '{pasta}/part-0.parquet' (FORMAT parquet)")
+    itens = tmp_path / "silver" / "itens" / "year=2026" / "month=09" / "day=01"
+    itens.mkdir(parents=True)
+    con.sql(f"COPY (SELECT 'PLANO-PRO' AS item_id) TO '{itens}/part-0.parquet' (FORMAT parquet)")
     gold = tmp_path / "gold" / "funil_compra"
     gold.mkdir(parents=True)
     con.sql(f"COPY (SELECT 'purchase' AS etapa, 7 AS sessoes) TO '{gold}/part-0.parquet' (FORMAT parquet)")
     (gold / "_SUCCESS").write_text("")
-    landing = tmp_path / "landing" / "eventos" / "year=2026" / "month=09" / "day=01"
-    landing.mkdir(parents=True)
-    (landing / "coletor-s42-001.jsonl").write_text(
-        '{"event_id":"a","event_name":"scroll"}\n{"event_id":"b","event_name":"click"}\n', encoding="utf-8")
+    for nome, evento in (("scroll", "a"), ("click", "b")):
+        landing = tmp_path / "landing" / f"event_name={nome}" / "year=2026" / "month=09" / "day=01"
+        landing.mkdir(parents=True)
+        (landing / "coletor-s42-001.jsonl").write_text(
+            f'{{"event_id":"{evento}","event_name":"{nome}"}}\n', encoding="utf-8")
     chaves = [p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*") if p.is_file()]
     conexao = consultas.conectar(s3=False)
     views = consultas.criar_views(conexao, str(tmp_path), particoes.datasets(chaves))
@@ -30,23 +35,23 @@ def lago(tmp_path):
 
 def test_cria_uma_view_por_dataset(lago):
     _, views, _ = lago
-    assert set(views) == {"gold_funil_compra", "landing_eventos", "silver_eventos"}
+    assert set(views) == {"gold_funil_compra", "landing", "silver", "silver_itens"}
 
 
 def test_particoes_viram_colunas_de_texto(lago):
     con, _, _ = lago
-    r = consultas.executar(con, "SELECT DISTINCT month, day, typeof(month) AS tipo FROM silver_eventos ORDER BY day")
+    r = consultas.executar(con, "SELECT DISTINCT event_name, month, day, typeof(month) AS tipo "
+                                "FROM silver ORDER BY day")
     assert r.tabela.to_dict("records") == [
-        {"month": "09", "day": "01", "tipo": "VARCHAR"},
-        {"month": "09", "day": "02", "tipo": "VARCHAR"},
+        {"event_name": "page_view", "month": "09", "day": "01", "tipo": "VARCHAR"},
+        {"event_name": "page_view", "month": "09", "day": "02", "tipo": "VARCHAR"},
     ]
 
 
 def test_contagens_das_views(lago):
     con, _, _ = lago
     contar = lambda v: consultas.executar(con, f"SELECT count(*) AS n FROM {v}").tabela["n"][0]
-    assert (contar("silver_eventos"), contar("landing_eventos"), contar("gold_funil_compra")) == (6, 2, 1)
-
+    assert (contar("silver"), contar("silver_itens"), contar("landing"), contar("gold_funil_compra")) == (6, 1, 2, 1)
 
 def test_executar_corta_no_limite_e_avisa(lago):
     con, _, _ = lago
@@ -66,7 +71,7 @@ def test_executar_recusa_sql_proibido_sem_executar(lago):
     con, _, tmp_path = lago
     destino = tmp_path / "copia.csv"
     with pytest.raises(consultas.SqlNaoPermitido):
-        consultas.executar(con, f"COPY silver_eventos TO '{destino}'")
+        consultas.executar(con, f"COPY silver TO '{destino}'")
     assert not destino.exists()
 
 
@@ -81,8 +86,8 @@ def test_executar_recusa_explain_analyze_com_copy_escondido(lago):
 
 def test_previa_le_um_arquivo(lago):
     con, _, tmp_path = lago
-    chave = "landing/eventos/year=2026/month=09/day=01/coletor-s42-001.jsonl"
-    assert consultas.previa(con, str(tmp_path), chave)["event_id"].tolist() == ["a", "b"]
+    chave = "landing/event_name=scroll/year=2026/month=09/day=01/coletor-s42-001.jsonl"
+    assert consultas.previa(con, str(tmp_path), chave)["event_id"].tolist() == ["a"]
     assert len(consultas.previa(con, str(tmp_path), "gold/funil_compra/part-0.parquet")) == 1
     with pytest.raises(ValueError, match="Prévia"):
         consultas.previa(con, str(tmp_path), "gold/funil_compra/_SUCCESS")
@@ -98,7 +103,7 @@ def test_conexao_travada_nao_le_fora_da_raiz(lago):
 
 @pytest.mark.parametrize("sql, trecho", [
     ("SELECT * FROM nao_existe", "tabela ou view não existe"),
-    ("SELECT coluna_inventada FROM silver_eventos", "coluna ou função não foi encontrada"),
+    ("SELECT coluna_inventada FROM silver", "coluna ou função não foi encontrada"),
     ("SELECT CAST('abc' AS INTEGER)", "não pôde ser convertido"),
 ])
 def test_explicar_erro_traduz_erros_comuns(lago, sql, trecho):

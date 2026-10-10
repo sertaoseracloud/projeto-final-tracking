@@ -22,7 +22,7 @@ from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType
 
-from comum import caminho, criar_sessao, exigir_camada, titulo
+from comum import caminho, criar_sessao, exigir_camada, glob_eventos, ler_eventos, titulo
 from sessoes import atributos_sessao
 
 SEED = 42
@@ -114,6 +114,9 @@ def perfil_visitantes(eventos: DataFrame) -> DataFrame:
 
 
 def segmentar(perfis: DataFrame, ks=(3, 4, 5)) -> DataFrame:
+    # O KMeans (mesmo com seed) depende da ordem das linhas; a ordem que chega da Silver muda
+    # com o layout das pastas. Ordenar numa partição só deixa o resultado reprodutível.
+    perfis = perfis.orderBy("visitante").coalesce(1)
     vetor = VectorAssembler(inputCols=PERFIL, outputCol="bruto").transform(perfis)
     escalado = StandardScaler(inputCol="bruto", outputCol="features").fit(vetor).transform(vetor).cache()
     avaliador = ClusteringEvaluator(featuresCol="features", predictionCol="segmento")
@@ -134,8 +137,8 @@ def segmentar(perfis: DataFrame, ks=(3, 4, 5)) -> DataFrame:
 
 def main() -> None:
     spark = criar_sessao("gold-ml")
-    exigir_camada(spark, "silver/eventos", "python professor/solucao/02_silver_eventos.py")
-    eventos = spark.read.parquet(caminho("silver/eventos")).cache()
+    exigir_camada(spark, glob_eventos("silver"), "python professor/solucao/02_silver_eventos.py")
+    eventos = ler_eventos(spark, "silver").cache()
     atributos = atributos_sessao(eventos, spark.read.parquet(caminho("silver/itens")))
 
     pontuado, metricas = treinar_propensao(features_sessao(eventos, atributos))

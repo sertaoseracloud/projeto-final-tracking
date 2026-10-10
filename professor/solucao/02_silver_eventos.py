@@ -8,7 +8,7 @@ from __future__ import annotations
 from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
 
-from comum import caminho, criar_sessao, exigir_camada, titulo
+from comum import caminho, criar_sessao, exigir_camada, glob_eventos, gravar_eventos, ler_eventos, titulo
 
 EVENTOS = (
     "page_view", "scroll", "click", "site_search",
@@ -127,16 +127,15 @@ def explodir_itens(df: DataFrame) -> DataFrame:
 
 def main() -> None:
     spark = criar_sessao("silver")
-    exigir_camada(spark, "bronze/eventos", "python professor/solucao/01_bronze_ingestao.py")
-    bronze = spark.read.parquet(caminho("bronze/eventos"))
+    exigir_camada(spark, glob_eventos("bronze"), "python professor/solucao/01_bronze_ingestao.py")
+    bronze = ler_eventos(spark, "bronze")
     total = bronze.count()
 
     unicos = deduplicar(bronze).cache()
     aprovados, rejeitados = validar(tipar(unicos))
     silver = resolver_identidade(sessionizar(aprovados)).cache()
 
-    silver.drop("page", "traffic", "device", "params", "items") \
-        .write.mode("overwrite").partitionBy(*DATA).parquet(caminho("silver/eventos"))
+    gravar_eventos(silver.drop("page", "traffic", "device", "params", "items"), "silver", "overwrite")
     explodir_itens(silver).write.mode("overwrite").partitionBy(*DATA).parquet(caminho("silver/itens"))
     rejeitados.select("event_id", "event_name", "event_ts", "user_pseudo_id", "params", "motivo_rejeicao",
                       "_arquivo_origem", "_ingerido_em", *DATA) \

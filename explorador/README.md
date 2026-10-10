@@ -15,29 +15,33 @@ Abra **http://localhost:8501** no navegador. Para desligar: `docker compose stop
 ## As três abas
 
 - **Arquivos** — navegue pelas pastas do bucket (`landing/`, `bronze/`, `silver/`, `gold/`) e veja nome, tamanho e data de cada arquivo. Escolha um `.parquet` ou `.jsonl` para ver as primeiras 100 linhas.
-- **Partições** — escolha um dataset e veja uma linha por dia (`year`, `month`, `day`) com quantos arquivos e quantos bytes ele tem. O botão "Contar linhas por partição" conta as linhas de cada dia.
+- **Partições** — escolha um dataset e veja uma linha por partição (`event_name`, `year`, `month`, `day`) com quantos arquivos e quantos bytes ela tem. Quando o dataset não tem uma dessas partições, a coluna mostra `—`. O botão "Contar linhas por partição" conta as linhas de cada uma.
 - **Consultas SQL** — escreva SQL e veja o resultado numa tabela. O campo **Limite de linhas** diz quantas linhas trazer: o padrão é 1 000 e o máximo é 50 000. Se a consulta tiver mais linhas que o limite, o resultado é cortado e aparece um aviso. O último resultado continua na tela, junto com a SQL que o gerou, e você pode baixá-lo em CSV. Se a consulta tiver um erro, o site explica em português o que costuma causá-lo (nome de view ou coluna errado, erro de escrita…) e mostra embaixo a mensagem original do DuckDB, que vem em inglês.
 
 ## Views: os nomes que você usa no SQL
 
-Cada pasta com dados vira uma **view**, uma tabela virtual que lê os arquivos na hora. O nome é o caminho da pasta com `_` no lugar de `/`:
+Cada pasta com dados vira uma **view**, uma tabela virtual que lê os arquivos na hora. O nome é o caminho da pasta, antes das partições `k=v`, com `_` no lugar de `/`:
 
 | Pasta no bucket | View |
 | --- | --- |
-| `landing/eventos/` | `landing_eventos` |
-| `silver/eventos/` | `silver_eventos` |
+| `landing/event_name=…/` | `landing` |
+| `bronze/event_name=…/` | `bronze` |
+| `silver/event_name=…/` | `silver` |
+| `silver/itens/` | `silver_itens` |
 | `gold/funil_compra/` | `gold_funil_compra` |
 
-Se uma pasta tiver arquivos `.parquet` e `.jsonl` misturados, ela vira duas views, com o formato no fim do nome (ex.: `landing_eventos_jsonl` e `landing_eventos_parquet`).
+A view `silver` lê só as pastas `event_name=…`: as vizinhas `silver/itens/` e `silver/eventos_rejeitados/` têm views próprias.
 
-As views das pastas particionadas têm as colunas `year`, `month` e `day`, como texto (`month` é `'09'`). A lista completa de views e colunas aparece em "Views disponíveis", na aba de SQL.
+Se uma pasta tiver arquivos `.parquet` e `.jsonl` misturados, ela vira duas views, com o formato no fim do nome (ex.: `landing_jsonl` e `landing_parquet`).
+
+As views das pastas particionadas têm as colunas de partição (`event_name`, `year`, `month`, `day`), como texto (`month` é `'09'`). A lista completa de views e colunas aparece em "Views disponíveis", na aba de SQL.
 
 Exemplos:
 
 ```sql
-SELECT event_name, count(*) AS eventos FROM landing_eventos GROUP BY event_name ORDER BY eventos DESC;
-SELECT year, month, day, count(*) AS linhas FROM silver_eventos GROUP BY ALL ORDER BY ALL;
-DESCRIBE silver_eventos;
+SELECT event_name, count(*) AS eventos FROM landing GROUP BY event_name ORDER BY eventos DESC;
+SELECT year, month, day, count(*) AS linhas FROM silver WHERE event_name = 'purchase' GROUP BY ALL ORDER BY ALL;
+DESCRIBE silver;
 ```
 
 ## Somente leitura

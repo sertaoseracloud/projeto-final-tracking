@@ -11,7 +11,7 @@ import importlib
 
 from pyspark.sql import functions as F
 
-from comum import caminho, criar_sessao, exigir_camada, titulo
+from comum import caminho, criar_sessao, exigir_camada, glob_eventos, ler_eventos, titulo
 from sessoes import atributos_sessao
 
 funil = importlib.import_module("03_gold_funil")
@@ -25,9 +25,9 @@ def metricas_em_texto(m: dict) -> str:
 
 def main() -> None:
     spark = criar_sessao("armadilhas")
-    exigir_camada(spark, "silver/eventos", "python professor/solucao/executar_pipeline.py")
-    bronze = spark.read.parquet(caminho("bronze/eventos"))
-    eventos = spark.read.parquet(caminho("silver/eventos")).cache()
+    exigir_camada(spark, glob_eventos("silver"), "python professor/solucao/executar_pipeline.py")
+    bronze = ler_eventos(spark, "bronze")
+    eventos = ler_eventos(spark, "silver").cache()
     itens = spark.read.parquet(caminho("silver/itens"))
     atributos = atributos_sessao(eventos, itens).cache()
 

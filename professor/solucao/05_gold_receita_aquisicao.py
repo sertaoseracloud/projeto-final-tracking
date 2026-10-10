@@ -11,7 +11,7 @@ from __future__ import annotations
 from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
 
-from comum import caminho, criar_sessao, exigir_camada, titulo
+from comum import caminho, criar_sessao, exigir_camada, glob_eventos, ler_eventos, titulo
 from sessoes import atributos_sessao
 
 BUMP = "BUMP-MENTORIA"
@@ -89,8 +89,8 @@ def lead_para_compra(eventos: DataFrame, compras: DataFrame, atributos: DataFram
 
 def main() -> None:
     spark = criar_sessao("gold-receita")
-    exigir_camada(spark, "silver/eventos", "python professor/solucao/02_silver_eventos.py")
-    eventos = spark.read.parquet(caminho("silver/eventos")).cache()
+    exigir_camada(spark, glob_eventos("silver"), "python professor/solucao/02_silver_eventos.py")
+    eventos = ler_eventos(spark, "silver").cache()
     itens = spark.read.parquet(caminho("silver/itens"))
     atributos = atributos_sessao(eventos, itens).cache()
     pedidos = compras(eventos, itens, atributos).cache()

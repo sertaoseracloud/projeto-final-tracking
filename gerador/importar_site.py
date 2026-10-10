@@ -16,10 +16,15 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from gerador.destinos import DestinoLocal, DestinoS3
-from gerador.lotes import PREFIXO, particao
+from gerador.lotes import pasta
 
 
 def validar(texto: str) -> list[dict]:
+    return [evento for _, evento in _linhas_validas(texto)]
+
+
+def _linhas_validas(texto: str) -> list[tuple[str, dict]]:
+    """Devolve (linha original, evento) de cada linha não vazia, ou ValueError com o número da linha."""
     eventos = []
     for n, linha in enumerate(texto.split("\n"), start=1):
         linha = linha.removesuffix("\r")
@@ -32,14 +37,21 @@ def validar(texto: str) -> list[dict]:
         if not isinstance(evento, dict) or not isinstance(evento.get("event_id"), str) \
                 or not isinstance(evento.get("event_ts"), str):
             raise ValueError(f"linha {n}: falta event_id ou event_ts")
-        eventos.append(evento)
+        eventos.append((linha, evento))
     if not eventos:
         raise ValueError("arquivo sem eventos")
     return eventos
 
 
-def chave(eventos: list[dict], agora: datetime) -> str:
-    return f"{PREFIXO}/{particao(eventos[0]['event_ts'])}/site-{agora:%Y%m%dT%H%M%S%f}.jsonl"
+def arquivos(texto: str, agora: datetime) -> dict[str, str]:
+    """{chave na landing: conteúdo}: um arquivo por event_name, todos na data do primeiro evento."""
+    linhas = _linhas_validas(texto)
+    data = linhas[0][1]["event_ts"]
+    por_pasta: dict[str, list[str]] = {}
+    for linha, evento in linhas:
+        por_pasta.setdefault(pasta(evento.get("event_name"), data), []).append(linha)
+    nome = f"site-{agora:%Y%m%dT%H%M%S%f}.jsonl"
+    return {f"{p}/{nome}": "\n".join(ls) + "\n" for p, ls in sorted(por_pasta.items())}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -50,15 +62,15 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         texto = a.arquivo.read_text(encoding="utf-8-sig")
-        eventos = validar(texto)
+        gerados = arquivos(texto, datetime.now(timezone.utc))
     except (OSError, UnicodeDecodeError, ValueError) as erro:
         print(f"erro: {erro}", file=sys.stderr)
         return 1
 
     destino = DestinoLocal(a.saida_local) if a.saida_local else DestinoS3()
-    k = chave(eventos, datetime.now(timezone.utc))
-    destino.gravar(k, texto if texto.endswith("\n") else texto + "\n")
-    print(f"{len(eventos)} eventos enviados para {destino.descricao()} em {k}")
+    for k, conteudo in gerados.items():
+        destino.gravar(k, conteudo)
+        print(f"{len(conteudo.splitlines()):>5} eventos enviados para {destino.descricao()} em {k}")
     return 0
 
 

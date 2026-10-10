@@ -15,14 +15,16 @@ Em outras palavras: o **coletor** junta os eventos e grava em arquivos, chamados
 **Layout** é a forma como os arquivos estão organizados em pastas. A **landing** é o prefixo `landing/` do bucket, onde os eventos brutos chegam. Os arquivos ficam neste caminho:
 
 ```text
-s3://datalake-tracking/landing/eventos/year=AAAA/month=MM/day=DD/<origem>-...jsonl
+s3://datalake-tracking/landing/event_name=<nome do evento>/year=AAAA/month=MM/day=DD/<origem>-...jsonl
 ```
 
-- Cada dia (partição `year=…/month=…/day=…`) tem de 3 a 6 lotes, como um coletor que descarrega em intervalos. O dia seguinte ao último pode ter 1 ou 2 lotes (sessões que atravessam a meia-noite).
+- Os arquivos são separados primeiro pelo **nome do evento** e depois pelo **dia de coleta**. Exemplo: as rolagens de 3 de setembro de 2026 ficam em `landing/event_name=scroll/year=2026/month=09/day=03/`.
+- Cada dia tem de 3 a 6 lotes, como um coletor que descarrega em intervalos. Cada lote vira um arquivo em cada pasta `event_name=` que tem eventos dele, com o mesmo nome de arquivo (ex.: `coletor-s42-001.jsonl`). O dia seguinte ao último pode ter 1 ou 2 lotes (sessões que atravessam a meia-noite).
+- Um evento sem `event_name` vai para a pasta `event_name=__HIVE_DEFAULT_PARTITION__`, que é o nome que o Spark usa para "valor vazio".
 - `<origem>` é `coletor` (eventos do gerador) ou `site` (eventos que você exportou da página de exemplo e subiu com `gerador/importar_site.py`).
 - Cada arquivo é JSON Lines: um evento por linha.
 
-Uma **partição** é uma subpasta que agrupa arquivos por um valor, aqui o dia de coleta. Exemplo: `landing/eventos/year=2026/month=09/day=03/` guarda os lotes gravados em 3 de setembro de 2026. **JSON Lines** (extensão `.jsonl`) é um arquivo de texto em que cada linha é um objeto JSON completo e independente.
+Uma **partição** é uma subpasta que agrupa arquivos por um valor. Aqui há duas: o nome do evento (`event_name=…`) e o dia de coleta (`year=…/month=…/day=…`). Quem quer só as compras lê só `event_name=purchase/`, sem abrir o resto. **JSON Lines** (extensão `.jsonl`) é um arquivo de texto em que cada linha é um objeto JSON completo e independente.
 
 ## O evento
 

@@ -40,7 +40,7 @@ def criar_sessao() -> SparkSession:
 
 def main() -> int:
     spark = criar_sessao()
-    landing = f"s3a://{BUCKET}/landing/eventos/"
+    landing = f"s3a://{BUCKET}/landing/"
     teste = f"s3a://{BUCKET}/_verificacao/"
     try:
         eventos = spark.read.json(landing)
