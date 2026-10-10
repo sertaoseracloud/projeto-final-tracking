@@ -42,7 +42,7 @@ Vale para o aluno (requisito novo no enunciado) e para a solução de referênci
 | `video_start` | `btn-play` |
 | `file_download` | `dl-ementa` |
 | `select_item` | `plano-basico`, `plano-pro`, `plano-premium` (o cartão do plano) |
-| `add_to_cart` / `remove_from_cart` de plano | `modal-comprar` |
+| `add_to_cart` / `remove_from_cart` de plano | `modal-comprar` (no site, quando a compra vem do botão "Quero este plano" do próprio cartão, vale o cartão: `plano-…`; o gerador usa sempre `modal-comprar`) |
 | `add_to_cart` / `remove_from_cart` do order bump | `bump` |
 | `generate_lead` | `form-lead` |
 | `site_search` | `faq-busca` |
@@ -100,7 +100,7 @@ Uma linha por marco da landing (`pagina = "/"`): 0, 25, 50, 75 e 90.
 | --- | --- |
 | `pagina` | `/` |
 | `marco` | inteiro |
-| `sessoes_que_chegaram` | marco 0: sessões com `page_view` na landing; demais: sessões com `scroll` de `percent_scrolled >= marco` na landing |
+| `sessoes_que_chegaram` | entre as sessões com `page_view` na landing: marco 0 = todas; demais = as que têm `scroll` na landing com `percent_scrolled >= marco` |
 | `pct_sessoes` | `sessoes_que_chegaram / sessões do marco 0`, arredondado a 4 casas |
 
 A série não cresce: um marco nunca tem mais sessões que o anterior, porque cada marco conta as sessões que chegaram nele ou além.
