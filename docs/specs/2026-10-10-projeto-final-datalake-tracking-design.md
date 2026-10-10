@@ -206,7 +206,7 @@ Um evento por linha de JSON. É o mesmo formato que `site/index.html` produz e q
 | `generate_lead` | `lead_source`, `currency`, `value` |
 | `sign_up`, `login` | `method` |
 
-`value` é sempre a receita dos itens **sem frete**, já com o desconto do Pix.
+`value` é sempre a receita dos itens **sem frete**. Em `purchase` e `refund` ele já vem com o desconto do Pix; nas etapas anteriores (`view_cart` até `add_payment_info`) é o valor de tabela, porque o desconto só existe depois que o pagamento é escolhido.
 
 ---
 
@@ -346,7 +346,7 @@ O formato (individual ou em dupla) e o prazo ficam a critério do professor.
 
 **Comportamentos que precisam aparecer no dado:**
 - **Lead que volta:** parte dos leads volta em sessão posterior e compra. Parte deles faz `sign_up` e, depois, `login`.
-- **Reembolso tardio:** cerca de 8% das compras recebem `refund` de 1 a 7 dias depois.
+- **Reembolso tardio:** cerca de 8% das compras recebem `refund` de 1 a 7 dias depois (compras da última semana podem ficar sem reembolso, porque ele cairia fora da janela).
 - **Order bump e troca de plano:** o order bump é adicionado e às vezes removido; a troca de plano gera `remove_from_cart`.
 - **Frete:** só pedidos Premium têm `add_shipping_info`.
 - **Reenvio de lote:** cerca de 1% dos eventos reaparece em outro lote com o mesmo `event_id`.
@@ -357,11 +357,11 @@ O formato (individual ou em dupla) e o prazo ficam a critério do professor.
 - `value` negativo;
 - `currency = USD`;
 - `percent_scrolled = 33`;
-- `refund` com `transaction_id` inexistente;
+- `refund` com `transaction_id` inexistente (no máximo 5% das compras);
 - `event_name` fora do catálogo (`add_to_wishlist`).
 
 **Escrita e resumo:**
-- Para cada dia, grava de três a seis lotes em `landing/eventos/dt=…/`.
+- Para cada dia, grava de três a seis lotes em `landing/eventos/dt=…/`. O dia seguinte ao último pode ter um ou dois lotes, com sessões que viram a meia-noite.
 - Imprime um resumo: visitantes, sessões reais, eventos por nome, duplicatas e defeitos injetados por tipo.
 - A mesma seed gera exatamente os mesmos eventos.
 
@@ -381,8 +381,8 @@ O formato (individual ou em dupla) e o prazo ficam a critério do professor.
 ## 12. Critérios de pronto do material
 
 - [x] `site/index.html` dispara os 20 eventos no contrato da seção 5 (verificado no navegador).
-- [ ] O gerador roda com os padrões, grava em `landing/`, imprime o resumo e é determinístico pela seed.
-- [ ] As cinco armadilhas da seção 9 são observáveis nos dados gerados.
+- [x] O gerador roda com os padrões, grava em `landing/`, imprime o resumo e é determinístico pela seed.
+- [x] As cinco armadilhas da seção 9 são observáveis nos dados gerados.
 - [ ] `professor/solucao/` roda os seis jobs do início ao fim contra o floci e produz as 13 tabelas Gold.
 - [ ] `GABARITO.md` traz os números medidos e as tolerâncias.
 - [ ] `git archive` gera um zip sem `professor/`, conferido listando o conteúdo do zip.
