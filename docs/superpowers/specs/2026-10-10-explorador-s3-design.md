@@ -65,6 +65,7 @@ explorador/
   - `validar_sql(sql) -> None`.
     - Lança `SqlNaoPermitido` se houver mais de um comando, ou se a primeira palavra (ignorando comentários `--` e `/* */` e espaços) não for `SELECT`, `WITH`, `DESCRIBE`, `SHOW`, `SUMMARIZE`, `FROM`, `PRAGMA table_info` ou `EXPLAIN`.
     - Também lança se aparecer `COPY`, `ATTACH`, `INSTALL`, `LOAD`, `CREATE`, `DROP`, `INSERT`, `UPDATE`, `DELETE`, `ALTER`, `EXPORT`, `IMPORT` ou `SET` fora de strings.
+    - Recusa `EXPLAIN ANALYZE` (e `EXPLAIN ANALYSE`), porque ele executa o comando de verdade; as palavras vêm do tokenizer do próprio DuckDB (`duckdb.tokenize`), não de um leitor feito à mão.
   - `executar(con, sql, limite=1000) -> Resultado`, com `dataframe` (até `limite` linhas), `cortado: bool` e `colunas`. Valida o SQL antes; o limite máximo é 50 000.
   - `previa(con, raiz, chave, linhas=100)`: lê um único arquivo, Parquet ou JSONL.
 - **`app.py`**

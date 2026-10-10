@@ -87,7 +87,7 @@ Estes arquivos já existem no repositório. Você não precisa alterá-los.
 | --- | --- |
 | `site/index.html` | landing de exemplo que dispara os 20 eventos e exporta JSONL; serve para ver o evento nascer |
 | `gerador/` | simulador do coletor: popula `landing/` no S3 com semanas de eventos sintéticos |
-| `docker-compose.yml` + `Dockerfile` | dois contêineres: `floci` (S3 emulado) e `app` (Python 3.11, Java 17, PySpark 3.5.3 com o conector `s3a`, `boto3`, `pytest`). Nada é instalado na máquina além do Docker; nenhuma conta de nuvem é necessária |
+| `docker-compose.yml` + `Dockerfile` | três contêineres: `floci` (S3 emulado), `app` (Python 3.11, Java 17, PySpark 3.5.3 com o conector `s3a`, `boto3`, `pytest`) e `explorador` (um site em `http://localhost:8501` para olhar o bucket, feito com a mesma imagem do `app`). Nada é instalado na máquina além do Docker; nenhuma conta de nuvem é necessária |
 | `infra/verificar_ambiente.py` | confere, de dentro do contêiner `app`, que o Spark lê e grava no floci por `s3a://` |
 | `SETUP.md` | ambiente do zero com Docker |
 | `docs/CONTRATO_EVENTO.md` | formato do evento e layout da landing no S3 |
@@ -375,7 +375,7 @@ Os termos estão agrupados por assunto. Os exemplos usam a landing da DadosPro.
 
 ### Ambiente
 
-- **Contêiner** — ambiente isolado, criado a partir de uma imagem Docker, que já traz os programas necessários. O projeto usa dois: `floci` e `app`.
+- **Contêiner** — ambiente isolado, criado a partir de uma imagem Docker, que já traz os programas necessários. O projeto usa três: `floci` (o S3), `app` (onde o seu código roda) e `explorador` (o site para olhar o bucket).
 - **S3 e bucket** — o S3 é o serviço de armazenamento de arquivos da AWS. Um bucket é um "disco" com nome dentro dele. Aqui o bucket é `datalake-tracking`.
 - **Prefixo** — o começo do caminho de um arquivo no S3. Funciona como uma pasta. Exemplo: `silver/`.
 - **floci** — programa que imita o S3 na sua máquina, em `http://floci:4566`. Para o Spark, ele parece um S3 de verdade.

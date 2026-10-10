@@ -39,7 +39,7 @@ def _listar() -> list[particoes.Objeto]:
     return s3.listar()
 
 
-@st.cache_resource(show_spinner="Conectando ao S3 e criando as views…")
+@st.cache_resource(max_entries=2, show_spinner="Conectando ao S3 e criando as views…")
 def _conexao(datasets: tuple[particoes.Dataset, ...], raiz: str):
     con = consultas.conectar(endpoint=s3.ENDPOINT, chave=s3.CHAVE, segredo=s3.SEGREDO, regiao=s3.REGIAO)
     views = consultas.criar_views(con, raiz, list(datasets))

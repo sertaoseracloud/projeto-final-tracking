@@ -70,6 +70,15 @@ def test_executar_recusa_sql_proibido_sem_executar(lago):
     assert not destino.exists()
 
 
+def test_executar_recusa_explain_analyze_com_copy_escondido(lago):
+    con, _, tmp_path = lago
+    destino = tmp_path / "pwn1.csv"
+    sql = f"EXPLAIN ANALYZE /* /* */ ' */ COPY (SELECT 42) TO '{destino}' --'"
+    with pytest.raises(consultas.SqlNaoPermitido):
+        consultas.executar(con, sql)
+    assert not destino.exists()
+
+
 def test_previa_le_um_arquivo(lago):
     con, _, tmp_path = lago
     chave = "landing/eventos/year=2026/month=09/day=01/coletor-s42-001.jsonl"

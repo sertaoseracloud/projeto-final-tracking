@@ -4,6 +4,8 @@ Um site que roda no seu computador para **olhar o bucket** sem escrever código:
 
 ## Como abrir
 
+Antes, construa a imagem uma vez (é o Passo 2 do [SETUP.md](../SETUP.md)): `docker compose build app`. O explorador usa essa mesma imagem; sem ela, ele não sobe.
+
 ```bash
 docker compose up -d floci explorador
 ```
@@ -14,7 +16,7 @@ Abra **http://localhost:8501** no navegador. Para desligar: `docker compose stop
 
 - **Arquivos** — navegue pelas pastas do bucket (`landing/`, `bronze/`, `silver/`, `gold/`) e veja nome, tamanho e data de cada arquivo. Escolha um `.parquet` ou `.jsonl` para ver as primeiras 100 linhas.
 - **Partições** — escolha um dataset e veja uma linha por dia (`year`, `month`, `day`) com quantos arquivos e quantos bytes ele tem. O botão "Contar linhas por partição" conta as linhas de cada dia.
-- **Consultas SQL** — escreva SQL e veja o resultado numa tabela. O último resultado continua na tela e você pode baixá-lo em CSV.
+- **Consultas SQL** — escreva SQL e veja o resultado numa tabela. O campo **Limite de linhas** diz quantas linhas trazer: o padrão é 1 000 e o máximo é 50 000. Se a consulta tiver mais linhas que o limite, o resultado é cortado e aparece um aviso. O último resultado continua na tela e você pode baixá-lo em CSV.
 
 ## Views: os nomes que você usa no SQL
 
@@ -40,10 +42,10 @@ DESCRIBE silver_eventos;
 
 O explorador só **lê**. Ele tem duas proteções:
 
-1. Aceita consultas que começam com `SELECT`, `WITH`, `DESCRIBE`, `SHOW`, `SUMMARIZE`, `FROM`, `EXPLAIN` ou `PRAGMA table_info`, uma por vez. Comandos que mudam dados (`COPY`, `CREATE`, `DROP`, `INSERT`…) são recusados.
+1. Aceita consultas que começam com `SELECT`, `WITH`, `DESCRIBE`, `SHOW`, `SUMMARIZE`, `FROM`, `EXPLAIN` ou `PRAGMA table_info`, uma por vez. Comandos que mudam dados (`COPY`, `CREATE`, `DROP`, `INSERT`…) são recusados. `EXPLAIN ANALYZE` também é recusado, porque ele executa o comando de verdade; use só `EXPLAIN`.
 2. A conexão com o DuckDB é **trancada** no bucket: ela não lê arquivos do computador nem muda configurações.
 
-Assim, você não estraga o seu datalake por engano. Se algo inesperado acontecer, o site mostra uma mensagem amigável em vez de um erro técnico.
+Assim, você não estraga o seu datalake por engano. Se algo inesperado acontecer, o site mostra uma mensagem amigável e, embaixo dela, uma linha curta de "Detalhe técnico" para ajudar a achar a causa.
 
 As consultas usam o **DuckDB**, um motor SQL rápido para arquivos. Ele serve só para explorar. O seu pipeline continua sendo construído com o Spark, como pede o enunciado.
 

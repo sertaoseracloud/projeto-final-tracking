@@ -116,6 +116,7 @@ Se algo der errado, procure a mensagem na primeira coluna.
 | porta `4566` já em uso | outro emulador rodando | pare o outro contêiner |
 | a página `localhost:8501` não abre | o serviço não está rodando ou a porta 8501 está ocupada | `docker compose up -d explorador`; veja `docker compose logs explorador` |
 | `ClassNotFoundException: org.apache.hadoop.fs.s3a.S3AFileSystem` | imagem antiga, sem os jars | `docker compose build --no-cache app` |
+| `ModuleNotFoundError: No module named 'streamlit'` (ou `'duckdb'`) | imagem antiga, de antes do explorador | `docker compose build app` |
 | `[erro]` no `verificar_ambiente.py` lendo a landing | o gerador ainda não rodou | Passo 3 |
 
 Dica: para ver quais contêineres estão ligados, use `docker compose ps`.

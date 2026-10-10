@@ -22,6 +22,9 @@ from explorador.consultas import MENSAGEM_SO_LEITURA, SqlNaoPermitido, validar_s
     "SELECT 1 -- delete tudo",
     "SELECT \"set\" FROM (SELECT 1 AS \"set\")",
     "SELECT user_id, updated FROM (SELECT 1 AS user_id, 2 AS updated)",
+    "SELECT $$a;b$$",  # o antigo leitor manual recusava por engano (falso positivo)
+    "SELECT 1;  -- fim",
+    "SELECT 'ação' AS texto, 2 AS número",  # acentos antes do código (posições em bytes)
 ])
 def test_aceita_consultas_de_leitura(sql):
     validar_sql(sql)
@@ -41,6 +44,14 @@ def test_aceita_consultas_de_leitura(sql):
     ("   -- só comentário", "Escreva uma consulta"),
     ("SELECT $$'$$; COPY (SELECT 42 AS a) TO '/tmp/pwn1.csv'; SELECT $$'$$", "um comando por vez"),
     ("SELECT E'\\'; ' ; COPY (SELECT 1) TO '/tmp/x.csv'", "um comando por vez"),
+    # Comentários aninhados: o DuckDB fecha o bloco num lugar diferente de um leitor feito à mão.
+    ("EXPLAIN ANALYZE /* /* */ ' */ COPY (SELECT 42) TO '/tmp/pwn1.csv' --'", "COPY"),
+    # O DuckDB também termina o comentário `--` no `\r`.
+    ("SELECT 1 --\rCOPY (SELECT 1) TO 'x.csv'", "COPY"),
+    ("EXPLAIN ANALYZE SELECT 1", "EXPLAIN ANALYZE"),
+    ("explain analyse select 1", "EXPLAIN ANALYZE"),
+    ("SELECT 1 /* bloco */ ; /* outro */ SELECT 2", "um comando por vez"),
+    ("/* comentário com acento */ COPY silver_eventos TO 'x.csv'", MENSAGEM_SO_LEITURA),
 ])
 def test_recusa_o_que_nao_e_leitura(sql, trecho):
     with pytest.raises(SqlNaoPermitido, match=re.escape(trecho)):
