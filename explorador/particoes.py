@@ -74,26 +74,46 @@ def _nome_view(prefixo: str) -> str:
 
 
 def datasets(chaves: Iterable[str]) -> list[Dataset]:
-    """Uma pasta com arquivos .parquet ou .jsonl vira um dataset (e uma view)."""
-    encontrados: dict[str, str] = {}
+    """Uma pasta com arquivos .parquet ou .jsonl vira um dataset (e uma view).
+
+    Se a mesma pasta tiver os dois formatos, vira um dataset por formato, com o
+    formato no fim do nome da view (ex.: landing_eventos_jsonl)."""
+    formatos: dict[str, set[str]] = defaultdict(set)
     for chave in chaves:
         formato = formato_do_arquivo(chave)
         if formato is None or any(_interno(s) for s in chave.split("/")[:-1]):
             continue
         prefixo = _prefixo_do_dataset(chave)
         if prefixo:
-            encontrados.setdefault(prefixo, formato)
-    return [Dataset(p, f, _nome_view(p)) for p, f in sorted(encontrados.items())]
+            formatos[prefixo].add(formato)
+    resultado = []
+    for prefixo, achados in sorted(formatos.items()):
+        for formato in sorted(achados):
+            nome = _nome_view(prefixo) + (f"_{formato}" if len(achados) > 1 else "")
+            resultado.append(Dataset(prefixo, formato, nome))
+    return resultado
 
 
-def tabela_particoes(objetos: Iterable[Objeto], prefixo: str) -> list[LinhaParticao]:
+def _pertence_ao_dataset(resto: str) -> bool:
+    """`resto` é a chave sem o prefixo do dataset. O arquivo conta se estiver direto na
+    pasta do dataset ou dentro de pastas de partição (k=v), sem pastas internas (_x, .x)."""
+    pastas = resto.split("/")[:-1]
+    if any(_interno(p) for p in pastas):
+        return False
+    return not pastas or "=" in pastas[0]
+
+
+def tabela_particoes(objetos: Iterable[Objeto], prefixo: str, formato: str | None = None) -> list[LinhaParticao]:
+    """Uma linha por partição year/month/day; com `formato`, conta só arquivos daquele formato."""
     base = prefixo.rstrip("/") + "/"
     grupos: dict[tuple[str, str, str], list[int]] = defaultdict(lambda: [0, 0])
     for o in objetos:
-        if not o.chave.startswith(base) or formato_do_arquivo(o.chave) is None:
+        formato_do_objeto = formato_do_arquivo(o.chave)
+        if not o.chave.startswith(base) or formato_do_objeto is None:
             continue
-        resto = o.chave[len(base):]
-        if any(_interno(s) for s in resto.split("/")[:-1]) or ("/" in resto and "=" not in resto.split("/")[0]):
+        if formato is not None and formato_do_objeto != formato:
+            continue
+        if not _pertence_ao_dataset(o.chave[len(base):]):
             continue
         particao = particao_da_chave(o.chave) or {}
         chave = tuple(particao.get(c, SEM_PARTICAO) for c in CAMPOS)
@@ -122,6 +142,7 @@ def tamanho_legivel(n: int) -> str:
     valor = float(n)
     for unidade in ("KB", "MB", "GB", "TB"):
         valor /= 1024
-        if valor < 1024 or unidade == "TB":
+        # Compara já arredondado: 1048575 B é "1,0 MB", não "1024,0 KB".
+        if round(valor, 1) < 1024 or unidade == "TB":
             return f"{valor:.1f} {unidade}".replace(".", ",")
     return f"{n} B"

@@ -72,3 +72,25 @@ def test_tamanho_legivel():
     assert tamanho_legivel(512) == "512 B"
     assert tamanho_legivel(1536) == "1,5 KB"
     assert tamanho_legivel(5 * 1024 * 1024) == "5,0 MB"
+
+
+def test_pasta_com_dois_formatos_vira_um_dataset_por_formato():
+    chaves = ["landing/mista/year=2026/month=09/day=01/a.jsonl",
+              "landing/mista/year=2026/month=09/day=01/b.parquet"]
+    assert datasets(chaves) == [Dataset("landing/mista", "jsonl", "landing_mista_jsonl"),
+                                Dataset("landing/mista", "parquet", "landing_mista_parquet")]
+    objetos = [Objeto(chaves[0], 10), Objeto(chaves[1], 30)]
+    assert tabela_particoes(objetos, "landing/mista", "parquet") == [LinhaParticao("2026", "09", "01", 1, 30)]
+    assert tabela_particoes(objetos, "landing/mista") == [LinhaParticao("2026", "09", "01", 2, 40)]
+
+
+def test_tabela_particoes_ignora_subpastas_que_nao_sao_particao():
+    objetos = [Objeto("silver/eventos/year=2026/month=09/day=01/a.parquet", 5),
+               Objeto("silver/eventos/_tmp/year=2026/b.parquet", 7),
+               Objeto("silver/eventos/backup/c.parquet", 9)]
+    assert tabela_particoes(objetos, "silver/eventos") == [LinhaParticao("2026", "09", "01", 1, 5)]
+
+
+def test_tamanho_legivel_arredonda_para_a_unidade_seguinte():
+    assert tamanho_legivel(1048575) == "1,0 MB"
+    assert tamanho_legivel(1023) == "1023 B"

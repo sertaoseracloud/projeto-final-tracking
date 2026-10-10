@@ -16,7 +16,7 @@ Abra **http://localhost:8501** no navegador. Para desligar: `docker compose stop
 
 - **Arquivos** — navegue pelas pastas do bucket (`landing/`, `bronze/`, `silver/`, `gold/`) e veja nome, tamanho e data de cada arquivo. Escolha um `.parquet` ou `.jsonl` para ver as primeiras 100 linhas.
 - **Partições** — escolha um dataset e veja uma linha por dia (`year`, `month`, `day`) com quantos arquivos e quantos bytes ele tem. O botão "Contar linhas por partição" conta as linhas de cada dia.
-- **Consultas SQL** — escreva SQL e veja o resultado numa tabela. O campo **Limite de linhas** diz quantas linhas trazer: o padrão é 1 000 e o máximo é 50 000. Se a consulta tiver mais linhas que o limite, o resultado é cortado e aparece um aviso. O último resultado continua na tela e você pode baixá-lo em CSV.
+- **Consultas SQL** — escreva SQL e veja o resultado numa tabela. O campo **Limite de linhas** diz quantas linhas trazer: o padrão é 1 000 e o máximo é 50 000. Se a consulta tiver mais linhas que o limite, o resultado é cortado e aparece um aviso. O último resultado continua na tela, junto com a SQL que o gerou, e você pode baixá-lo em CSV. Se a consulta tiver um erro, o site explica em português o que costuma causá-lo (nome de view ou coluna errado, erro de escrita…) e mostra embaixo a mensagem original do DuckDB, que vem em inglês.
 
 ## Views: os nomes que você usa no SQL
 
@@ -27,6 +27,8 @@ Cada pasta com dados vira uma **view**, uma tabela virtual que lê os arquivos n
 | `landing/eventos/` | `landing_eventos` |
 | `silver/eventos/` | `silver_eventos` |
 | `gold/funil_compra/` | `gold_funil_compra` |
+
+Se uma pasta tiver arquivos `.parquet` e `.jsonl` misturados, ela vira duas views, com o formato no fim do nome (ex.: `landing_eventos_jsonl` e `landing_eventos_parquet`).
 
 As views das pastas particionadas têm as colunas `year`, `month` e `day`, como texto (`month` é `'09'`). A lista completa de views e colunas aparece em "Views disponíveis", na aba de SQL.
 
@@ -49,4 +51,4 @@ Assim, você não estraga o seu datalake por engano. Se algo inesperado acontece
 
 As consultas usam o **DuckDB**, um motor SQL rápido para arquivos. Ele serve só para explorar. O seu pipeline continua sendo construído com o Spark, como pede o enunciado.
 
-Depois de rodar um job novo, clique em **Recarregar** para o explorador encontrar as pastas novas.
+Depois de rodar um job novo, clique em **Recarregar** para o explorador encontrar as pastas novas e as colunas novas das views. (Sem clicar, a lista de arquivos se atualiza sozinha a cada 30 segundos, mas a lista de colunas não.)

@@ -95,6 +95,26 @@ class Resultado:
     colunas: list[str]
 
 
+EXPLICACOES_DE_ERRO = (
+    ("CatalogException", "Essa tabela ou view não existe. Confira o nome em \"Views disponíveis\"."),
+    ("BinderException", "Alguma coluna ou função não foi encontrada. Confira os nomes das colunas da view."),
+    ("ParserException", "O SQL tem um erro de escrita (vírgula, parêntese ou palavra fora do lugar)."),
+    ("ConversionException", "Um valor não pôde ser convertido para o tipo pedido (ex.: texto para número)."),
+    ("PermissionException", "Esse acesso é bloqueado: o explorador só lê os arquivos do bucket."),
+    ("HTTPException", "O S3 recusou ou não respondeu à leitura. Confira se o floci está ligado."),
+    ("IOException", "Não consegui ler os arquivos. Talvez a pasta tenha mudado: clique em Recarregar."),
+    ("OutOfMemoryException", "A consulta precisou de memória demais. Filtre mais ou agrupe os dados."),
+    ("InvalidInputException", "Algum valor ou argumento da consulta é inválido."),
+)
+
+
+def explicar_erro(erro: Exception) -> str:
+    """Traduz o tipo de erro do DuckDB numa frase em português (a mensagem original fica à parte)."""
+    nomes = {c.__name__ for c in type(erro).__mro__}
+    return next((texto for nome, texto in EXPLICACOES_DE_ERRO if nome in nomes),
+                "O DuckDB não conseguiu rodar a consulta.")
+
+
 def _texto_sql(valor: str) -> str:
     return "'" + valor.replace("'", "''") + "'"
 
@@ -157,6 +177,8 @@ def previa(con: duckdb.DuckDBPyConnection, raiz: str, chave: str, linhas: int = 
     formato = formato_do_arquivo(chave)
     if formato is None:
         raise ValueError("Prévia só para arquivos .parquet e .jsonl.")
+    if ".." in chave.split("/"):
+        raise ValueError("Prévia só para arquivos dentro do bucket.")
     funcao = "read_parquet" if formato == "parquet" else "read_json_auto"
     caminho = f"{raiz.rstrip('/')}/{chave}"
     return con.sql(f"SELECT * FROM {funcao}({_texto_sql(caminho)}) LIMIT {int(linhas)}").df()
