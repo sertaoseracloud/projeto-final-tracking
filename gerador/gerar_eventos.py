@@ -20,6 +20,7 @@ if __package__ in (None, ""):
 
 from gerador import catalogo as cat
 from gerador.destinos import DestinoLocal, DestinoS3
+from gerador.elementos import marcar_elementos
 from gerador.jornadas import simular
 from gerador.lotes import montar_lotes
 from gerador.sujeira import aplicar_sujeira
@@ -36,6 +37,7 @@ def gerar(seed: int = 42, dias: int = 14, visitantes: int = 6000, sujeira: float
     por_evento = Counter(e["event_name"] for e in eventos)
     eventos_limpos = len(eventos)
     defeitos = aplicar_sujeira(rng, eventos, sujeira)
+    marcar_elementos(eventos)                 # determinístico: não mexe no rng
     arquivos, duplicatas = montar_lotes(rng, eventos, origem="coletor", seed=seed)
 
     ultimo_dia = data_inicial + timedelta(days=dias - 1)
