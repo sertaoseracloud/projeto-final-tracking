@@ -108,7 +108,7 @@ Projeto final de engenharia de dados. O aluno recebe um problema de negócio e u
  │                                          │          │                                                    │
  │  site/index.html ──export JSONL──┐       │          │  bronze ─► silver ─┬─► gold funil                  │
  │                                  ▼       │          │                    ├─► gold engajamento            │
- │  gerador/ ──────► s3://<bucket>/landing/eventos/dt=…/*.jsonl ──────────► ├─► gold receita e aquisição     │
+ │  gerador/ ──────► s3://<bucket>/landing/eventos/year=…/month=…/day=…/*.jsonl ──────────► ├─► gold receita e aquisição     │
  │                                          │          │                    └─► gold ML                     │
  └──────────────────────────────────────────┘          └────────────────────────────────────────────────────┘
                                  fronteira: formato do evento (seção 5) + prefixo landing/
@@ -150,7 +150,7 @@ projeto-final-tracking/
 
 ### Layout da landing no S3
 
-`s3://<bucket>/landing/eventos/dt=YYYY-MM-DD/<origem>-<lote>.jsonl` — vários lotes por dia, como um coletor que descarrega em intervalos. `<origem>` é `coletor` (gerador) ou `site` (importação). Bucket e endpoint vêm de `AWS_S3_BUCKET` e `AWS_ENDPOINT_URL`.
+`s3://<bucket>/landing/eventos/year=YYYY/month=MM/day=DD/<origem>-<lote>.jsonl` — vários lotes por dia, como um coletor que descarrega em intervalos. `<origem>` é `coletor` (gerador) ou `site` (importação). Bucket e endpoint vêm de `AWS_S3_BUCKET` e `AWS_ENDPOINT_URL`.
 
 ---
 
@@ -219,7 +219,7 @@ Um evento por linha de JSON. É o mesmo formato que `site/index.html` produz e q
   - um job Bronze, um job Silver e **quatro jobs Gold, cada um num arquivo próprio** (funil, engajamento, receita e aquisição, ML);
   - cada job verifica que a camada de que depende existe e, se não existir, para com uma mensagem que diz o que rodar antes.
 - **R3.** Um script que roda os seis jobs em sequência. Ele **não** gera dados.
-- **R4.** Bronze append-only, com schema explícito (sem inferência), particionada por data do evento e com colunas de proveniência: arquivo de origem e instante da ingestão.
+- **R4.** Bronze append-only, com schema explícito (sem inferência), particionada por data no formato `year=AAAA/month=MM/day=DD` (o dia de coleta, tirado do caminho da landing) e com colunas de proveniência: arquivo de origem e instante da ingestão.
 
 ### 6.2 Silver
 
@@ -273,7 +273,7 @@ Pipeline completo que atende à seção 6. É com ele que o professor gera os n�
   - os jobs `01_bronze_ingestao.py`, `02_silver_eventos.py`, `03_gold_funil.py`, `04_gold_engajamento.py`, `05_gold_receita_aquisicao.py`, `06_gold_ml.py`;
   - `executar_pipeline.py`.
 - **Acesso ao S3:** `comum.py` cria a `SparkSession` com o conector `s3a` (`hadoop-aws` 3.3.4, o mesmo Hadoop do PySpark 3.5.3) apontado para o floci: endpoint `http://floci:4566`, `path.style.access=true`, SSL desligado, credenciais fixas de teste. Cada job lê e grava direto em `s3a://<bucket>/<camada>/`. Para saber se a camada anterior existe, usa a API `FileSystem` do Hadoop pela JVM do Spark (`spark._jvm.org.apache.hadoop.fs.Path`), sem SDK.
-- **Bronze:** `params` como `map<string,string>`, `items` como `array<struct>`. A proveniência vem de `input_file_name()` e `current_timestamp()`; a partição é `dt`.
+- **Bronze:** `params` como `map<string,string>`, `items` como `array<struct>`. A proveniência vem de `input_file_name()` e `current_timestamp()`; a partição é `year=AAAA/month=MM/day=DD`, tirada do caminho do arquivo; a sessão Spark desliga `spark.sql.sources.partitionColumnTypeInference` para `month=09` não virar `month=9` ao regravar.
 - **Silver, nesta ordem:**
   1. deduplicação (primeira ocorrência por instante de ingestão);
   2. tipagem dos `params`;
@@ -361,11 +361,11 @@ O formato (individual ou em dupla) e o prazo ficam a critério do professor.
 - `event_name` fora do catálogo (`add_to_wishlist`).
 
 **Escrita e resumo:**
-- Para cada dia, grava de três a seis lotes em `landing/eventos/dt=…/`. O dia seguinte ao último pode ter um ou dois lotes, com sessões que viram a meia-noite.
+- Para cada dia, grava de três a seis lotes em `landing/eventos/year=…/month=…/day=…/`. O dia seguinte ao último pode ter um ou dois lotes, com sessões que viram a meia-noite.
 - Imprime um resumo: visitantes, sessões reais, eventos por nome, duplicatas e defeitos injetados por tipo.
 - A mesma seed gera exatamente os mesmos eventos.
 
-**`importar_site.py <arquivo.jsonl>`** — valida que cada linha é JSON com `event_id` e `event_ts` e sobe o arquivo em `landing/eventos/dt=<data do primeiro evento>/site-<timestamp>.jsonl`.
+**`importar_site.py <arquivo.jsonl>`** — valida que cada linha é JSON com `event_id` e `event_ts` e sobe o arquivo em `landing/eventos/year=…/month=…/day=… (data do primeiro evento)/site-<timestamp>.jsonl`.
 
 ---
 

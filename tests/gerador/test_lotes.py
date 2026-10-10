@@ -1,7 +1,7 @@
 import json
 import random
 
-from gerador.lotes import PREFIXO, montar_lotes, serializar
+from gerador.lotes import PREFIXO, montar_lotes, particao, serializar
 
 
 def _ev(i, dt="2026-09-01"):
@@ -27,7 +27,7 @@ def test_cada_dia_vira_de_3_a_6_lotes_com_a_chave_do_contrato():
     arquivos, duplicatas = montar_lotes(random.Random(3), eventos, origem="coletor", seed=42, fracao_reenvio=0.0)
     assert duplicatas == 0
     for dt in ("2026-09-01", "2026-09-02"):
-        chaves = [k for k in arquivos if k.startswith(f"{PREFIXO}/dt={dt}/coletor-s42-")]
+        chaves = [k for k in arquivos if k.startswith(f"{PREFIXO}/{particao(dt)}/coletor-s42-")]
         assert 3 <= len(chaves) <= 6
         assert all(k.endswith(".jsonl") for k in chaves)
     assert sum(len(v.splitlines()) for v in arquivos.values()) == 600
@@ -48,5 +48,10 @@ def test_reenvio_repete_event_id_em_outro_lote_nunca_no_mesmo():
 def test_evento_sem_timestamp_vai_para_o_dia_de_coleta():
     sem_ts = {"event_id": "nulo", "event_ts": None, "event_name": "scroll", "_dt": "2026-09-01"}
     arquivos, _ = montar_lotes(random.Random(3), [_ev(1), _ev(2), _ev(3), sem_ts], "coletor", 42, 0.0)
-    conteudo = "".join(v for k, v in arquivos.items() if "dt=2026-09-01" in k)
+    conteudo = "".join(v for k, v in arquivos.items() if "year=2026/month=09/day=01" in k)
     assert '"event_id":"nulo"' in conteudo
+
+
+def test_particao_usa_year_month_day_com_zeros():
+    assert particao("2026-09-01") == "year=2026/month=09/day=01"
+    assert particao("2026-12-31") == "year=2026/month=12/day=31"

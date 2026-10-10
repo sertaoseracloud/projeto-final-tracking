@@ -23,6 +23,8 @@ def criar_sessao(nome: str) -> SparkSession:
         .config("spark.ui.enabled", "false")
         .config("spark.sql.shuffle.partitions", "8")
         .config("spark.sql.session.timeZone", "UTC")
+        # year=2026/month=09/day=01: sem inferência, month continua "09" (e não 9) ao regravar
+        .config("spark.sql.sources.partitionColumnTypeInference.enabled", "false")
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
         .config("spark.hadoop.fs.s3a.endpoint", ENDPOINT)
         .config("spark.hadoop.fs.s3a.path.style.access", "true")

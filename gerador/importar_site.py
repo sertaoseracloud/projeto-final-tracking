@@ -16,7 +16,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from gerador.destinos import DestinoLocal, DestinoS3
-from gerador.lotes import PREFIXO
+from gerador.lotes import PREFIXO, particao
 
 
 def validar(texto: str) -> list[dict]:
@@ -39,7 +39,7 @@ def validar(texto: str) -> list[dict]:
 
 
 def chave(eventos: list[dict], agora: datetime) -> str:
-    return f"{PREFIXO}/dt={eventos[0]['event_ts'][:10]}/site-{agora:%Y%m%dT%H%M%S%f}.jsonl"
+    return f"{PREFIXO}/{particao(eventos[0]['event_ts'])}/site-{agora:%Y%m%dT%H%M%S%f}.jsonl"
 
 
 def main(argv: list[str] | None = None) -> int:

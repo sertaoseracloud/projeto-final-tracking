@@ -26,6 +26,7 @@ TEXTOS = (
     "link_text", "file_name", "file_extension", "video_title", "video_provider", "method",
     "lead_source", "reason", "page_title",
 )
+DATA = ["year", "month", "day"]   # partição: year=AAAA/month=MM/day=DD
 FORMATO_TS = "yyyy-MM-dd'T'HH:mm:ss.SSSX"
 MARCOS_SCROLL = (25, 50, 75, 90)
 MARCOS_VIDEO = (0, 10, 25, 50, 75, 100)
@@ -118,7 +119,7 @@ def resolver_identidade(df: DataFrame) -> DataFrame:
 def explodir_itens(df: DataFrame) -> DataFrame:
     return (
         df.filter(F.size("items") > 0)
-          .select("event_id", "event_name", "ts", "dt", "session_id", "user_pseudo_id",
+          .select("event_id", "event_name", "ts", *DATA, "session_id", "user_pseudo_id",
                   "user_id_resolvido", "transaction_id", F.posexplode("items").alias("posicao", "item"))
           .select("*", "item.*").drop("item")
     )
@@ -135,10 +136,10 @@ def main() -> None:
     silver = resolver_identidade(sessionizar(aprovados)).cache()
 
     silver.drop("page", "traffic", "device", "params", "items") \
-        .write.mode("overwrite").partitionBy("dt").parquet(caminho("silver/eventos"))
-    explodir_itens(silver).write.mode("overwrite").partitionBy("dt").parquet(caminho("silver/itens"))
+        .write.mode("overwrite").partitionBy(*DATA).parquet(caminho("silver/eventos"))
+    explodir_itens(silver).write.mode("overwrite").partitionBy(*DATA).parquet(caminho("silver/itens"))
     rejeitados.select("event_id", "event_name", "event_ts", "user_pseudo_id", "params", "motivo_rejeicao",
-                      "_arquivo_origem", "_ingerido_em", "dt") \
+                      "_arquivo_origem", "_ingerido_em", *DATA) \
         .write.mode("overwrite").parquet(caminho("silver/eventos_rejeitados"))
 
     titulo("Silver")

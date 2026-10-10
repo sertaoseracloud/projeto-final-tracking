@@ -30,11 +30,11 @@ Navegue por `site/index.html`, clique em **Exportar JSONL** no painel lateral e 
 docker compose run --rm app python gerador/importar_site.py saida/eventos_2026-10-10.jsonl
 ```
 
-O arquivo vai para `landing/eventos/dt=<data do primeiro evento>/site-<instante com microssegundos>.jsonl`. Arquivos com BOM e quebras de linha CRLF são aceitos.
+O arquivo vai para `landing/eventos/year=…/month=…/day=… (data do primeiro evento)/site-<instante com microssegundos>.jsonl`. Arquivos com BOM e quebras de linha CRLF são aceitos.
 
 ## O que é gravado
 
-`s3://datalake-tracking/landing/eventos/dt=AAAA-MM-DD/coletor-s<seed>-<lote>.jsonl` — um evento JSON por linha, de 3 a 6 lotes por dia; o dia seguinte ao último (ex.: `dt=2026-09-15`) pode ter 1 ou 2 lotes, com sessões que viram a meia-noite.
+`s3://datalake-tracking/landing/eventos/year=AAAA/month=MM/day=DD/coletor-s<seed>-<lote>.jsonl` — um evento JSON por linha, de 3 a 6 lotes por dia; o dia seguinte ao último (ex.: `year=2026/month=09/day=15`) pode ter 1 ou 2 lotes, com sessões que viram a meia-noite.
 
 ## Como a jornada é simulada
 

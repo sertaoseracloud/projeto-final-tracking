@@ -35,6 +35,10 @@ SCHEMA = StructType(_texto("event_id", "event_name", "event_ts", "user_pseudo_id
 ])
 
 
+PARTICAO = r"year=(\d{4})/month=(\d{2})/day=(\d{2})"   # dia de coleta, tirado do caminho
+DATA = ["year", "month", "day"]
+
+
 def ler_landing(spark, uri: str) -> DataFrame:
     return spark.read.schema(SCHEMA).json(uri)
 
@@ -43,7 +47,9 @@ def adicionar_proveniencia(df: DataFrame) -> DataFrame:
     return (
         df.withColumn("_arquivo_origem", F.input_file_name())
           .withColumn("_ingerido_em", F.current_timestamp())
-          .withColumn("dt", F.regexp_extract("_arquivo_origem", r"dt=(\d{4}-\d{2}-\d{2})", 1))
+          .withColumn("year", F.regexp_extract("_arquivo_origem", PARTICAO, 1))
+          .withColumn("month", F.regexp_extract("_arquivo_origem", PARTICAO, 2))
+          .withColumn("day", F.regexp_extract("_arquivo_origem", PARTICAO, 3))
     )
 
 
@@ -51,7 +57,7 @@ def main() -> None:
     spark = criar_sessao("bronze")
     exigir_camada(spark, "landing/eventos", "python gerador/gerar_eventos.py")
     bronze = adicionar_proveniencia(ler_landing(spark, caminho("landing/eventos"))).cache()
-    bronze.write.mode("append").partitionBy("dt").parquet(caminho("bronze/eventos"))
+    bronze.write.mode("append").partitionBy(*DATA).parquet(caminho("bronze/eventos"))
 
     titulo("Bronze")
     print(f"linhas lidas da landing e gravadas: {bronze.count()}")

@@ -22,6 +22,8 @@ def criar_sessao() -> SparkSession:
         .master("local[2]")
         .config("spark.ui.enabled", "false")
         .config("spark.sql.session.timeZone", "UTC")
+        # partições year=AAAA/month=MM/day=DD: sem inferência, month continua "09" (e não 9)
+        .config("spark.sql.sources.partitionColumnTypeInference.enabled", "false")
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
         .config("spark.hadoop.fs.s3a.endpoint", ENDPOINT)
         .config("spark.hadoop.fs.s3a.path.style.access", "true")

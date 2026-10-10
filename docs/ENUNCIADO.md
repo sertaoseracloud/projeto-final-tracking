@@ -75,7 +75,7 @@ Os 20 eventos, o formato de cada um e o layout dos arquivos no S3 estão em [`CO
  │                                          │          │                                                    │
  │  site/index.html ──export JSONL──┐       │          │  bronze ─► silver ─┬─► gold funil                  │
  │                                  ▼       │          │                    ├─► gold engajamento            │
- │  gerador/ ──────► s3://<bucket>/landing/eventos/dt=…/*.jsonl ──────────► ├─► gold receita e aquisição     │
+ │  gerador/ ──────► s3://<bucket>/landing/eventos/year=…/month=…/day=…/*.jsonl ──────────► ├─► gold receita e aquisição     │
  │                                          │          │                    └─► gold ML                     │
  └──────────────────────────────────────────┘          └────────────────────────────────────────────────────┘
                                  fronteira: formato do evento (CONTRATO_EVENTO.md) + prefixo landing/
@@ -100,7 +100,7 @@ s3://datalake-tracking/
   - um job Bronze, um job Silver e **quatro jobs Gold, cada um num arquivo próprio** (funil, engajamento, receita e aquisição, ML);
   - cada job verifica que a camada de que depende existe e, se não existir, para com uma mensagem que diz o que rodar antes.
 - **R3.** Um script que roda os seis jobs em sequência. Ele **não** gera dados.
-- **R4.** Bronze append-only, com schema explícito (sem inferência), particionada por data do evento e com colunas de proveniência: arquivo de origem e instante da ingestão.
+- **R4.** Bronze append-only, com schema explícito (sem inferência), particionada por data no formato `year=AAAA/month=MM/day=DD` (o dia de coleta, tirado do caminho da landing) e com colunas de proveniência: arquivo de origem e instante da ingestão.
 
 ### 5.2 Silver
 
@@ -149,7 +149,7 @@ Nomes de colunas são livres; o **conteúdo** é obrigatório, porque é o que a
 
 Para que a sua tabela possa ser comparada com o esperado, use exatamente estas definições.
 
-1. **Caminhos das camadas.** `bronze/eventos/`, `silver/eventos/`, `silver/itens/`, `silver/eventos_rejeitados/` e `gold/<nome da tabela>/`, no bucket `datalake-tracking`, em Parquet.
+1. **Caminhos das camadas.** `bronze/eventos/`, `silver/eventos/`, `silver/itens/`, `silver/eventos_rejeitados/` e `gold/<nome da tabela>/`, no bucket `datalake-tracking`, em Parquet. `bronze/eventos/`, `silver/eventos/` e `silver/itens/` são particionadas por dia no formato `year=AAAA/month=MM/day=DD` (mês e dia com dois dígitos), o mesmo da landing.
 2. **Receita.**
    - Bruta: soma de `value` dos `purchase` válidos (sem frete, já com o desconto do Pix, incluindo o order bump).
    - Reembolsada: soma de `value` dos `refund` válidos, atribuída à compra pelo `transaction_id`.

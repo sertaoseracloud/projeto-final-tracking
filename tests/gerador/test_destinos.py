@@ -5,8 +5,8 @@ from gerador.destinos import BUCKET, DestinoLocal, DestinoS3
 
 def test_destino_local_espelha_a_chave_em_pastas(tmp_path):
     destino = DestinoLocal(tmp_path)
-    destino.gravar("landing/eventos/dt=2026-09-01/coletor-s42-001.jsonl", '{"a":"é"}\n')
-    arquivo = tmp_path / "landing" / "eventos" / "dt=2026-09-01" / "coletor-s42-001.jsonl"
+    destino.gravar("landing/eventos/year=2026/month=09/day=01/coletor-s42-001.jsonl", '{"a":"é"}\n')
+    arquivo = tmp_path / "landing" / "eventos" / "year=2026" / "month=09" / "day=01" / "coletor-s42-001.jsonl"
     assert arquivo.read_bytes() == '{"a":"é"}\n'.encode("utf-8")
     assert str(tmp_path.resolve()) in destino.descricao()
 

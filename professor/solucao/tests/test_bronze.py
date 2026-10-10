@@ -2,7 +2,7 @@ import json
 
 
 def _gravar_landing(tmp_path):
-    pasta = tmp_path / "landing" / "eventos" / "dt=2026-09-01"
+    pasta = tmp_path / "landing" / "eventos" / "year=2026" / "month=09" / "day=01"
     pasta.mkdir(parents=True)
     compra = {
         "event_id": "e1", "event_name": "purchase", "event_ts": "2026-09-01T14:22:05.123Z",
@@ -33,11 +33,13 @@ def test_le_a_landing_com_schema_fixo_e_params_como_texto(spark, job, tmp_path):
     assert linhas["scroll"].params["outbound"] == "true"
 
 
-def test_proveniencia_traz_arquivo_instante_e_dt_do_caminho(spark, job, tmp_path):
+def test_proveniencia_traz_arquivo_instante_e_data_do_caminho(spark, job, tmp_path):
     bronze = job("01_bronze_ingestao")
     df = bronze.adicionar_proveniencia(bronze.ler_landing(spark, _gravar_landing(tmp_path).as_uri()))
     linhas = df.collect()
-    assert {r.dt for r in linhas} == {"2026-09-01"}
+    assert {(r.year, r.month, r.day) for r in linhas} == {("2026", "09", "01")}
     assert all(r._arquivo_origem.endswith("coletor-s42-001.jsonl") for r in linhas)
     assert all(r._ingerido_em is not None for r in linhas)
-    assert dict(df.dtypes)["dt"] == "string"
+    tipos = dict(df.dtypes)
+    assert (tipos["year"], tipos["month"], tipos["day"]) == ("string", "string", "string")
+    assert "dt" not in df.columns

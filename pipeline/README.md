@@ -21,6 +21,16 @@ caminho = spark._jvm.org.apache.hadoop.fs.Path("s3a://datalake-tracking/silver/e
 existe = caminho.getFileSystem(spark._jsc.hadoopConfiguration()).exists(caminho)
 ```
 
+## Partições por dia
+
+A landing, a Bronze e a Silver usam pastas `year=AAAA/month=MM/day=DD`. Ao ler uma pasta assim, o Spark descobre `year`, `month` e `day` como colunas e, por padrão, converte os valores em número: `month=09` vira `9`, e ao regravar a pasta sai `month=9`. Para manter os dois dígitos, desligue essa inferência na `SparkSession`:
+
+```python
+.config("spark.sql.sources.partitionColumnTypeInference.enabled", "false")
+```
+
+Na gravação, use `.partitionBy("year", "month", "day")` com as três colunas como texto.
+
 ## Antes de começar
 
 1. `docker compose up -d floci`

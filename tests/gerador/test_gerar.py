@@ -32,7 +32,7 @@ def test_resumo_bate_com_as_linhas_gravadas():
 
 def test_main_grava_na_pasta_local_e_imprime_resumo(tmp_path, capsys):
     assert main(["--dias", "2", "--visitantes", "50", "--saida-local", str(tmp_path)]) == 0
-    assert list(tmp_path.glob("landing/eventos/dt=*/coletor-s42-*.jsonl"))
+    assert list(tmp_path.glob("landing/eventos/year=*/month=*/day=*/coletor-s42-*.jsonl"))
     saida = capsys.readouterr().out
     assert "eventos limpos" in saida
     assert str(tmp_path.resolve()) in saida

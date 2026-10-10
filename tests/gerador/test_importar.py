@@ -26,14 +26,14 @@ def test_validar_rejeita_com_a_linha_do_problema(texto, mensagem):
 def test_chave_usa_a_data_do_primeiro_evento_e_o_instante_do_envio():
     agora = datetime(2026, 10, 11, 8, 30, 0, tzinfo=timezone.utc)
     assert chave([{"event_ts": "2026-10-10T12:00:00.000Z"}], agora) == \
-        "landing/eventos/dt=2026-10-10/site-20261011T083000000000.jsonl"
+        "landing/eventos/year=2026/month=10/day=10/site-20261011T083000000000.jsonl"
 
 
 def test_main_grava_o_arquivo_na_landing(tmp_path):
     origem = tmp_path / "eventos.jsonl"
     origem.write_text(UM + "\n", encoding="utf-8")
     assert main([str(origem), "--saida-local", str(tmp_path / "s3")]) == 0
-    gravados = list((tmp_path / "s3").glob("landing/eventos/dt=2026-10-10/site-*.jsonl"))
+    gravados = list((tmp_path / "s3").glob("landing/eventos/year=2026/month=10/day=10/site-*.jsonl"))
     assert len(gravados) == 1
     assert gravados[0].read_text(encoding="utf-8") == UM + "\n"
 
@@ -59,7 +59,7 @@ def test_main_aceita_arquivo_com_bom_e_grava_sem_bom(tmp_path):
     origem = tmp_path / "eventos.jsonl"
     origem.write_bytes(("﻿" + UM + "\n").encode("utf-8"))
     assert main([str(origem), "--saida-local", str(tmp_path / "s3")]) == 0
-    gravados = list((tmp_path / "s3").glob("landing/eventos/dt=2026-10-10/site-*.jsonl"))
+    gravados = list((tmp_path / "s3").glob("landing/eventos/year=2026/month=10/day=10/site-*.jsonl"))
     assert len(gravados) == 1
     assert gravados[0].read_text(encoding="utf-8") == UM + "\n"
 

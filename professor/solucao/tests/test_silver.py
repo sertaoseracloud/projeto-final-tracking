@@ -15,7 +15,9 @@ def schema_bronze(job):
     return StructType(bronze.SCHEMA.fields + [
         StructField("_arquivo_origem", StringType()),
         StructField("_ingerido_em", TimestampType()),
-        StructField("dt", StringType()),
+        StructField("year", StringType()),
+        StructField("month", StringType()),
+        StructField("day", StringType()),
     ])
 
 
@@ -23,7 +25,7 @@ def linha(event_id, event_name, ts="2026-09-01T10:00:00.000Z", pseudo="anon-1", 
           params=None, items=None, ingerido="2026-10-01 00:00:00", arquivo="lote-1"):
     return (event_id, event_name, ts, pseudo, user_id, "s-1",
             ("https://loja.exemplo/", None), ("google", "cpc", None), ("mobile", "Android", "Chrome"),
-            params or {}, items or [], arquivo, datetime.fromisoformat(ingerido), "2026-09-01")
+            params or {}, items or [], arquivo, datetime.fromisoformat(ingerido), "2026", "09", "01")
 
 
 @pytest.fixture
@@ -141,3 +143,4 @@ def test_explodir_itens_gera_uma_linha_por_item(silver, bronze_df):
     assert sorted(x.item_id for x in r) == ["BUMP-MENTORIA", "PLANO-PRO"]
     assert all(x.transaction_id == "T-1" and x.session_id == "anon-1-1" for x in r)
     assert sorted(x.posicao for x in r) == [0, 1]
+    assert {(x.year, x.month, x.day) for x in r} == {("2026", "09", "01")}
