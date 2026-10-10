@@ -3,7 +3,9 @@
 Cada tipo recebe uma cota proporcional ao seu peso. Os defeitos que
 alteram um evento existente atingem no máximo 5% dos candidatos daquele
 tipo, para não destruir a receita (por exemplo, tirar o id de metade das
-compras); os reembolsos órfãos inseridos também ficam em 5% das compras,
+compras). Além disso, somando todos os tipos, no máximo 5% dos eventos de
+cada nome são alterados, para os defeitos monetários não se acumularem nas
+compras. Os reembolsos órfãos inseridos também ficam em 5% das compras,
 para não superar os reembolsos reais. O que sobra das cotas vai para "ts_futuro", que tem candidatos
 de sobra. Um evento recebe no máximo um defeito.
 """
@@ -14,6 +16,7 @@ import copy
 import itertools
 import math
 import random
+from collections import Counter
 from datetime import timedelta
 
 from gerador.eventos import hex8, iso, ler_iso, novo_uuid
@@ -124,6 +127,9 @@ def aplicar_sujeira(rng: random.Random, eventos: list[dict], fracao: float) -> d
     cotas["refund_orfao"], sobra = _limitar_orfaos(cotas["refund_orfao"], originais)
     contagem = dict.fromkeys(TIPOS, 0)
     usados: set[int] = set()
+    por_nome = Counter(e["event_name"] for e in originais)
+    tetos = {nome: math.ceil(n * TETO) for nome, n in por_nome.items()}
+    alterados: Counter = Counter()
 
     for tipo, mutar in MUTACOES.items():
         candidatos = [e for e in originais if id(e) not in usados and FILTROS[tipo](e)]
@@ -133,10 +139,20 @@ def aplicar_sujeira(rng: random.Random, eventos: list[dict], fracao: float) -> d
         n = min(quero, teto)
         if tipo != "ts_futuro":
             sobra += quero - n
-        for e in candidatos[:n]:
+        aplicados = 0
+        for e in candidatos:
+            if aplicados == n:
+                break
+            nome = e["event_name"]
+            if alterados[nome] >= tetos[nome]:
+                continue
             mutar(e)
             usados.add(id(e))
-        contagem[tipo] = n
+            alterados[nome] += 1
+            aplicados += 1
+        if tipo != "ts_futuro":
+            sobra += n - aplicados
+        contagem[tipo] = aplicados
 
     limpos = [e for e in originais if id(e) not in usados]
     for tipo, inserir in INSERCOES.items():

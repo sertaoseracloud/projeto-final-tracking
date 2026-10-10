@@ -1,5 +1,7 @@
 import copy
+import math
 import random
+from collections import Counter
 
 from gerador.sujeira import TIPOS, aplicar_sujeira
 
@@ -61,3 +63,15 @@ def test_fracao_zero_nao_altera_nada(simulacao):
     contagem = aplicar_sujeira(random.Random(1), eventos, 0.0)
     assert sum(contagem.values()) == 0
     assert eventos == simulacao[0]
+
+
+def test_cada_nome_de_evento_recebe_no_maximo_5_por_cento_de_mutacoes(simulacao):
+    eventos = copy.deepcopy(simulacao[0])
+    antes = {e["event_id"]: copy.deepcopy(e) for e in eventos}
+    total = Counter(e["event_name"] for e in eventos)
+    aplicar_sujeira(random.Random(1), eventos, 0.03)
+    mutados = Counter(e["event_name"] for e in eventos
+                      if e["event_id"] in antes and e != antes[e["event_id"]])
+    assert mutados
+    for nome, n in mutados.items():
+        assert n <= math.ceil(total[nome] * 0.05), nome

@@ -1,6 +1,6 @@
 """Simula o coletor de tracking da landing DadosPro e grava na landing do datalake.
 
-    python gerador/gerar_eventos.py                       # 3000 visitantes, 14 dias, no S3 (floci)
+    python gerador/gerar_eventos.py                       # 6000 visitantes, 14 dias, no S3 (floci)
     python gerador/gerar_eventos.py --seed 7 --sujeira 0.05
     python gerador/gerar_eventos.py --saida-local saida   # numa pasta, sem S3
 
@@ -27,7 +27,7 @@ from gerador.sujeira import aplicar_sujeira
 DATA_PADRAO = "2026-09-01"
 
 
-def gerar(seed: int = 42, dias: int = 14, visitantes: int = 3000, sujeira: float = 0.03,
+def gerar(seed: int = 42, dias: int = 14, visitantes: int = 6000, sujeira: float = 0.03,
           data_inicial: datetime = datetime(2026, 9, 1, tzinfo=timezone.utc)) -> tuple[dict[str, str], dict]:
     """Devolve ({chave: conteúdo JSONL}, resumo)."""
     eventos, sessoes, rng = simular(seed, dias, visitantes, data_inicial)
@@ -73,7 +73,7 @@ def imprimir_resumo(r: dict, destino: str) -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--dias", type=int, default=14)
-    ap.add_argument("--visitantes", type=int, default=3000)
+    ap.add_argument("--visitantes", type=int, default=6000)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--sujeira", type=float, default=0.03, help="fração de eventos com defeito (0 a 0.5)")
     ap.add_argument("--data-inicial", default=DATA_PADRAO, help="AAAA-MM-DD, em UTC")
@@ -83,7 +83,10 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--sujeira precisa estar entre 0 e 0.5")
     if a.dias < 1 or a.visitantes < 1:
         ap.error("--dias e --visitantes precisam ser positivos")
-    data = datetime.strptime(a.data_inicial, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    try:
+        data = datetime.strptime(a.data_inicial, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    except ValueError:
+        ap.error("--data-inicial precisa estar no formato AAAA-MM-DD")
 
     arquivos, resumo = gerar(a.seed, a.dias, a.visitantes, a.sujeira, data)
     destino = DestinoLocal(a.saida_local) if a.saida_local else DestinoS3()

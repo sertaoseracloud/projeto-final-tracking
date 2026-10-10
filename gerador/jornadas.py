@@ -18,7 +18,7 @@ from gerador import catalogo as cat
 from gerador.eventos import Contexto, criar_evento, hex8, item, ler_iso
 
 P_RECARGA = 0.25          # chance de um page_view ser recarga completa (novo session_hint)
-P_REEMBOLSO = 0.11         # ~8% observado: compras da última semana perdem o reembolso fora da janela
+P_REEMBOLSO = 0.12         # base; o fator_reembolso do canal ajusta. ~8% observado (compras da última semana perdem o reembolso fora da janela)
 
 
 @dataclass
@@ -38,8 +38,11 @@ class Sessao:
         self.eventos.append(evento)
         return evento
 
-    def abrir(self, pagina: str) -> dict:
-        if self.ctx.pagina is None:
+    def abrir(self, pagina: str, recarga: bool = False) -> dict:
+        if recarga and self.ctx.pagina is not None:
+            self.ctx.referrer = cat.PAGINAS[self.ctx.pagina]
+            self.ctx.session_hint = "s-" + hex8(self.rng)
+        elif self.ctx.pagina is None:
             self.ctx.referrer = self.ctx.canal["referrer"]
         else:
             self.ctx.referrer = cat.PAGINAS[self.ctx.pagina]
@@ -154,6 +157,8 @@ def simular_sessao(rng: random.Random, ctx: Contexto, inicio: datetime,
     fator = ctx.canal["fator_compra"] * ctx.dispositivo["fator_compra"] * intencao
 
     s.abrir("landing")
+    if s.chance(P_RECARGA):
+        s.abrir("landing", recarga=True)
     if s.chance(0.30):
         s.emitir("click", {"link_url": cat.BASE_URL + "/#planos", "link_text": "Ver planos",
                            "link_id": "hero_ver_planos", "outbound": False})
@@ -262,7 +267,7 @@ def simular_visitante(rng: random.Random, data_inicial: datetime, dias: int) -> 
         e_lead = e_lead or resultado.fez_lead
         if resultado.compra is not None:
             compra = resultado.compra
-            if rng.random() < P_REEMBOLSO:
+            if rng.random() < P_REEMBOLSO * canal["fator_reembolso"]:
                 quando = ler_iso(compra["event_ts"]) + timedelta(days=rng.uniform(1, 6.9))
                 if quando < fim:
                     ctx_r = Contexto(pseudo, canal, dispositivo, "s-" + hex8(rng), user_id)

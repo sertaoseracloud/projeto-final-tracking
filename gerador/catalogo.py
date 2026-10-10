@@ -38,18 +38,19 @@ PESOS_PAGAMENTO = (0.40, 0.20, 0.40)
 
 LISTA = {"item_list_id": "tabela_planos", "item_list_name": "Tabela de planos"}
 
-# peso: participação no tráfego; fator_compra: multiplica a propensão de compra
+# peso: participação no tráfego; fator_compra: multiplica a propensão de compra;
+# fator_reembolso: multiplica a chance de pedir reembolso
 CANAIS = (
     {"source": "direct", "medium": "(none)", "campaign": None,
-     "referrer": None, "peso": 0.20, "fator_compra": 1.0},
+     "referrer": None, "peso": 0.20, "fator_compra": 1.0, "fator_reembolso": 0.8},
     {"source": "google", "medium": "cpc", "campaign": "formacao_dados",
-     "referrer": "https://www.google.com/", "peso": 0.30, "fator_compra": 1.2},
+     "referrer": "https://www.google.com/", "peso": 0.30, "fator_compra": 1.2, "fator_reembolso": 1.0},
     {"source": "google", "medium": "organic", "campaign": None,
-     "referrer": "https://www.google.com/", "peso": 0.20, "fator_compra": 1.0},
+     "referrer": "https://www.google.com/", "peso": 0.20, "fator_compra": 1.0, "fator_reembolso": 0.7},
     {"source": "instagram", "medium": "paid_social", "campaign": "lancamento_nov",
-     "referrer": "https://l.instagram.com/", "peso": 0.25, "fator_compra": 0.6},
+     "referrer": "https://l.instagram.com/", "peso": 0.25, "fator_compra": 0.6, "fator_reembolso": 2.5},
     {"source": "newsletter", "medium": "email", "campaign": "ebook_nutricao",
-     "referrer": None, "peso": 0.05, "fator_compra": 1.5},
+     "referrer": None, "peso": 0.05, "fator_compra": 1.5, "fator_reembolso": 0.5},
 )
 NEWSLETTER = CANAIS[4]
 

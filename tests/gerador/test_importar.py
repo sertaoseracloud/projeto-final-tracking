@@ -26,7 +26,7 @@ def test_validar_rejeita_com_a_linha_do_problema(texto, mensagem):
 def test_chave_usa_a_data_do_primeiro_evento_e_o_instante_do_envio():
     agora = datetime(2026, 10, 11, 8, 30, 0, tzinfo=timezone.utc)
     assert chave([{"event_ts": "2026-10-10T12:00:00.000Z"}], agora) == \
-        "landing/eventos/dt=2026-10-10/site-20261011T083000.jsonl"
+        "landing/eventos/dt=2026-10-10/site-20261011T083000000000.jsonl"
 
 
 def test_main_grava_o_arquivo_na_landing(tmp_path):

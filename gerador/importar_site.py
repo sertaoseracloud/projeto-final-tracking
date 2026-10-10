@@ -39,7 +39,7 @@ def validar(texto: str) -> list[dict]:
 
 
 def chave(eventos: list[dict], agora: datetime) -> str:
-    return f"{PREFIXO}/dt={eventos[0]['event_ts'][:10]}/site-{agora:%Y%m%dT%H%M%S}.jsonl"
+    return f"{PREFIXO}/dt={eventos[0]['event_ts'][:10]}/site-{agora:%Y%m%dT%H%M%S%f}.jsonl"
 
 
 def main(argv: list[str] | None = None) -> int:

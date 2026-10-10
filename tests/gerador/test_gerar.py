@@ -41,3 +41,8 @@ def test_main_grava_na_pasta_local_e_imprime_resumo(tmp_path, capsys):
 def test_main_recusa_fracao_de_sujeira_absurda(tmp_path):
     with pytest.raises(SystemExit):
         main(["--sujeira", "0.9", "--saida-local", str(tmp_path)])
+
+
+def test_main_recusa_data_inicial_invalida(tmp_path):
+    with pytest.raises(SystemExit):
+        main(["--data-inicial", "2026-9-1x", "--saida-local", str(tmp_path)])

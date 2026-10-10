@@ -66,6 +66,27 @@ def test_session_hint_muda_mais_vezes_que_as_sessoes(simulacao):
     assert len({e["session_hint"] for e in eventos}) > sessoes
 
 
+def test_session_hint_distintos_passam_de_1_2_vezes_as_sessoes(simulacao):
+    eventos, sessoes = simulacao
+    assert len({e["session_hint"] for e in eventos}) >= 1.2 * sessoes
+
+
+def test_reembolso_e_mais_frequente_no_instagram_que_no_organico(simulacao):
+    eventos, _ = simulacao
+    compras = {e["params"]["transaction_id"]: e for e in eventos if e["event_name"] == "purchase"}
+    reembolsados = {e["params"]["transaction_id"] for e in eventos if e["event_name"] == "refund"}
+    n, r = defaultdict(int), defaultdict(int)
+    for tid, c in compras.items():
+        canal = (c["traffic"]["source"], c["traffic"]["medium"])
+        n[canal] += 1
+        r[canal] += tid in reembolsados
+    insta, organico = ("instagram", "paid_social"), ("google", "organic")
+    assert n[insta] and n[organico]
+    assert r[insta] / n[insta] > r[organico] / n[organico]
+    outros = [c for c in n if c != insta]
+    assert r[insta] / n[insta] > sum(r[c] for c in outros) / sum(n[c] for c in outros)
+
+
 def test_user_id_so_aparece_a_partir_do_sign_up(simulacao):
     casos = 0
     for evs in _por_pseudo(simulacao[0]).values():
