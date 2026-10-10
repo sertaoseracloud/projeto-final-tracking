@@ -197,11 +197,12 @@ Leitura: o segmento 0 engaja sem converter, o 1 reúne os compradores, o 2 os le
 | Sessões | ±2% (bordas do gap de 30 min) |
 | Funil e receita | ±2% |
 | AUC honesto | dentro de ±0,03 de 0,9243. Um AUC ≥ 0,98 indica vazamento |
+| Medianas (lead → compra, em dias) | ±0,5 dia (`percentile_approx` contra mediana exata) |
 | Silhueta e k | livres (dependem das features de perfil escolhidas). Exigir só que k ∈ {3, 4, 5} e que a escolha seja justificada |
 
 ## 9. Como reconhecer cada armadilha no trabalho do aluno
 
-1. **Frete no funil.** Com `add_shipping_info` como etapa obrigatória, a conversão em sequência por plano (entre as sessões com `begin_checkout`) cai de 0,5858 para 0,0356 no Básico e de 0,6133 para 0,0172 no Pro. O Premium cai só de 0,5682 para 0,4886. O frete praticamente só existe no Premium (136 sessões com `add_shipping_info`, contra 15 no Básico e 20 no Pro). Os poucos eventos de frete em Básico e Pro vêm de visitantes que trocaram para o Premium, porque o plano da sessão é o primeiro `select_item`.
+1. **Frete no funil.** Com `add_shipping_info` como etapa obrigatória, a conversão em sequência por plano (entre as sessões com `begin_checkout`) cai de 0,5858 para 0,0356 no Básico e de 0,6133 para 0,0172 no Pro. O Premium cai só de 0,5682 para 0,4886. O frete praticamente só existe no Premium (136 sessões com `add_shipping_info`, contra 15 no Básico e 20 no Pro). Os poucos eventos de frete em Básico e Pro vêm de visitantes que trocaram de plano depois do `add_to_cart` (o gerador troca o plano em 10% dos carrinhos), porque o plano da sessão é o primeiro `select_item`. **Sintoma do aluno que seguiu o 5.4 (contagem sem exigir a sequência) e mesmo assim pôs o frete como etapa obrigatória:** no Básico a linha de `add_shipping_info` tem 15 sessões, cerca de 0,049 de `begin_checkout` (15 ÷ 309), e a etapa seguinte, `add_payment_info`, mostra conversão de cerca de 15,3 (230 ÷ 15), acima de 100%. No Pro são 20 sessões, cerca de 0,049 (20 ÷ 406), e a etapa seguinte mostra cerca de 16,1 (322 ÷ 20).
 2. **Reembolso na data errada.** Atribuindo o `refund` à data do próprio evento, 7 de 189 células (data × plano × canal) ficam com receita líquida negativa, por exemplo -1144,0 em 2026-09-09 (PLANO-PREMIUM, google / organic) e -947,15 em 2026-09-04 (PLANO-PREMIUM, instagram / paid_social).
 3. **Vazamento no modelo.** AUC 0,9886, F1 0,7852 e precisão 0,6573 com eventos do checkout, contra AUC 0,9243, F1 0,5065 e precisão 0,3421 só com a landing.
 4. **Duplicata de lote.** Sem deduplicar por `event_id`, a Bronze tem 64372 linhas para 63716 `event_id` distintos, e há 609 `purchase` contra 604 distintos. A receita bruta de `purchase` na Bronze fica em 359250,85, contra 356240,4 deduplicada por `event_id`: diferença de 3010,45.
@@ -213,7 +214,7 @@ Leitura: o segmento 0 engaja sem converter, o 1 reúne os compradores, o 2 os le
 | --- | --- | --- |
 | Arquitetura (R1–R4) | 15 | Um job por camada, verificação de camada antes de ler, Bronze append-only com proveniência (arquivo de origem). Rodar o script de sequência do zero e conferir que termina sem erro. |
 | Silver (R5–R10) | 25 | Linhas na Bronze 64372, duplicatas 656, aprovados 61813 e rejeitados por motivo (seção 3), dentro de ±1%. Sessões perto de 8793 (±2%) e calculadas sem `session_hint`. Stitching de visitante presente. |
-| Gold (seção 6.3) | 30 | As 13 tabelas existem. Funil, receita e lead batem com as seções 4 a 6 (±2%). Modelo sem vazamento: AUC honesto em 0,9243 ±0,03 e nunca ≥ 0,98. |
+| Gold (seção 5.3 do enunciado) | 30 | As 13 tabelas existem. Funil, receita e lead batem com as seções 4 a 6 (±2%). Modelo sem vazamento: AUC honesto em 0,9243 ±0,03 e nunca ≥ 0,98. |
 | Relatório | 20 | Cada resposta cita tabela e número da Gold. A recomendação é coerente com os dados (por exemplo, a maior perda do funil em `select_item`, o reembolso alto em instagram / paid_social, os termos de FAQ sem resultado). |
 | Qualidade do dado | 10 | Identifica ao menos três das cinco armadilhas da seção 9 com o sintoma em número, além de duplicatas e rejeições. |
 

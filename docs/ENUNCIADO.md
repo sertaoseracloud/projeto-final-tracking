@@ -58,7 +58,7 @@ Os 20 eventos, o formato de cada um e o layout dos arquivos no S3 estão em [`CO
 
 ### Você entrega
 
-1. **`pipeline/`** — código PySpark que atende aos requisitos da seção 5, mais um `pipeline/README.md` dizendo como rodar.
+1. **`pipeline/`** — código PySpark que atende aos requisitos da seção 5, e a atualização do `pipeline/README.md` (já existe, com o acesso ao S3) para dizer também como rodar o seu pipeline.
 2. **`RELATORIO.md`** — respostas às quatro perguntas da seção 1. Cada resposta cita a tabela Gold e os números que a sustentam e termina com uma recomendação para a empresa.
 3. **Seção "Qualidade do dado"** no relatório:
    - quantos eventos foram descartados como duplicata;
@@ -127,7 +127,7 @@ Nomes de colunas são livres; o **conteúdo** é obrigatório, porque é o que a
 
 | Job | Tabela | Conteúdo mínimo |
 | --- | --- | --- |
-| Funil | `funil_compra` | sessões que atingiram cada etapa de `view_item_list → select_item → add_to_cart → view_cart → begin_checkout → add_payment_info → purchase`, conversão sobre a etapa anterior e sobre o topo; total e por plano × canal. `view_item` (abrir o detalhe do plano) é opcional na jornada e **não** entra na sequência: aparece como taxa à parte (sessões com `view_item` ÷ sessões com `select_item`). `add_shipping_info` só existe no Premium: se quiser analisá-lo, faça-o num recorte do Premium |
+| Funil | `funil_compra` | sessões que atingiram cada etapa de `view_item_list → select_item → add_to_cart → view_cart → begin_checkout → add_payment_info → purchase`, conversão sobre a etapa anterior e sobre o topo; total e por plano × canal. `view_item` (abrir o detalhe do plano) é opcional na jornada e **não** entra na sequência: aparece como taxa à parte (sessões com `view_item` ÷ sessões com `select_item`). |
 | | `funil_lead` | `page_view` da landing → `scroll` ≥ 50% → `generate_lead`, por canal |
 | Engajamento | `sessoes` | uma linha por sessão: duração, eventos, scroll máximo, maior `video_percent`, fez lead, comprou, canal, dispositivo |
 | | `retencao_video` | das sessões com `video_start`, percentual que atingiu 10, 25, 50, 75 e 100% |
@@ -163,6 +163,11 @@ Para que a sua tabela possa ser comparada com o esperado, use exatamente estas d
 4. **Funil.** Uma sessão conta numa etapa se teve aquele evento em qualquer momento, sem exigir as etapas anteriores. Conversão sobre a etapa anterior = sessões da etapa ÷ sessões da etapa anterior.
 5. **Lead → compra.** A unidade é a pessoa (`user_id` resolvido; se não houver, `user_pseudo_id`). Vale o primeiro `generate_lead` da pessoa e a primeira compra estritamente depois dele. Dias = diferença em segundos ÷ 86400 (fracionário); use a mediana desses dias.
 6. **Propensão.** Uma linha por sessão (todas as sessões da Silver). O rótulo é verdadeiro quando a sessão contém um `purchase`.
+7. **Reembolso.** Taxa de reembolso = pedidos com reembolso ÷ pedidos (por plano e canal da compra).
+8. **Mediana de dias.** Use `percentile_approx(dias, 0.5)` do Spark.
+9. **Canal de um lead.** É o canal da sessão do primeiro `generate_lead` da pessoa. A tabela `lead_para_compra` traz o total e uma linha por canal do lead.
+10. **Datas.** Datas (data da compra etc.) em UTC.
+11. **Métricas do modelo.** F1, precisão e recall referem-se à classe positiva (sessão com compra).
 
 ## 6. Como rodar
 

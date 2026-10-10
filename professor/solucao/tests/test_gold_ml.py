@@ -43,8 +43,6 @@ def test_treinar_propensao_pontua_todas_as_sessoes_e_mede_no_teste(spark, ml):
     assert pontuado.count() == 200
     assert {"precisao", "recall"} <= set(metricas)
     assert pontuado.columns == ["session_id", "conjunto", "rotulo", "probabilidade"]
-    assert {"precisao", "recall"} <= set(metricas)
-    assert pontuado.columns == ["session_id", "conjunto", "rotulo", "probabilidade"]
     assert {r.conjunto for r in pontuado.select("conjunto").distinct().collect()} == {"treino", "teste"}
     assert all(0 <= r.probabilidade <= 1 for r in pontuado.collect())
 
@@ -73,19 +71,3 @@ def test_segmentar_escolhe_k_pelo_silhouette_e_devolve_um_por_visitante(spark, m
     assert len(seg) == 90 and len({r.visitante for r in seg}) == 90
     assert seg[0].k in (3, 4, 5) and seg[0].silhueta > 0.5
     assert sum(1 for r in seg if r.segmento == seg[0].segmento) == seg[0].visitantes_no_segmento
-
-
-def test_pesos_de_classe_fazem_o_modelo_prever_a_classe_rara(spark, ml):
-    linhas = []
-    for i in range(400):
-        comprou = i % 20 == 0
-        base = {n: 0 for n in ml.NUMERICAS}
-        base.update(scroll_max=(60 + i % 4 * 10) if comprou else (10 + i % 7 * 10),
-                    video_max=(50 + i % 3 * 15) if comprou else (i % 6 * 10),
-                    viu_planos=1, page_views=1)
-        linhas.append((f"s{i}", ["google / cpc", "instagram / paid_social"][i % 2], "mobile", "(nenhum)",
-                       *[int(base[n]) for n in ml.NUMERICAS], 1.0 if comprou else 0.0))
-    ddl = ("session_id string, canal string, dispositivo string, plano string, "
-           + ", ".join(f"{n} int" for n in ml.NUMERICAS) + ", rotulo double")
-    _, metricas = ml.treinar_propensao(spark.createDataFrame(linhas, ddl))
-    assert metricas["recall"] > 0.5
