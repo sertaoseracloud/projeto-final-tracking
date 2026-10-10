@@ -4,14 +4,32 @@ Só é preciso o **Docker**. Python, Java, PySpark e o conector do Spark para S3
 
 Tempo total: **cerca de 10 minutos** na primeira vez, a maior parte baixando imagens.
 
+## Antes de tudo: o que é o Docker
+
+Se você nunca usou Docker, leia esta seção. Ela explica as quatro palavras que aparecem no resto do guia.
+
+- **Docker** é um programa que roda outros programas dentro de "caixas" isoladas. Assim, todo mundo da turma usa exatamente as mesmas versões de Python, Java e Spark, sem instalar nada disso na própria máquina.
+- **Imagem** é o "molde" de uma caixa: um pacote pronto com sistema, programas e bibliotecas. A imagem do projeto é descrita no arquivo `Dockerfile`.
+- **Contêiner** é uma caixa em funcionamento, criada a partir de uma imagem. Você pode criar, parar e apagar contêineres sem afetar a sua máquina.
+- **Docker Compose** é a ferramenta que liga vários contêineres de uma vez. O arquivo `docker-compose.yml` diz quais contêineres o projeto usa e como eles conversam. Todo comando `docker compose ...` lê esse arquivo, por isso você precisa estar na **raiz do repositório** (a pasta onde está o `docker-compose.yml`) ao digitá-lo.
+
+E mais dois termos do projeto:
+
+- **S3** é o serviço de armazenamento de arquivos da AWS. Os arquivos ficam dentro de um **bucket** (um "disco" com nome). Aqui o bucket se chama `datalake-tracking`.
+- **floci** é um programa que imita o S3 na sua máquina. Para o Spark, ele parece um S3 de verdade, mas tudo fica local e é gratuito.
+
 ## O que roda em cada contêiner
+
+O projeto usa dois contêineres, chamados de **serviços** no `docker-compose.yml`:
 
 | Serviço | Imagem | O que tem |
 | --- | --- | --- |
 | `floci` | `floci/floci:latest` | S3 emulado em `http://floci:4566` (e `localhost:4566` na sua máquina) |
 | `app` | construída pelo `Dockerfile` | Python 3.11, Java 17, PySpark 3.5.3, conector `s3a` (`hadoop-aws` 3.3.4), `boto3`, `pytest` |
 
-O repositório é montado em `/projeto` dentro do `app`: o que você edita na sua máquina vale na hora, sem reconstruir a imagem.
+Em outras palavras: o `floci` guarda os arquivos e o `app` roda o seu código. O conector `s3a` é a peça que permite ao Spark ler e gravar no S3 com caminhos que começam com `s3a://`.
+
+O repositório é montado em `/projeto` dentro do `app`: o que você edita na sua máquina vale na hora, sem reconstruir a imagem. Ou seja, você edita os arquivos no seu editor de sempre, e o contêiner enxerga a mesma pasta.
 
 ## Passo 1 — Docker
 
@@ -21,22 +39,37 @@ Instale o Docker Desktop (Windows ou macOS) ou o Docker Engine com o plugin Comp
 docker compose version
 ```
 
+**O que faz:** pergunta ao Docker qual versão do Compose está instalada.
+
+**O que você deve ver:** uma linha parecida com `Docker Compose version v2...`. Se aparecer "comando não encontrado", o Docker não está instalado ou não está no PATH. No Windows e no macOS, deixe o Docker Desktop **aberto** enquanto trabalha: é ele que mantém o Docker funcionando.
+
 ## Passo 2 — Construir a imagem e subir o S3
 
-Na raiz do repositório:
+Abra um terminal na raiz do repositório e rode:
 
 ```bash
 docker compose build app
 docker compose up -d floci
 ```
 
+**O que faz cada comando:**
+
+- `docker compose build app` monta a imagem do serviço `app` seguindo o `Dockerfile`. Na primeira vez ele baixa Python, Java e Spark, por isso demora alguns minutos. Nas próximas vezes é rápido, porque o Docker reaproveita o que já baixou.
+- `docker compose up -d floci` liga o contêiner do S3 emulado. O `-d` significa "em segundo plano": o terminal fica livre e o floci continua rodando sozinho, até você pará-lo ou fechar o Docker.
+
+**O que você deve ver:** o `build` imprime muitas linhas de progresso e termina sem mensagem de erro. O `up -d floci` mostra o contêiner `floci-datalake-tracking` como iniciado (`Started` ou `Running`).
+
 ## Passo 3 — Popular a landing do datalake
+
+"Popular a landing" significa colocar os eventos brutos no prefixo `landing/` do bucket, que é a porta de entrada do datalake.
 
 ```bash
 docker compose run --rm app python gerador/gerar_eventos.py
 ```
 
-O resumo impresso diz quantos eventos e defeitos foram gerados. Detalhes em [gerador/README.md](gerador/README.md).
+**O que faz:** `docker compose run app` cria um contêiner `app` só para rodar um comando, aqui `python gerador/gerar_eventos.py`. O `--rm` apaga esse contêiner quando o comando termina, para não acumular lixo. Você vai usar essa mesma forma para rodar todos os scripts do projeto.
+
+**O que você deve ver:** o resumo impresso diz quantos eventos e defeitos foram gerados. Detalhes em [gerador/README.md](gerador/README.md).
 
 ## Passo 4 — Conferir o Spark falando com o S3
 
@@ -44,16 +77,24 @@ O resumo impresso diz quantos eventos e defeitos foram gerados. Detalhes em [ger
 docker compose run --rm app python infra/verificar_ambiente.py
 ```
 
-Precisa terminar com três linhas `[ok]`. A configuração `s3a` usada pelo Spark está no início do próprio script (`infra/verificar_ambiente.py`).
+**O que faz:** abre uma sessão do Spark dentro do `app`, lê os eventos da landing, grava um arquivo de teste no bucket, lê esse arquivo de volta e apaga o teste.
+
+**O que você deve ver:** precisa terminar com três linhas `[ok]`. No meio delas aparece uma tabela com a contagem de eventos por nome. A configuração `s3a` usada pelo Spark está no início do próprio script (`infra/verificar_ambiente.py`). Se aparecer `[erro]`, veja a tabela de problemas comuns abaixo.
 
 ## Como rodar qualquer coisa
+
+Todo comando Python do projeto roda dentro do contêiner `app`, nesta forma:
 
 ```bash
 docker compose run --rm app python <script.py>
 docker compose run --rm app python -m pytest
 ```
 
+A primeira linha roda um script (troque `<script.py>` pelo caminho dele, por exemplo `pipeline/bronze.py`). A segunda roda os testes automáticos com o `pytest`.
+
 ## Problemas comuns
+
+Se algo der errado, procure a mensagem na primeira coluna.
 
 | O que você vê | Causa | Solução |
 | --- | --- | --- |
@@ -63,9 +104,16 @@ docker compose run --rm app python -m pytest
 | `ClassNotFoundException: org.apache.hadoop.fs.s3a.S3AFileSystem` | imagem antiga, sem os jars | `docker compose build --no-cache app` |
 | `[erro]` no `verificar_ambiente.py` lendo a landing | o gerador ainda não rodou | Passo 3 |
 
+Dica: para ver quais contêineres estão ligados, use `docker compose ps`.
+
 ## Desinstalar
+
+Quando terminar o projeto, estes comandos limpam tudo:
 
 ```bash
 docker compose down -v
 docker image rm datalake-tracking-app
 ```
+
+- `docker compose down -v` desliga e apaga os contêineres do projeto, junto com os volumes (os dados guardados por eles). **Atenção:** os eventos e as camadas gravadas no floci se perdem.
+- `docker image rm datalake-tracking-app` apaga a imagem do `app` para liberar espaço em disco.

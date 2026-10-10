@@ -2,14 +2,20 @@
 
 Este diretório faz o papel do **mundo lá fora**: a landing page DadosPro e o coletor de tracking que grava os eventos dela no S3. O pipeline do datalake não conhece este código. A única coisa que os dois compartilham é o **formato do evento** (`docs/CONTRATO_EVENTO.md`) e o prefixo `landing/eventos/` do bucket.
 
-Não usa Spark: é Python puro mais `boto3`.
+Em outras palavras: numa empresa real, os eventos chegariam de milhares de visitantes de verdade. Aqui, este gerador inventa visitantes e jornadas para que você tenha dados para trabalhar. O **coletor** é o sistema que recebe os eventos da página e os grava em arquivos no S3.
+
+Não usa Spark: é Python puro mais `boto3` (o SDK da AWS para Python, que grava arquivos no S3).
 
 ## Uso
+
+Os dois comandos abaixo ligam o S3 local e geram os eventos com os valores padrão. Se você nunca usou Docker, veja antes o [SETUP.md](../SETUP.md).
 
 ```bash
 docker compose up -d floci                                      # S3 local
 docker compose run --rm app python gerador/gerar_eventos.py     # 6000 visitantes, 14 dias, seed 42
 ```
+
+O gerador aceita opções na linha de comando. Para o projeto, rode sem opções, com os valores padrão.
 
 | Opção | Padrão | O que faz |
 | --- | --- | --- |
@@ -19,6 +25,8 @@ docker compose run --rm app python gerador/gerar_eventos.py     # 6000 visitante
 | `--sujeira` | 0.03 | fração de eventos com defeito (0 a 0.5) |
 | `--data-inicial` | 2026-09-01 | primeiro dia, em UTC |
 | `--saida-local PASTA` | — | grava numa pasta, com a mesma árvore de chaves, em vez do S3 |
+
+A **seed** (semente) é o número que controla o sorteio aleatório. Com a mesma seed, o gerador sorteia sempre os mesmos visitantes e eventos, então todos da turma recebem os mesmos dados.
 
 Rodar de novo com a **mesma** seed sobrescreve os mesmos arquivos. Uma seed **diferente** acrescenta arquivos novos (`coletor-s<seed>-*.jsonl`), como um segundo coletor gravando no mesmo bucket.
 
@@ -30,15 +38,23 @@ Navegue por `site/index.html`, clique em **Exportar JSONL** no painel lateral e 
 docker compose run --rm app python gerador/importar_site.py saida/eventos_2026-10-10.jsonl
 ```
 
-O arquivo vai para `landing/eventos/year=…/month=…/day=… (data do primeiro evento)/site-<instante com microssegundos>.jsonl`. Arquivos com BOM e quebras de linha CRLF são aceitos.
+Troque `saida/eventos_2026-10-10.jsonl` pelo nome do arquivo que você exportou.
+
+O arquivo vai para `landing/eventos/year=…/month=…/day=… (data do primeiro evento)/site-<instante com microssegundos>.jsonl`. Arquivos com BOM e quebras de linha CRLF são aceitos. (BOM e CRLF são detalhes de como o Windows às vezes salva arquivos de texto; você não precisa se preocupar com eles.)
 
 ## O que é gravado
 
+Cada execução grava arquivos neste caminho:
+
 `s3://datalake-tracking/landing/eventos/year=AAAA/month=MM/day=DD/coletor-s<seed>-<lote>.jsonl` — um evento JSON por linha, de 3 a 6 lotes por dia; o dia seguinte ao último (ex.: `year=2026/month=09/day=15`) pode ter 1 ou 2 lotes, com sessões que viram a meia-noite.
+
+Cada arquivo é um **lote**: um pacote de eventos que o coletor descarregou de uma vez.
 
 ## Como a jornada é simulada
 
-Cada visitante recebe um canal de origem e um dispositivo, que mudam as chances de rolar a página, ver o vídeo, escolher um plano e comprar. Na ordem da página: hero → vídeo → módulos → tabela de planos → checkout → obrigado → área de membros.
+A **jornada** é o caminho que o visitante faz na página, do primeiro acesso até (talvez) a compra. Cada visitante recebe um canal de origem e um dispositivo, que mudam as chances de rolar a página, ver o vídeo, escolher um plano e comprar. Na ordem da página: hero → vídeo → módulos → tabela de planos → checkout → obrigado → área de membros.
+
+O **canal de origem** é de onde o visitante veio, como Google, Instagram ou a newsletter. O **dispositivo** é o tipo de aparelho, como celular ou computador.
 
 - **Parte dos leads** volta outro dia, em geral pela newsletter, com mais intenção de compra.
 - **Quem compra** pode criar conta (`sign_up`) e, em visitas seguintes, faz `login`.
@@ -65,6 +81,8 @@ Os tipos que alteram um evento existente atingem no máximo 5% dos candidatos; a
 Um `purchase` que perde o `transaction_id` ou o valor deixa o `refund` dele sem compra válida. Esse efeito em cascata é proposital.
 
 ## Saída com os parâmetros padrão
+
+Ao terminar, o gerador imprime um resumo como este. Use-o para conferir se a geração rodou certo.
 
 ```text
 Destino:            s3://datalake-tracking (http://floci:4566)
@@ -111,6 +129,8 @@ Defeitos injetados:
 ```
 
 ## Testes
+
+Para rodar os testes automáticos do gerador:
 
 ```bash
 docker compose run --rm app python -m pytest tests/gerador

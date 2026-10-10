@@ -1,15 +1,28 @@
 # Enunciado — datalake de tracking da DadosPro
 
+> Este documento usa vários termos de engenharia de dados. Cada um é explicado na primeira vez que aparece, e todos estão reunidos no [Glossário](#glossário), no fim da página. Se travar numa palavra, consulte o glossário.
+
 ## 1. O problema
 
 Uma empresa vende um curso online por meio de uma landing page de conversão. A página foi instrumentada com 20 eventos de tracking, que chegam a um bucket S3 como arquivos JSON Lines. Ninguém olha esses dados ainda.
 
-Você vai **construir do zero** um datalake em arquitetura medalhão que responda a quatro perguntas da empresa:
+Traduzindo:
+
+- **Landing page de conversão** é uma página única feita para levar o visitante a uma ação, aqui comprar o curso.
+- **Instrumentar** a página é colocar código nela para registrar o que o visitante faz. Cada registro é um **evento de tracking**. Exemplo: o visitante clicou no Plano Pro → nasce um evento `select_item`.
+- **Bucket S3** é um espaço de armazenamento de arquivos na nuvem. Neste projeto ele é simulado na sua máquina.
+- **JSON Lines** é um arquivo de texto com um objeto JSON por linha, ou seja, um evento por linha.
+
+Você vai **construir do zero** um datalake em arquitetura medalhão que responda a quatro perguntas da empresa. Um **datalake** é um repositório central de dados guardados como arquivos. A **arquitetura medalhão** organiza esse repositório em três camadas: Bronze (dado cru), Silver (dado limpo) e Gold (tabelas prontas para responder perguntas).
+
+As quatro perguntas:
 
 1. **Funil** — em que etapa a jornada de compra perde mais gente, por plano e por canal?
 2. **Engajamento** — o vídeo de apresentação é visto até o fim? O que o visitante procura no FAQ e não encontra?
 3. **Receita e aquisição** — quanto entrou de fato, descontados os reembolsos, e qual canal traz cliente que não desiste?
 4. **Previsão** — quais sessões estão perto de comprar, e que perfis de visitante existem?
+
+Um **funil** é a sequência de etapas até a compra (ver os planos → escolher → pagar). Em cada etapa, parte das pessoas desiste. O **canal** é de onde o visitante veio, por exemplo `google / cpc` (anúncio pago no Google).
 
 Competências avaliadas:
 
@@ -23,11 +36,30 @@ Competências avaliadas:
 - Spark ML sem vazamento de informação;
 - leitura e escrita em armazenamento de objetos (S3).
 
+Em outras palavras, você vai praticar: ler JSON com campos dentro de campos; definir o formato das colunas (o **schema**) em vez de deixar o Spark adivinhar; separar dado bom de dado ruim, dizendo por que o ruim foi recusado; remover eventos repetidos; agrupar eventos em sessões; ligar o visitante anônimo à pessoa logada; calcular métricas; treinar modelos de machine learning sem "colar" a resposta; e ler e gravar arquivos no S3. Todos esses termos estão no [Glossário](#glossário).
+
+## Por onde começar
+
+Uma ordem sugerida de trabalho. Faça uma etapa de cada vez e só avance quando a anterior estiver funcionando.
+
+1. **Suba o ambiente.** Siga o [`SETUP.md`](../SETUP.md) até ver as três linhas `[ok]`.
+2. **Gere os dados.** Rode o gerador (Passo 3 do `SETUP.md`) e leia o resumo que ele imprime.
+3. **Olhe alguns eventos.** Abra `site/index.html` no navegador e veja os eventos nascendo no painel lateral. Depois, leia algumas linhas da landing com o Spark e compare com o [`CONTRATO_EVENTO.md`](CONTRATO_EVENTO.md).
+4. **Construa a Bronze.** Leia a landing com schema explícito e grave em Parquet, com as colunas de proveniência (R1, R2, R4).
+5. **Construa a Silver.** Deduplique, extraia os `params`, valide, sessionize, faça o stitching e exploda os itens (R5 a R10). Confira as contagens a cada passo.
+6. **Construa a Gold, uma tabela por vez.** Comece pelas mais simples e confira cada número com uma consulta à mão antes de seguir (seção 5.3 e 5.4).
+7. **Escreva o script de sequência** que roda os seis jobs (R3) e teste-o do zero.
+8. **Escreva o relatório.** Responda às quatro perguntas citando tabelas e números, e preencha a seção "Qualidade do dado".
+
 ## 2. O produto: DadosPro
 
 **DadosPro — Formação em Análise de Dados** é um curso online vendido por uma landing page de página única.
 
 **Seções da landing:** hero com CTA, vídeo de apresentação (VSL), módulos, depoimentos, tabela de planos, e-book gratuito, garantia de 7 dias, FAQ com busca e rodapé com redes sociais. Fora da landing ficam o checkout, a página de obrigado e a área de membros.
+
+Termos: o **hero** é o topo da página, a primeira coisa que o visitante vê. **CTA** (*call to action*) é o botão que chama para a ação, como "Quero me inscrever". **VSL** (*video sales letter*) é o vídeo de vendas. O **checkout** é a página onde o visitante preenche os dados e paga.
+
+A tabela abaixo lista os produtos à venda, com o código (`item_id`) que aparece nos eventos e o preço.
 
 | Item | `item_id` | Preço | Observação |
 | --- | --- | --- | --- |
@@ -35,6 +67,8 @@ Competências avaliadas:
 | Plano Pro | `PLANO-PRO` | R$ 597,00 | acesso vitalício + mentoria |
 | Plano Premium | `PLANO-PREMIUM` | R$ 997,00 | inclui **apostila impressa** enviada pelos Correios |
 | Mentoria em grupo | `BUMP-MENTORIA` | R$ 147,00 | *order bump* oferecido no checkout |
+
+O **order bump** é uma oferta extra, de valor menor, que aparece no checkout como uma caixa para marcar. Exemplo: quem compra o Plano Pro pode marcar a Mentoria em grupo e levar os dois no mesmo pedido.
 
 - Frete só existe no Premium: PAC R$ 24,90 ou SEDEX R$ 49,90.
 - Pix tem 5% de desconto (cupom `PIX5`).
@@ -47,6 +81,8 @@ Os 20 eventos, o formato de cada um e o layout dos arquivos no S3 estão em [`CO
 
 ### Você recebe (pronto)
 
+Estes arquivos já existem no repositório. Você não precisa alterá-los.
+
 | Item | Para quê |
 | --- | --- |
 | `site/index.html` | landing de exemplo que dispara os 20 eventos e exporta JSONL; serve para ver o evento nascer |
@@ -55,6 +91,8 @@ Os 20 eventos, o formato de cada um e o layout dos arquivos no S3 estão em [`CO
 | `infra/verificar_ambiente.py` | confere, de dentro do contêiner `app`, que o Spark lê e grava no floci por `s3a://` |
 | `SETUP.md` | ambiente do zero com Docker |
 | `docs/CONTRATO_EVENTO.md` | formato do evento e layout da landing no S3 |
+
+Um **contêiner** é um ambiente isolado que já traz os programas necessários. O **floci** imita o S3 na sua máquina. `s3a://` é o prefixo de caminho que o Spark usa para ler e gravar no S3.
 
 ### Você entrega
 
@@ -66,9 +104,13 @@ Os 20 eventos, o formato de cada um e o layout dos arquivos no S3 estão em [`CO
    - se alguma regra rejeitou dado legítimo;
    - quais armadilhas você encontrou e como as tratou.
 
+Por que isso importa: numa empresa, um número sem explicação não convence ninguém. O relatório mostra que você entendeu os dados, e a seção de qualidade mostra que você sabe o quanto pode confiar neles.
+
 **Desafio opcional:** navegue pela página de `site/`, exporte o JSONL, suba-o com `gerador/importar_site.py`, reprocesse e localize a sua própria sessão nas tabelas Gold.
 
 ## 4. Arquitetura esperada
+
+O desenho abaixo mostra o caminho do dado. À esquerda, o que você recebe pronto: a página e o gerador gravam eventos na landing. À direita, o que você constrói: as camadas Bronze, Silver e Gold.
 
 ```text
  ┌──────────── recebido pronto ─────────────┐          ┌────────────── construído por você ────────────────┐
@@ -91,22 +133,36 @@ s3://datalake-tracking/
 └── gold/
 ```
 
+**Parquet** é um formato de arquivo para tabelas. Ele guarda os dados por coluna, com o tipo de cada uma, e é muito mais rápido de ler que JSON. Um **prefixo** é o começo do caminho de um arquivo no S3; funciona como uma pasta.
+
 ## 5. Requisitos
+
+Os requisitos são numerados de R1 a R10. Cada um vem com uma linha "Em outras palavras" que explica a ideia. A regra que vale é sempre o texto do requisito.
 
 ### 5.1 Obrigatórios de arquitetura
 
 - **R1.** PySpark, lendo de `landing/` e gravando todas as camadas no mesmo bucket S3 (floci), em Parquet, **diretamente pelo Spark com `s3a://`**. O pipeline não usa `boto3` nem outro SDK de nuvem, não baixa arquivos para o disco local e roda no contêiner `app`.
+  - *Em outras palavras:* todo acesso ao S3 é feito com `spark.read` e `df.write` em caminhos `s3a://datalake-tracking/...`. Nada de baixar arquivos para o seu computador.
 - **R2.** **Um job por camada**, executáveis separadamente:
   - um job Bronze, um job Silver e **quatro jobs Gold, cada um num arquivo próprio** (funil, engajamento, receita e aquisição, ML);
   - cada job verifica que a camada de que depende existe e, se não existir, para com uma mensagem que diz o que rodar antes.
+  - *Em outras palavras:* um **job** é um script que faz uma etapa inteira. São seis scripts. Exemplo: se alguém roda o job Silver antes do Bronze, o job Silver para e avisa "rode o job Bronze antes".
 - **R3.** Um script que roda os seis jobs em sequência. Ele **não** gera dados.
+  - *Em outras palavras:* um único comando reconstrói o datalake inteiro, a partir da landing que já existe.
 - **R4.** Bronze append-only, com schema explícito (sem inferência), particionada por data no formato `year=AAAA/month=MM/day=DD` (o dia de coleta, tirado do caminho da landing) e com colunas de proveniência: arquivo de origem e instante da ingestão.
+  - *Em outras palavras:* **append-only** quer dizer que a Bronze só recebe dados novos; nunca apaga nem altera o que já está lá. **Schema explícito** quer dizer que você escreve no código o nome e o tipo de cada campo, em vez de deixar o Spark adivinhar. **Particionada por data** quer dizer que cada dia fica numa subpasta própria, como `bronze/eventos/year=2026/month=09/day=03/`. **Proveniência** é a "etiqueta de origem" de cada linha: de qual arquivo da landing ela veio e quando foi lida.
 
 ### 5.2 Silver
 
+A Silver é a camada do dado limpo: sem repetições, com colunas tipadas, com o dado inválido separado e com sessões e identidades resolvidas.
+
 - **R5.** Deduplicação por `event_id`.
+  - *Em outras palavras:* o mesmo evento pode chegar duas vezes (reenvio de lote). Na Silver, cada `event_id` aparece uma vez só.
 - **R6.** Extração dos `params` para colunas tipadas.
+  - *Em outras palavras:* as chaves que estão dentro de `params` (como `value` ou `percent_scrolled`) viram colunas próprias, cada uma com o tipo certo (número, texto, booleano).
 - **R7.** Validação com **motivo de rejeição**. Os rejeitados são gravados numa tabela separada, um motivo por linha. As regras mínimas estão abaixo; você pode acrescentar outras, justificando no relatório.
+
+  A tabela lista cada motivo de rejeição e a condição que o dispara.
 
   | Motivo | Condição |
   | --- | --- |
@@ -117,13 +173,21 @@ s3://datalake-tracking/
   | marco fora do padrão | `percent_scrolled` ∉ {25, 50, 75, 90} ou `video_percent` ∉ {0, 10, 25, 50, 75, 100} |
   | reembolso sem compra | `refund` cujo `transaction_id` não existe em nenhum `purchase` válido |
 
+  - *Em outras palavras:* um evento inválido não é jogado fora em silêncio. Ele vai para uma tabela de rejeitados com o motivo escrito. Exemplo: um `scroll` com `percent_scrolled = 40` vai para os rejeitados com o motivo "marco fora do padrão". O símbolo ∉ significa "não pertence a".
 - **R8.** Sessionização própria: uma sessão nova começa quando o mesmo `user_pseudo_id` fica mais de 30 minutos sem evento. **`session_hint` não pode ser usado.**
+  - *Em outras palavras:* uma **sessão** é uma visita. Você ordena os eventos de cada visitante pelo horário e corta onde houver uma pausa de mais de 30 minutos. Exemplo: eventos às 10h00, 10h05 e 10h50 do mesmo `user_pseudo_id` formam duas sessões (10h00–10h05 e 10h50), porque entre 10h05 e 10h50 passaram 45 minutos. As **window functions** do Spark ajudam a comparar cada evento com o anterior.
 - **R9.** Identity stitching: todo evento de um `user_pseudo_id` que em algum momento tenha `user_id` recebe esse `user_id`, inclusive os eventos anteriores ao login.
+  - *Em outras palavras:* **identity stitching** ("costura de identidade") é ligar o visitante anônimo à pessoa. Exemplo: o navegador `anon-9a46b593` visitou a página na segunda, sem login. Na quarta, fez `login` como `u-…`. Todos os eventos desse navegador, inclusive os de segunda, passam a ter esse `user_id`.
 - **R10.** Uma tabela de itens com `items[]` explodido, uma linha por item por evento.
+  - *Em outras palavras:* **explodir** uma lista é transformar cada elemento dela numa linha. Exemplo: um `purchase` com o Plano Pro e a Mentoria em grupo vira duas linhas na tabela de itens.
 
 ### 5.3 Gold: as 13 tabelas obrigatórias
 
+A Gold é a camada das respostas: tabelas pequenas, já agregadas, prontas para o relatório. São quatro jobs, e cada job grava algumas tabelas.
+
 Nomes de colunas são livres; o **conteúdo** é obrigatório, porque é o que a correção compara.
+
+A tabela abaixo diz, para cada uma das 13 tabelas, o que ela precisa conter. As definições exatas de canal, plano, receita e outras estão na seção 5.4.
 
 | Job | Tabela | Conteúdo mínimo |
 | --- | --- | --- |
@@ -141,37 +205,71 @@ Nomes de colunas são livres; o **conteúdo** é obrigatório, porque é o que a
 | | `metricas_modelo` | AUC e F1 no conjunto de teste, e a lista de features usadas |
 | | `segmentos_visitantes` | grupo de cada visitante (clusterização) e perfil médio de cada grupo |
 
+Em outras palavras, a pergunta que cada tabela responde:
+
+- `funil_compra` — de cada 100 sessões que viram os planos, quantas chegaram a cada etapa até a compra? **Conversão** é a fração que passou de uma etapa para outra. "Sobre o topo" quer dizer em relação à primeira etapa (`view_item_list`). Exemplo: se 1000 sessões viram os planos e 50 compraram, a conversão sobre o topo da compra é 5%.
+- `funil_lead` — por canal, quantas sessões tiveram `page_view` da landing, quantas rolaram pelo menos 50% da página e quantas deixaram o e-mail?
+- `sessoes` — um resumo de cada visita, uma linha por sessão.
+- `retencao_video` — de quem deu play no vídeo, quantos chegaram a 10%, 25%, 50%, 75% e ao fim?
+- `buscas_faq` — o que as pessoas procuram no FAQ, e o que procuram sem achar resposta?
+- `saidas_downloads` — para quais sites as pessoas saem (redes sociais) e quais arquivos baixam?
+- `receita_diaria` — quanto a empresa vendeu por dia, antes e depois dos reembolsos? O **ticket médio** é o valor médio de um pedido.
+- `taxa_reembolso` — que fração das compras foi devolvida, por plano e por canal?
+- `adesao_order_bump` — que fração das compras levou também a Mentoria em grupo?
+- `lead_para_compra` — dos que baixaram o e-book, quantos compraram depois, e em quantos dias?
+- `propensao_sessao` — para cada sessão, a chance de terminar em compra, segundo um modelo de machine learning.
+- `metricas_modelo` — quão bom é esse modelo, medido em dados que ele não viu no treino.
+- `segmentos_visitantes` — em que grupos os visitantes se dividem, e como é o visitante típico de cada grupo.
+
 **Restrição do modelo de propensão:** as features só podem usar o comportamento na landing **antes do primeiro `add_to_cart` da sessão**: rolagem, vídeo, tabela de planos vista, plano selecionado, detalhe aberto, buscas, downloads, cliques, canal e dispositivo. Qualquer evento do checkout (`view_cart` em diante) já praticamente revela a compra.
 
+Por que isso importa: **features** são as informações que o modelo usa para prever. Se você der ao modelo um evento que só acontece em quem já está comprando, ele "acerta" sem aprender nada útil. Isso é **vazamento de informação**. Exemplo: quem chegou a `add_payment_info` quase sempre compra; usar esse evento daria um modelo com nota altíssima e inútil para a empresa, que quer prever a compra **antes** do checkout.
+
 **Recomendação:** como compradores são raros, registre também precisão e recall em `metricas_modelo`, além de AUC e F1. Isso ajuda a interpretar o modelo.
+
+Por que isso importa: se só 5 de cada 100 sessões compram, um modelo que diz "ninguém compra" acerta 95% das vezes e não serve para nada. Precisão e recall mostram se o modelo acha os compradores de verdade (veja o [Glossário](#glossário)).
 
 ### 5.4 Definições que valem para a correção
 
 Para que a sua tabela possa ser comparada com o esperado, use exatamente estas definições.
 
+Por que isso importa: "receita" ou "canal" podem ser calculados de vários jeitos. Se cada pessoa escolher um jeito, os números não batem. Estas definições fixam um único jeito.
+
 1. **Caminhos das camadas.** `bronze/eventos/`, `silver/eventos/`, `silver/itens/`, `silver/eventos_rejeitados/` e `gold/<nome da tabela>/`, no bucket `datalake-tracking`, em Parquet. `bronze/eventos/`, `silver/eventos/` e `silver/itens/` são particionadas por dia no formato `year=AAAA/month=MM/day=DD` (mês e dia com dois dígitos), o mesmo da landing.
+   - *Exemplo:* a tabela `funil_compra` fica em `s3a://datalake-tracking/gold/funil_compra/`. Os eventos limpos de 3 de setembro de 2026 ficam em `silver/eventos/year=2026/month=09/day=03/`.
 2. **Receita.**
    - Bruta: soma de `value` dos `purchase` válidos (sem frete, já com o desconto do Pix, incluindo o order bump).
    - Reembolsada: soma de `value` dos `refund` válidos, atribuída à compra pelo `transaction_id`.
    - Líquida: bruta − reembolsada.
    - Ticket médio: bruta ÷ pedidos.
+   - *Em outras palavras:* a **receita bruta** é tudo o que foi vendido; a **receita líquida** é o que ficou depois de devolver o dinheiro dos reembolsos. "Atribuída à compra" quer dizer que cada reembolso é somado junto da compra que ele referencia, encontrada pelo `transaction_id`.
 3. **Canal e plano.**
    - Canal de uma sessão: `"<source> / <medium>"` do primeiro evento da sessão.
    - Plano de uma sessão: `item_id` do primeiro `select_item` da sessão (`(nenhum)` se não houver).
    - Plano de uma compra: o item de categoria `plano` no `items` do `purchase`.
    - Canal de uma compra: o canal da sessão em que ela aconteceu.
+   - *Exemplo:* se o primeiro evento da sessão tem `traffic.source = "google"` e `traffic.medium = "cpc"`, o canal é `google / cpc`.
 4. **Funil.** Uma sessão conta numa etapa se teve aquele evento em qualquer momento, sem exigir as etapas anteriores. Conversão sobre a etapa anterior = sessões da etapa ÷ sessões da etapa anterior.
+   - *Em outras palavras:* para contar uma sessão em `add_to_cart`, basta ela ter um `add_to_cart`; não importa se teve `select_item` antes.
 5. **Lead → compra.** A unidade é a pessoa (`user_id` resolvido; se não houver, `user_pseudo_id`). Vale o primeiro `generate_lead` da pessoa e a primeira compra estritamente depois dele. Dias = diferença em segundos ÷ 86400 (fracionário); use a mediana desses dias.
+   - *Exemplo:* lead em 01/09 às 10h00 e primeira compra depois disso em 03/09 às 22h00 → 216000 segundos ÷ 86400 = 2,5 dias. "`user_id` resolvido" é o `user_id` depois do identity stitching (R9).
 6. **Propensão.** Uma linha por sessão (todas as sessões da Silver). O rótulo é verdadeiro quando a sessão contém um `purchase`.
+   - *Em outras palavras:* o **rótulo** é a resposta certa que o modelo tenta prever: "esta sessão comprou?" (sim ou não).
 7. **Reembolso.** Taxa de reembolso = pedidos com reembolso ÷ pedidos (por plano e canal da compra).
+   - *Exemplo:* 100 pedidos de um plano e canal, dos quais 8 tiveram reembolso → taxa de 8%.
 8. **Mediana de dias.** Use `percentile_approx(dias, 0.5)` do Spark.
+   - *Em outras palavras:* a **mediana** é o valor do meio quando os números estão em ordem. `percentile_approx` é a função do Spark que a calcula; o `0.5` pede o ponto de 50%.
 9. **Canal de um lead.** É o canal da sessão do primeiro `generate_lead` da pessoa. A tabela `lead_para_compra` traz o total e uma linha por canal do lead.
 10. **Datas.** Datas (data da compra etc.) em UTC.
+    - *Em outras palavras:* a data de um evento é o dia no fuso UTC, não no horário de Brasília.
 11. **Métricas do modelo.** F1, precisão e recall referem-se à classe positiva (sessão com compra).
+    - *Em outras palavras:* as métricas medem o quão bem o modelo acha as sessões que **compraram**.
 
 ## 6. Como rodar
 
 Todo comando roda no contêiner `app`; a única coisa instalada na máquina é o Docker. Detalhes do ambiente em [`SETUP.md`](../SETUP.md).
+
+Os comandos abaixo são digitados no terminal, na raiz do repositório. O `SETUP.md` explica o que cada parte deles faz.
 
 ```bash
 # 1. subir o S3 emulado (floci)
@@ -191,7 +289,7 @@ O código do pipeline vai em `pipeline/`, e o [`pipeline/README.md`](../pipeline
 
 ## 7. Avaliação
 
-Rubrica de 100 pontos:
+Rubrica de 100 pontos. A tabela mostra cada critério, quantos pontos vale e como ele é conferido.
 
 | Critério | Pontos | Como se verifica |
 | --- | --- | --- |
@@ -201,4 +299,85 @@ Rubrica de 100 pontos:
 | Relatório: respostas às quatro perguntas, sustentadas por números da Gold | 20 | cada resposta cita tabela e número; recomendação coerente com os dados |
 | Qualidade do dado: duplicatas, rejeições e armadilhas identificadas | 10 | identifica ao menos três armadilhas escondidas no dado e explica como as tratou |
 
+**Tolerância** é a pequena diferença aceita entre o seu número e o esperado. Uma **armadilha** é um problema no dado que não aparece à primeira vista; parte do trabalho é encontrá-las.
+
 O formato (individual ou em dupla) e o prazo ficam a combinar com a turma.
+
+## Glossário
+
+Os termos estão agrupados por assunto. Os exemplos usam a landing da DadosPro.
+
+### Dados e eventos
+
+- **Evento de tracking** — registro de uma ação do visitante na página, em JSON. Exemplo: clicar no Plano Pro gera um `select_item`.
+- **Landing** — tem dois sentidos neste projeto. A *landing page* é a página de vendas da DadosPro. A *landing do datalake* é o prefixo `landing/` do bucket, onde os eventos brutos chegam antes de qualquer tratamento.
+- **Coletor e lote** — o coletor é o sistema que recebe os eventos da página e os grava no S3. Cada arquivo que ele grava de uma vez é um lote.
+- **JSON aninhado, `map` e `array`** — JSON aninhado tem campos dentro de campos, como `traffic.source`. No Spark, um `map` é um conjunto de pares chave → valor (como `params`) e um `array` é uma lista (como `items`).
+- **Schema** — a descrição das colunas de uma tabela: nome e tipo de cada uma. Exemplo: `event_ts` é timestamp, `value` é número decimal. "Schema explícito" é escrever isso no código em vez de deixar o Spark adivinhar.
+- **Parquet** — formato de arquivo para tabelas, organizado por coluna e com os tipos gravados. É o formato de todas as camadas do datalake.
+- **`event_id`** — identificador único de cada evento. Se dois eventos têm o mesmo `event_id`, são cópias do mesmo evento.
+- **`event_ts`** — data e hora em que o evento aconteceu, em UTC.
+- **UTC** — horário de referência mundial, 3 horas à frente do horário de Brasília. Todas as datas do projeto estão em UTC.
+
+### Arquitetura
+
+- **Datalake** — repositório central onde os dados ficam guardados como arquivos, prontos para análise.
+- **Arquitetura medalhão** — forma de organizar o datalake em camadas de qualidade crescente: Bronze, Silver e Gold, como medalhas.
+- **Bronze** — primeira camada: o que chegou na landing, já em Parquet e com schema, mais as colunas de proveniência. A limpeza fica para a Silver.
+- **Silver** — dado limpo: sem duplicatas, com colunas tipadas, com inválidos separados e com sessões e identidades resolvidas. Exemplo: `silver/eventos/`, `silver/itens/` e `silver/eventos_rejeitados/`.
+- **Gold** — tabelas agregadas que respondem perguntas de negócio. Exemplo: `gold/receita_diaria/`.
+- **Job** — script que executa uma etapa inteira do pipeline. Exemplo: o job Bronze lê a landing e grava a Bronze.
+- **Pipeline** — o conjunto de jobs que leva o dado da landing até a Gold.
+- **Partição** — subpasta que agrupa os dados por um valor. Exemplo: `year=2026/month=09/day=03/` guarda só os dados de 3 de setembro de 2026. No Spark, a gravação particionada usa `partitionBy`.
+- **Append-only** — tabela que só recebe linhas novas; nada do que já foi gravado é apagado ou alterado. A Bronze é append-only.
+- **Proveniência** — informação sobre a origem de cada linha: o arquivo da landing de onde veio e o instante em que foi ingerida.
+- **Ingestão** — o ato de ler os dados de uma fonte e trazê-los para dentro do datalake. O job Bronze faz a ingestão.
+
+### Limpeza e preparação
+
+- **Deduplicação** — remover cópias do mesmo registro. Aqui, deixar cada `event_id` uma vez só na Silver.
+- **Validação e motivo de rejeição** — conferir se cada evento segue as regras do contrato. O que falha vai para `silver/eventos_rejeitados/` com o motivo escrito, como "evento fora do catálogo".
+- **Explodir** — transformar cada elemento de uma lista numa linha própria. Exemplo: um `purchase` com dois itens vira duas linhas em `silver/itens/`.
+- **Sessão** — uma visita do visitante. Começa uma sessão nova quando o mesmo `user_pseudo_id` fica mais de 30 minutos sem evento.
+- **Sessionização** — o cálculo que agrupa os eventos em sessões.
+- **Window function** — função do Spark que olha para linhas vizinhas dentro de um grupo ordenado. Exemplo: com `lag`, cada evento enxerga o horário do evento anterior do mesmo visitante.
+- **`user_pseudo_id`** — identificador anônimo do navegador, guardado num cookie. O mesmo visitante no celular e no notebook tem dois `user_pseudo_id`.
+- **`user_id`** — identificador da pessoa, preenchido depois de `sign_up` ou `login`.
+- **Identity stitching** — ligar o `user_pseudo_id` ao `user_id` da pessoa e aplicar esse `user_id` a todos os eventos daquele navegador, inclusive os de antes do login.
+
+### Negócio
+
+- **Funil** — sequência de etapas até a compra, como ver os planos → escolher → pôr no carrinho → pagar. Em cada etapa, parte das pessoas desiste.
+- **Conversão** — fração de sessões que chegou a uma etapa, comparada a outra etapa. Exemplo: 200 sessões com `select_item` e 100 com `add_to_cart` → conversão de 50%.
+- **Canal** — de onde o visitante veio, no formato `"<source> / <medium>"`. Exemplo: `google / cpc`.
+- **Lead** — visitante que deixou o e-mail, aqui em troca do e-book gratuito (evento `generate_lead`).
+- **Order bump** — oferta extra marcada no checkout. Aqui é a Mentoria em grupo (`BUMP-MENTORIA`, R$ 147,00).
+- **Reembolso** — devolução do dinheiro dentro da garantia de 7 dias (evento `refund`). Ele aponta para a compra pelo `transaction_id`.
+- **Receita bruta** — soma do `value` das compras válidas.
+- **Receita líquida** — receita bruta menos a receita reembolsada.
+- **Ticket médio** — receita bruta dividida pelo número de pedidos.
+
+### Machine learning
+
+- **Propensão** — a chance de algo acontecer. Aqui, a probabilidade de uma sessão terminar em compra.
+- **Classificação** — tipo de modelo que prevê uma categoria. Aqui, "comprou" ou "não comprou".
+- **Feature** — informação usada pelo modelo para prever. Exemplo: o maior `video_percent` da sessão.
+- **Rótulo** — a resposta certa que o modelo aprende a prever. Aqui, se a sessão teve `purchase`.
+- **Conjunto de teste** — parte dos dados separada antes do treino, usada só para medir o modelo em casos que ele não viu.
+- **Classe positiva** — a categoria de interesse. Aqui, sessão com compra.
+- **Precisão** — das sessões que o modelo disse que iam comprar, quantas compraram de fato. Exemplo: o modelo apontou 10 sessões e 7 compraram → precisão de 70%.
+- **Recall** — das sessões que compraram de fato, quantas o modelo encontrou. Exemplo: 20 sessões compraram e o modelo apontou 7 delas → recall de 35%.
+- **F1** — uma nota única que combina precisão e recall (a média harmônica dos dois). Só é alta quando os dois são altos.
+- **AUC** — mede o quanto o modelo consegue colocar as sessões que compram acima das que não compram, numa escala de 0 a 1. 0,5 é chute; 1 é perfeito.
+- **Vazamento de informação** — quando o modelo recebe, como feature, algo que já entrega a resposta. Exemplo: usar `begin_checkout` para prever compra. O modelo parece ótimo no teste, mas não serve para prever nada na prática.
+- **Clusterização e K-Means** — clusterização é dividir os visitantes em grupos parecidos sem um rótulo prévio. K-Means é um algoritmo de clusterização: você escolhe o número de grupos (K) e ele agrupa cada visitante com o centro mais próximo.
+- **Silhueta** — nota de -1 a 1 que diz se os grupos de uma clusterização estão bem separados. Quanto mais perto de 1, melhor. Ajuda a escolher o K.
+
+### Ambiente
+
+- **Contêiner** — ambiente isolado, criado a partir de uma imagem Docker, que já traz os programas necessários. O projeto usa dois: `floci` e `app`.
+- **S3 e bucket** — o S3 é o serviço de armazenamento de arquivos da AWS. Um bucket é um "disco" com nome dentro dele. Aqui o bucket é `datalake-tracking`.
+- **Prefixo** — o começo do caminho de um arquivo no S3. Funciona como uma pasta. Exemplo: `silver/`.
+- **floci** — programa que imita o S3 na sua máquina, em `http://floci:4566`. Para o Spark, ele parece um S3 de verdade.
+- **`s3a://`** — prefixo de caminho que faz o Spark ler e gravar no S3 pelo conector `s3a`. Exemplo: `s3a://datalake-tracking/bronze/eventos/`.
+- **SDK** — biblioteca para conversar com um serviço. O `boto3` é o SDK da AWS para Python; o gerador usa, mas o seu pipeline não pode usar (R1).
