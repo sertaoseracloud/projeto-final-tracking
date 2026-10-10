@@ -84,7 +84,7 @@ docker compose run --rm app python infra/verificar_ambiente.py
 
 ## Passo 5 — Explore o bucket
 
-Este passo liga um site que mostra o que está dentro do bucket, sem você escrever código: os arquivos, as partições por dia e consultas SQL.
+Este passo liga um site que mostra o que está dentro do bucket, sem você escrever código: os arquivos, as partições (por nome do evento e por dia) e consultas SQL.
 
 ```bash
 docker compose up -d explorador

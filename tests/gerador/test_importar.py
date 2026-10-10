@@ -1,8 +1,9 @@
+import json
 from datetime import datetime, timezone
 
 import pytest
 
-from gerador.importar_site import chave, main, validar
+from gerador.importar_site import arquivos, main, validar
 
 UM = '{"event_id":"a","event_ts":"2026-10-10T12:00:00.000Z"}'
 
@@ -23,17 +24,29 @@ def test_validar_rejeita_com_a_linha_do_problema(texto, mensagem):
         validar(texto)
 
 
-def test_chave_usa_a_data_do_primeiro_evento_e_o_instante_do_envio():
+def test_um_arquivo_por_event_name_na_data_do_primeiro_evento():
     agora = datetime(2026, 10, 11, 8, 30, 0, tzinfo=timezone.utc)
-    assert chave([{"event_ts": "2026-10-10T12:00:00.000Z"}], agora) == \
-        "landing/eventos/year=2026/month=10/day=10/site-20261011T083000000000.jsonl"
+    texto = (
+        '{"event_id":"a","event_ts":"2026-10-10T23:59:00.000Z","event_name":"page_view"}\n'
+        '{"event_id":"b","event_ts":"2026-10-11T00:01:00.000Z","event_name":"scroll"}\n'
+        '{"event_id":"c","event_ts":"2026-10-11T00:02:00.000Z","event_name":"page_view"}\n'
+        '{"event_id":"d","event_ts":"2026-10-11T00:03:00.000Z"}\n'
+    )
+    gerados = arquivos(texto, agora)
+    nome = "year=2026/month=10/day=10/site-20261011T083000000000.jsonl"
+    assert sorted(gerados) == [
+        f"landing/event_name=__HIVE_DEFAULT_PARTITION__/{nome}",
+        f"landing/event_name=page_view/{nome}",
+        f"landing/event_name=scroll/{nome}",
+    ]
+    assert [json.loads(l)["event_id"] for l in gerados[f"landing/event_name=page_view/{nome}"].splitlines()] == ["a", "c"]
 
 
 def test_main_grava_o_arquivo_na_landing(tmp_path):
     origem = tmp_path / "eventos.jsonl"
     origem.write_text(UM + "\n", encoding="utf-8")
     assert main([str(origem), "--saida-local", str(tmp_path / "s3")]) == 0
-    gravados = list((tmp_path / "s3").glob("landing/eventos/year=2026/month=10/day=10/site-*.jsonl"))
+    gravados = list((tmp_path / "s3").glob("landing/event_name=*/year=2026/month=10/day=10/site-*.jsonl"))
     assert len(gravados) == 1
     assert gravados[0].read_text(encoding="utf-8") == UM + "\n"
 
@@ -59,7 +72,7 @@ def test_main_aceita_arquivo_com_bom_e_grava_sem_bom(tmp_path):
     origem = tmp_path / "eventos.jsonl"
     origem.write_bytes(("﻿" + UM + "\n").encode("utf-8"))
     assert main([str(origem), "--saida-local", str(tmp_path / "s3")]) == 0
-    gravados = list((tmp_path / "s3").glob("landing/eventos/year=2026/month=10/day=10/site-*.jsonl"))
+    gravados = list((tmp_path / "s3").glob("landing/event_name=*/year=2026/month=10/day=10/site-*.jsonl"))
     assert len(gravados) == 1
     assert gravados[0].read_text(encoding="utf-8") == UM + "\n"
 

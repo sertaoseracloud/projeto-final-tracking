@@ -35,7 +35,7 @@ Parâmetros: seed 42, 6000 visitantes, 14 dias (2026-09-01 a 2026-09-14), 3% de 
 | sessões simuladas | 8805 |
 | eventos limpos | 63414 |
 | duplicatas (lote) | 656 |
-| linhas gravadas | 64372, em 66 arquivos |
+| linhas gravadas | 64372, em 1381 arquivos (um por lote e por event_name) |
 
 Defeitos injetados: `purchase_sem_id` 31, `valor_negativo` 272, `moeda_usd` 77, `scroll_33` 272, `ts_nulo` 272, `ts_futuro` 676, `refund_orfao` 31, `evento_fora_catalogo` 271.
 
@@ -178,16 +178,17 @@ Modelo de propensão de compra, com pesos de classe porque os compradores são c
 
 O vazamento aparece mais claramente no F1 e na precisão (o F1 sobe de 0,5065 para 0,7852 e a precisão de 0,3421 para 0,6573). No AUC o salto também existe, de 0,9243 para 0,9886.
 
-Segmentação de visitantes: k escolhido 4, silhueta 0,4767.
+Segmentação de visitantes: k escolhido 5, silhueta 0,5122. (O job ordena os visitantes antes do KMeans; sem isso, o resultado muda com a ordem em que as linhas chegam da Silver.)
 
 | Segmento | Visitantes | Média de sessões | Média de eventos médios | Média de scroll médio | Média da taxa de vídeo | Média fez lead | Média comprou |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 0 | 3074 | 1,39 | 8,349 | 70,542 | 0,501 | 0,0 | 0,0 |
-| 1 | 535 | 1,914 | 12,438 | 52,393 | 0,304 | 0,004 | 1,0 |
-| 2 | 520 | 1,796 | 8,059 | 68,803 | 0,348 | 1,0 | 0,073 |
-| 3 | 1865 | 1,374 | 3,146 | 25,296 | 0,069 | 0,0 | 0,0 |
+| 0 | 1337 | 1,403 | 2,579 | 16,56 | 0,043 | 0,0 | 0,0 |
+| 1 | 1686 | 1,219 | 6,562 | 72,667 | 0,0 | 0,0 | 0,0 |
+| 2 | 1916 | 1,515 | 8,884 | 62,3 | 0,841 | 0,0 | 0,0 |
+| 3 | 482 | 1,722 | 7,834 | 69,183 | 0,347 | 1,0 | 0,0 |
+| 4 | 573 | 1,969 | 12,337 | 53,162 | 0,308 | 0,07 | 1,0 |
 
-Leitura: o segmento 0 engaja sem converter, o 1 reúne os compradores, o 2 os leads e o 3 os visitantes de baixo engajamento.
+Leitura: o segmento 0 são os visitantes de baixo engajamento, o 1 lê a página sem ver o vídeo, o 2 vê o vídeo sem converter, o 3 reúne os leads e o 4 os compradores.
 
 ## 8. Tolerâncias para corrigir o trabalho do aluno
 

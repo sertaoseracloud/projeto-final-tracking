@@ -117,7 +117,7 @@ O desenho abaixo mostra o caminho do dado. À esquerda, o que você recebe pront
  │                                          │          │                                                    │
  │  site/index.html ──export JSONL──┐       │          │  bronze ─► silver ─┬─► gold funil                  │
  │                                  ▼       │          │                    ├─► gold engajamento            │
- │  gerador/ ──────► s3://<bucket>/landing/eventos/year=…/month=…/day=…/*.jsonl ──────────► ├─► gold receita e aquisição     │
+ │  gerador/ ──────► s3://<bucket>/landing/event_name=…/year=…/month=…/day=…/*.jsonl ─────► ├─► gold receita e aquisição     │
  │                                          │          │                    └─► gold ML                     │
  └──────────────────────────────────────────┘          └────────────────────────────────────────────────────┘
                                  fronteira: formato do evento (CONTRATO_EVENTO.md) + prefixo landing/
@@ -149,8 +149,8 @@ Os requisitos são numerados de R1 a R10. Cada um vem com uma linha "Em outras p
   - *Em outras palavras:* um **job** é um script que faz uma etapa inteira. São seis scripts. Exemplo: se alguém roda o job Silver antes do Bronze, o job Silver para e avisa "rode o job Bronze antes".
 - **R3.** Um script que roda os seis jobs em sequência. Ele **não** gera dados.
   - *Em outras palavras:* um único comando reconstrói o datalake inteiro, a partir da landing que já existe.
-- **R4.** Bronze append-only, com schema explícito (sem inferência), particionada por data no formato `year=AAAA/month=MM/day=DD` (o dia de coleta, tirado do caminho da landing) e com colunas de proveniência: arquivo de origem e instante da ingestão.
-  - *Em outras palavras:* **append-only** quer dizer que a Bronze só recebe dados novos; nunca apaga nem altera o que já está lá. **Schema explícito** quer dizer que você escreve no código o nome e o tipo de cada campo, em vez de deixar o Spark adivinhar. **Particionada por data** quer dizer que cada dia fica numa subpasta própria, como `bronze/eventos/year=2026/month=09/day=03/`. **Proveniência** é a "etiqueta de origem" de cada linha: de qual arquivo da landing ela veio e quando foi lida.
+- **R4.** Bronze append-only, com schema explícito (sem inferência), particionada por nome do evento e por data no formato `event_name=<nome>/year=AAAA/month=MM/day=DD` (o dia de coleta, tirado do caminho da landing) e com colunas de proveniência: arquivo de origem e instante da ingestão.
+  - *Em outras palavras:* **append-only** quer dizer que a Bronze só recebe dados novos; nunca apaga nem altera o que já está lá. **Schema explícito** quer dizer que você escreve no código o nome e o tipo de cada campo, em vez de deixar o Spark adivinhar. **Particionada por nome do evento e por data** quer dizer que cada evento, em cada dia, fica numa subpasta própria, como `bronze/event_name=scroll/year=2026/month=09/day=03/`. **Proveniência** é a "etiqueta de origem" de cada linha: de qual arquivo da landing ela veio e quando foi lida.
 
 ### 5.2 Silver
 
@@ -235,8 +235,11 @@ Para que a sua tabela possa ser comparada com o esperado, use exatamente estas d
 
 Por que isso importa: "receita" ou "canal" podem ser calculados de vários jeitos. Se cada pessoa escolher um jeito, os números não batem. Estas definições fixam um único jeito.
 
-1. **Caminhos das camadas.** `bronze/eventos/`, `silver/eventos/`, `silver/itens/`, `silver/eventos_rejeitados/` e `gold/<nome da tabela>/`, no bucket `datalake-tracking`, em Parquet. `bronze/eventos/`, `silver/eventos/` e `silver/itens/` são particionadas por dia no formato `year=AAAA/month=MM/day=DD` (mês e dia com dois dígitos), o mesmo da landing.
-   - *Exemplo:* a tabela `funil_compra` fica em `s3a://datalake-tracking/gold/funil_compra/`. Os eventos limpos de 3 de setembro de 2026 ficam em `silver/eventos/year=2026/month=09/day=03/`.
+1. **Caminhos das camadas.** No bucket `datalake-tracking`, em Parquet:
+   - os eventos da Bronze e da Silver ficam direto na raiz da camada, sem pasta `eventos`, particionados no formato `event_name=<nome>/year=AAAA/month=MM/day=DD` (mês e dia com dois dígitos), o mesmo da landing: `bronze/event_name=…/…` e `silver/event_name=…/…`;
+   - `silver/itens/` (particionada por `year=AAAA/month=MM/day=DD`), `silver/eventos_rejeitados/` e `gold/<nome da tabela>/` ficam em pastas próprias. Na Silver, elas ficam **ao lado** das pastas `event_name=`.
+   - *Exemplo:* a tabela `funil_compra` fica em `s3a://datalake-tracking/gold/funil_compra/`. As compras limpas de 3 de setembro de 2026 ficam em `silver/event_name=purchase/year=2026/month=09/day=03/`.
+   - *Atenção:* como `silver/itens/` mora ao lado das partições, ler ou gravar a raiz `silver/` direto dá problema. O [pipeline/README.md](../pipeline/README.md#partições-por-nome-do-evento-e-por-dia) mostra como ler só as pastas `event_name=` e como regravar sem apagar as vizinhas.
 2. **Receita.**
    - Bruta: soma de `value` dos `purchase` válidos (sem frete, já com o desconto do Pix, incluindo o order bump).
    - Reembolsada: soma de `value` dos `refund` válidos, atribuída à compra pelo `transaction_id`.
@@ -324,7 +327,7 @@ Os termos estão agrupados por assunto. Os exemplos usam a landing da DadosPro.
 - **Datalake** — repositório central onde os dados ficam guardados como arquivos, prontos para análise.
 - **Arquitetura medalhão** — forma de organizar o datalake em camadas de qualidade crescente: Bronze, Silver e Gold, como medalhas.
 - **Bronze** — primeira camada: o que chegou na landing, já em Parquet e com schema, mais as colunas de proveniência. A limpeza fica para a Silver.
-- **Silver** — dado limpo: sem duplicatas, com colunas tipadas, com inválidos separados e com sessões e identidades resolvidas. Exemplo: `silver/eventos/`, `silver/itens/` e `silver/eventos_rejeitados/`.
+- **Silver** — dado limpo: sem duplicatas, com colunas tipadas, com inválidos separados e com sessões e identidades resolvidas. Exemplo: `silver/event_name=…/`, `silver/itens/` e `silver/eventos_rejeitados/`.
 - **Gold** — tabelas agregadas que respondem perguntas de negócio. Exemplo: `gold/receita_diaria/`.
 - **Job** — script que executa uma etapa inteira do pipeline. Exemplo: o job Bronze lê a landing e grava a Bronze.
 - **Pipeline** — o conjunto de jobs que leva o dado da landing até a Gold.
@@ -379,5 +382,5 @@ Os termos estão agrupados por assunto. Os exemplos usam a landing da DadosPro.
 - **S3 e bucket** — o S3 é o serviço de armazenamento de arquivos da AWS. Um bucket é um "disco" com nome dentro dele. Aqui o bucket é `datalake-tracking`.
 - **Prefixo** — o começo do caminho de um arquivo no S3. Funciona como uma pasta. Exemplo: `silver/`.
 - **floci** — programa que imita o S3 na sua máquina, em `http://floci:4566`. Para o Spark, ele parece um S3 de verdade.
-- **`s3a://`** — prefixo de caminho que faz o Spark ler e gravar no S3 pelo conector `s3a`. Exemplo: `s3a://datalake-tracking/bronze/eventos/`.
+- **`s3a://`** — prefixo de caminho que faz o Spark ler e gravar no S3 pelo conector `s3a`. Exemplo: `s3a://datalake-tracking/bronze/event_name=scroll/`.
 - **SDK** — biblioteca para conversar com um serviço. O `boto3` é o SDK da AWS para Python; o gerador usa, mas o seu pipeline não pode usar (R1).

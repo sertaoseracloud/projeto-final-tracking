@@ -13,7 +13,7 @@ from __future__ import annotations
 from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
 
-from comum import caminho, criar_sessao, exigir_camada, titulo
+from comum import caminho, criar_sessao, exigir_camada, glob_eventos, ler_eventos, titulo
 from sessoes import atributos_sessao
 
 PREMIUM = "PLANO-PREMIUM"
@@ -74,8 +74,8 @@ def funil_lead(eventos: DataFrame, atributos: DataFrame) -> DataFrame:
 
 def main() -> None:
     spark = criar_sessao("gold-funil")
-    exigir_camada(spark, "silver/eventos", "python professor/solucao/02_silver_eventos.py")
-    eventos = spark.read.parquet(caminho("silver/eventos"))
+    exigir_camada(spark, glob_eventos("silver"), "python professor/solucao/02_silver_eventos.py")
+    eventos = ler_eventos(spark, "silver")
     atributos = atributos_sessao(eventos, spark.read.parquet(caminho("silver/itens"))).cache()
 
     compra = funil_compra(eventos, atributos).cache()

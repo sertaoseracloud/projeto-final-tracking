@@ -8,7 +8,7 @@ from __future__ import annotations
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
-from comum import caminho, criar_sessao, exigir_camada, titulo
+from comum import caminho, criar_sessao, exigir_camada, glob_eventos, ler_eventos, titulo
 from sessoes import atributos_sessao, tabela_sessoes
 
 MARCOS = [10, 25, 50, 75, 100]
@@ -46,8 +46,8 @@ def saidas_downloads(eventos: DataFrame) -> DataFrame:
 
 def main() -> None:
     spark = criar_sessao("gold-engajamento")
-    exigir_camada(spark, "silver/eventos", "python professor/solucao/02_silver_eventos.py")
-    eventos = spark.read.parquet(caminho("silver/eventos")).cache()
+    exigir_camada(spark, glob_eventos("silver"), "python professor/solucao/02_silver_eventos.py")
+    eventos = ler_eventos(spark, "silver").cache()
     atributos = atributos_sessao(eventos, spark.read.parquet(caminho("silver/itens")))
 
     tabelas = {

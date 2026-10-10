@@ -1,7 +1,7 @@
 import json
 import random
 
-from gerador.lotes import PREFIXO, montar_lotes, particao, serializar
+from gerador.lotes import SEM_NOME, montar_lotes, particao, pasta, serializar, valor_de_particao
 
 
 def _ev(i, dt="2026-09-01"):
@@ -27,7 +27,7 @@ def test_cada_dia_vira_de_3_a_6_lotes_com_a_chave_do_contrato():
     arquivos, duplicatas = montar_lotes(random.Random(3), eventos, origem="coletor", seed=42, fracao_reenvio=0.0)
     assert duplicatas == 0
     for dt in ("2026-09-01", "2026-09-02"):
-        chaves = [k for k in arquivos if k.startswith(f"{PREFIXO}/{particao(dt)}/coletor-s42-")]
+        chaves = [k for k in arquivos if k.startswith(f"{pasta('page_view', dt)}/coletor-s42-")]
         assert 3 <= len(chaves) <= 6
         assert all(k.endswith(".jsonl") for k in chaves)
     assert sum(len(v.splitlines()) for v in arquivos.values()) == 600
@@ -55,3 +55,22 @@ def test_evento_sem_timestamp_vai_para_o_dia_de_coleta():
 def test_particao_usa_year_month_day_com_zeros():
     assert particao("2026-09-01") == "year=2026/month=09/day=01"
     assert particao("2026-12-31") == "year=2026/month=12/day=31"
+
+
+def test_cada_lote_vira_um_arquivo_por_event_name():
+    eventos = [dict(_ev(i), event_name=("scroll" if i % 3 else "page_view")) for i in range(90)]
+    arquivos, _ = montar_lotes(random.Random(3), eventos, "coletor", 42, 0.0)
+    pastas = {k.rsplit("/", 1)[0] for k in arquivos}
+    assert pastas == {"landing/event_name=page_view/year=2026/month=09/day=01",
+                      "landing/event_name=scroll/year=2026/month=09/day=01"}
+    for chave, conteudo in arquivos.items():
+        nome = chave.split("event_name=")[1].split("/")[0]
+        assert {json.loads(linha)["event_name"] for linha in conteudo.splitlines()} == {nome}
+    assert sum(len(v.splitlines()) for v in arquivos.values()) == 90
+
+
+def test_valor_de_particao_segue_as_regras_do_spark():
+    assert valor_de_particao("page_view") == "page_view"
+    assert valor_de_particao(None) == valor_de_particao("") == SEM_NOME
+    assert valor_de_particao("a/b=c") == "a%2Fb%3Dc"
+    assert pasta("scroll", "2026-09-01T10:00:00Z") == "landing/event_name=scroll/year=2026/month=09/day=01"

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Iterable
 
-CAMPOS = ("year", "month", "day")
+CAMPOS = ("event_name", "year", "month", "day")
 SEM_PARTICAO = "—"
 EXTENSOES = {".parquet": "parquet", ".jsonl": "jsonl"}
 
@@ -29,10 +29,12 @@ class Dataset:
     prefixo: str
     formato: str
     nome_view: str
+    particionado: bool = False   # arquivos em pastas k=v logo abaixo do prefixo
 
 
 @dataclass(frozen=True)
 class LinhaParticao:
+    event_name: str
     year: str
     month: str
     day: str
@@ -79,6 +81,7 @@ def datasets(chaves: Iterable[str]) -> list[Dataset]:
     Se a mesma pasta tiver os dois formatos, vira um dataset por formato, com o
     formato no fim do nome da view (ex.: landing_eventos_jsonl)."""
     formatos: dict[str, set[str]] = defaultdict(set)
+    particionados: set[str] = set()
     for chave in chaves:
         formato = formato_do_arquivo(chave)
         if formato is None or any(_interno(s) for s in chave.split("/")[:-1]):
@@ -86,11 +89,13 @@ def datasets(chaves: Iterable[str]) -> list[Dataset]:
         prefixo = _prefixo_do_dataset(chave)
         if prefixo:
             formatos[prefixo].add(formato)
+            if prefixo != chave.rsplit("/", 1)[0]:   # há pastas k=v entre o prefixo e o arquivo
+                particionados.add(prefixo)
     resultado = []
     for prefixo, achados in sorted(formatos.items()):
         for formato in sorted(achados):
             nome = _nome_view(prefixo) + (f"_{formato}" if len(achados) > 1 else "")
-            resultado.append(Dataset(prefixo, formato, nome))
+            resultado.append(Dataset(prefixo, formato, nome, prefixo in particionados))
     return resultado
 
 

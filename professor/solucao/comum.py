@@ -43,13 +43,44 @@ def caminho(camada: str) -> str:
     return f"s3a://{BUCKET}/{camada}"
 
 
+# Os eventos de cada camada ficam em <camada>/event_name=<nome>/year=…/month=…/day=…
+# (sem pasta "eventos"). Na Silver, itens/ e eventos_rejeitados/ ficam ao lado das partições.
+PARTICAO_EVENTOS = "event_name=*"
+COLUNAS_PARTICAO = ["event_name", "year", "month", "day"]
+
+
+def glob_eventos(camada: str) -> str:
+    """'silver' -> 'silver/event_name=*': o glob que pega só as partições de eventos."""
+    return f"{camada}/{PARTICAO_EVENTOS}"
+
+
+def ler_eventos(spark, camada: str, formato: str = "parquet"):
+    """Lê só as pastas event_name=… da camada. O basePath faz o Spark devolver event_name
+    como coluna e ignorar as pastas vizinhas (silver/itens, silver/eventos_rejeitados)."""
+    leitor = spark.read.option("basePath", caminho(camada))
+    return leitor.format(formato).load(caminho(glob_eventos(camada)))
+
+
+def gravar_eventos(df, camada: str, modo: str) -> None:
+    """Grava particionado por event_name/year/month/day direto na raiz da camada.
+
+    Com "overwrite", o modo dinâmico troca só as partições presentes no DataFrame:
+    sem ele, o Spark apagaria a pasta inteira da camada (e, na Silver, itens/ e
+    eventos_rejeitados/ junto)."""
+    (df.write.mode(modo).option("partitionOverwriteMode", "dynamic")
+       .partitionBy(*COLUNAS_PARTICAO).parquet(caminho(camada)))
+
+
 def _sistema_de_arquivos(spark, uri: str):
     path = spark._jvm.org.apache.hadoop.fs.Path(uri)
     return path.getFileSystem(spark._jsc.hadoopConfiguration()), path
 
 
 def existe(spark, uri: str) -> bool:
+    """Aceita glob (ex.: .../silver/event_name=*): existe se alguma pasta casar."""
     fs, path = _sistema_de_arquivos(spark, uri)
+    if "*" in uri:
+        return bool(fs.globStatus(path))
     return bool(fs.exists(path))
 
 

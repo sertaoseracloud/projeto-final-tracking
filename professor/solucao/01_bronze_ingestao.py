@@ -13,7 +13,8 @@ from pyspark.sql import functions as F
 from pyspark.sql.types import (ArrayType, DoubleType, LongType, MapType, StringType,
                                StructField, StructType)
 
-from comum import caminho, criar_sessao, exigir_camada, titulo
+from comum import (PARTICAO_EVENTOS, caminho, criar_sessao, exigir_camada, glob_eventos, gravar_eventos,
+                   ler_eventos, titulo)
 
 
 def _texto(*nomes: str) -> list[StructField]:
@@ -36,11 +37,12 @@ SCHEMA = StructType(_texto("event_id", "event_name", "event_ts", "user_pseudo_id
 
 
 PARTICAO = r"year=(\d{4})/month=(\d{2})/day=(\d{2})"   # dia de coleta, tirado do caminho
-DATA = ["year", "month", "day"]
 
 
 def ler_landing(spark, uri: str) -> DataFrame:
-    return spark.read.schema(SCHEMA).json(uri)
+    """`uri` é a raiz da landing; lê as pastas event_name=… (o event_name vem do caminho)."""
+    raiz = uri.rstrip("/")
+    return spark.read.schema(SCHEMA).option("basePath", raiz).json(f"{raiz}/{PARTICAO_EVENTOS}")
 
 
 def adicionar_proveniencia(df: DataFrame) -> DataFrame:
@@ -55,14 +57,14 @@ def adicionar_proveniencia(df: DataFrame) -> DataFrame:
 
 def main() -> None:
     spark = criar_sessao("bronze")
-    exigir_camada(spark, "landing/eventos", "python gerador/gerar_eventos.py")
-    bronze = adicionar_proveniencia(ler_landing(spark, caminho("landing/eventos"))).cache()
-    bronze.write.mode("append").partitionBy(*DATA).parquet(caminho("bronze/eventos"))
+    exigir_camada(spark, glob_eventos("landing"), "python gerador/gerar_eventos.py")
+    bronze = adicionar_proveniencia(ler_landing(spark, caminho("landing"))).cache()
+    gravar_eventos(bronze, "bronze", "append")
 
     titulo("Bronze")
     print(f"linhas lidas da landing e gravadas: {bronze.count()}")
     print(f"arquivos de origem:                 {bronze.select('_arquivo_origem').distinct().count()}")
-    print(f"total acumulado na Bronze:          {spark.read.parquet(caminho('bronze/eventos')).count()}")
+    print(f"total acumulado na Bronze:          {ler_eventos(spark, 'bronze').count()}")
     spark.stop()
 
 

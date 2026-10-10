@@ -108,7 +108,7 @@ Projeto final de engenharia de dados. O aluno recebe um problema de negócio e u
  │                                          │          │                                                    │
  │  site/index.html ──export JSONL──┐       │          │  bronze ─► silver ─┬─► gold funil                  │
  │                                  ▼       │          │                    ├─► gold engajamento            │
- │  gerador/ ──────► s3://<bucket>/landing/eventos/year=…/month=…/day=…/*.jsonl ──────────► ├─► gold receita e aquisição     │
+ │  gerador/ ──────► s3://<bucket>/landing/event_name=…/year=…/month=…/day=…/*.jsonl ─────► ├─► gold receita e aquisição     │
  │                                          │          │                    └─► gold ML                     │
  └──────────────────────────────────────────┘          └────────────────────────────────────────────────────┘
                                  fronteira: formato do evento (seção 5) + prefixo landing/
@@ -150,7 +150,7 @@ projeto-final-tracking/
 
 ### Layout da landing no S3
 
-`s3://<bucket>/landing/eventos/year=YYYY/month=MM/day=DD/<origem>-<lote>.jsonl` — vários lotes por dia, como um coletor que descarrega em intervalos. `<origem>` é `coletor` (gerador) ou `site` (importação). Bucket e endpoint vêm de `AWS_S3_BUCKET` e `AWS_ENDPOINT_URL`.
+`s3://<bucket>/landing/event_name=<nome>/year=YYYY/month=MM/day=DD/<origem>-<lote>.jsonl` — vários lotes por dia, cada lote separado em um arquivo por `event_name`, como um coletor que descarrega em intervalos. `<origem>` é `coletor` (gerador) ou `site` (importação). Bucket e endpoint vêm de `AWS_S3_BUCKET` e `AWS_ENDPOINT_URL`.
 
 ---
 
@@ -361,11 +361,11 @@ O formato (individual ou em dupla) e o prazo ficam a critério do professor.
 - `event_name` fora do catálogo (`add_to_wishlist`).
 
 **Escrita e resumo:**
-- Para cada dia, grava de três a seis lotes em `landing/eventos/year=…/month=…/day=…/`. O dia seguinte ao último pode ter um ou dois lotes, com sessões que viram a meia-noite.
+- Para cada dia, grava de três a seis lotes, cada um separado por nome do evento em `landing/event_name=…/year=…/month=…/day=…/`. O dia seguinte ao último pode ter um ou dois lotes, com sessões que viram a meia-noite.
 - Imprime um resumo: visitantes, sessões reais, eventos por nome, duplicatas e defeitos injetados por tipo.
 - A mesma seed gera exatamente os mesmos eventos.
 
-**`importar_site.py <arquivo.jsonl>`** — valida que cada linha é JSON com `event_id` e `event_ts` e sobe o arquivo em `landing/eventos/year=…/month=…/day=… (data do primeiro evento)/site-<timestamp>.jsonl`.
+**`importar_site.py <arquivo.jsonl>`** — valida que cada linha é JSON com `event_id` e `event_ts` e sobe um arquivo por `event_name` em `landing/event_name=…/year=…/month=…/day=… (data do primeiro evento)/site-<timestamp>.jsonl`.
 
 ---
 

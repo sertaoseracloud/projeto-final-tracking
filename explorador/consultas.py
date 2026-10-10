@@ -140,7 +140,9 @@ def conectar(s3: bool = True, endpoint: str = "http://floci:4566", chave: str = 
 def _origem(raiz: str, dataset: Dataset) -> str:
     extensao = "parquet" if dataset.formato == "parquet" else "jsonl"
     funcao = "read_parquet" if dataset.formato == "parquet" else "read_json_auto"
-    padrao = f"{raiz.rstrip('/')}/{dataset.prefixo}/**/*.{extensao}"
+    # Particionado: só as pastas k=v, para não misturar as vizinhas (silver/itens ao lado de silver/event_name=…).
+    pastas = "*=*/**" if dataset.particionado else "**"
+    padrao = f"{raiz.rstrip('/')}/{dataset.prefixo}/{pastas}/*.{extensao}"
     return f"{funcao}({_texto_sql(padrao)}, {OPCOES_LEITURA})"
 
 

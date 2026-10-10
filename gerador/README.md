@@ -1,6 +1,6 @@
 # Gerador de eventos — o coletor de tracking simulado
 
-Este diretório faz o papel do **mundo lá fora**: a landing page DadosPro e o coletor de tracking que grava os eventos dela no S3. O pipeline do datalake não conhece este código. A única coisa que os dois compartilham é o **formato do evento** (`docs/CONTRATO_EVENTO.md`) e o prefixo `landing/eventos/` do bucket.
+Este diretório faz o papel do **mundo lá fora**: a landing page DadosPro e o coletor de tracking que grava os eventos dela no S3. O pipeline do datalake não conhece este código. A única coisa que os dois compartilham é o **formato do evento** (`docs/CONTRATO_EVENTO.md`) e o prefixo `landing/` do bucket.
 
 Em outras palavras: numa empresa real, os eventos chegariam de milhares de visitantes de verdade. Aqui, este gerador inventa visitantes e jornadas para que você tenha dados para trabalhar. O **coletor** é o sistema que recebe os eventos da página e os grava em arquivos no S3.
 
@@ -40,15 +40,15 @@ docker compose run --rm app python gerador/importar_site.py saida/eventos_2026-1
 
 Troque `saida/eventos_2026-10-10.jsonl` pelo nome do arquivo que você exportou.
 
-O arquivo vai para `landing/eventos/year=…/month=…/day=… (data do primeiro evento)/site-<instante com microssegundos>.jsonl`. Arquivos com BOM e quebras de linha CRLF são aceitos. (BOM e CRLF são detalhes de como o Windows às vezes salva arquivos de texto; o importador aceita os dois formatos.)
+O arquivo é separado por nome do evento: cada `event_name` vira um arquivo em `landing/event_name=<nome>/year=…/month=…/day=… (data do primeiro evento)/site-<instante com microssegundos>.jsonl`. Eventos sem `event_name` vão para `event_name=__HIVE_DEFAULT_PARTITION__`. Arquivos com BOM e quebras de linha CRLF são aceitos. (BOM e CRLF são detalhes de como o Windows às vezes salva arquivos de texto; o importador aceita os dois formatos.)
 
 ## O que é gravado
 
 Cada execução grava arquivos neste caminho:
 
-`s3://datalake-tracking/landing/eventos/year=AAAA/month=MM/day=DD/coletor-s<seed>-<lote>.jsonl` — um evento JSON por linha, de 3 a 6 lotes por dia; o dia seguinte ao último (ex.: `year=2026/month=09/day=15`) pode ter 1 ou 2 lotes, com sessões que viram a meia-noite.
+`s3://datalake-tracking/landing/event_name=<nome>/year=AAAA/month=MM/day=DD/coletor-s<seed>-<lote>.jsonl` — um evento JSON por linha, de 3 a 6 lotes por dia; o dia seguinte ao último (ex.: `year=2026/month=09/day=15`) pode ter 1 ou 2 lotes, com sessões que viram a meia-noite.
 
-Cada arquivo é um **lote**: um pacote de eventos que o coletor descarregou de uma vez.
+Um **lote** é um pacote de eventos que o coletor descarregou de uma vez. Cada lote é separado por nome do evento: o lote 1 de um dia vira `event_name=page_view/…/coletor-s42-001.jsonl`, `event_name=scroll/…/coletor-s42-001.jsonl` e assim por diante, um arquivo para cada evento que aparece nele.
 
 ## Como a jornada é simulada
 
@@ -91,7 +91,7 @@ visitantes              6000
 sessões simuladas       8805
 eventos limpos         63414
 duplicatas (lote)        656
-linhas gravadas        64372   em 66 arquivos
+linhas gravadas        64372   em 1381 arquivos
 
 Eventos por nome (antes da sujeira):
   page_view              13235

@@ -24,13 +24,13 @@ from explorador import consultas, particoes, s3
 
 EXEMPLOS = {
     "Eventos por nome (landing)": (
-        "SELECT event_name, count(*) AS eventos\nFROM landing_eventos\n"
+        "SELECT event_name, count(*) AS eventos\nFROM landing\n"
         "GROUP BY event_name\nORDER BY eventos DESC"
     ),
     "Linhas por dia (Silver)": (
-        "SELECT year, month, day, count(*) AS linhas\nFROM silver_eventos\nGROUP BY ALL\nORDER BY ALL"
+        "SELECT year, month, day, count(*) AS linhas\nFROM silver\nGROUP BY ALL\nORDER BY ALL"
     ),
-    "Colunas de uma view": "DESCRIBE silver_eventos",
+    "Colunas de uma view": "DESCRIBE silver",
 }
 
 
@@ -107,9 +107,9 @@ def _aba_particoes(objetos, datasets, con):
     st.caption(f"{len(linhas)} partição(ões) · {int(tabela['arquivos'].sum())} arquivo(s) · "
                f"{particoes.tamanho_legivel(int(tabela['bytes'].sum()))}")
     if st.button("Contar linhas por partição", key="contar"):
-        particionado = any(l.year != particoes.SEM_PARTICAO for l in linhas)
-        sql = (f'SELECT year, month, day, count(*) AS linhas FROM "{nome}" GROUP BY ALL ORDER BY ALL'
-               if particionado else f'SELECT count(*) AS linhas FROM "{nome}"')
+        campos = [c for c in particoes.CAMPOS if any(getattr(l, c) != particoes.SEM_PARTICAO for l in linhas)]
+        sql = (f'SELECT {", ".join(campos)}, count(*) AS linhas FROM "{nome}" GROUP BY ALL ORDER BY ALL'
+               if campos else f'SELECT count(*) AS linhas FROM "{nome}"')
         try:
             with st.spinner("Contando linhas… (lê todos os arquivos do dataset)"):
                 contagem = consultas.executar(con.cursor(), sql, consultas.LIMITE_MAXIMO).tabela
