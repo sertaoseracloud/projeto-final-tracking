@@ -177,4 +177,4 @@ Rubrica de 100 pontos:
 | Relatório: respostas às quatro perguntas, sustentadas por números da Gold | 20 | cada resposta cita tabela e número; recomendação coerente com os dados |
 | Qualidade do dado: duplicatas, rejeições e armadilhas identificadas | 10 | identifica ao menos três armadilhas escondidas no dado e explica como as tratou |
 
-O formato (individual ou em dupla) e o prazo ficam a critério do professor.
+O formato (individual ou em dupla) e o prazo ficam a combinar com a turma.
