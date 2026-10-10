@@ -348,7 +348,7 @@ Os termos estão agrupados por assunto. Os exemplos usam a landing da DadosPro.
 ### Negócio
 
 - **Funil** — sequência de etapas até a compra, como ver os planos → escolher → pôr no carrinho → pagar. Em cada etapa, parte das pessoas desiste.
-- **Conversão** — fração das sessões de uma etapa que também aparecem na etapa seguinte. Exemplo: 200 sessões com `select_item` e 100 com `add_to_cart` → conversão de 50%.
+- **Conversão** — número de sessões de uma etapa dividido pelo número de sessões da etapa anterior (como na regra 5.4). Exemplo: 200 sessões com `select_item` e 100 com `add_to_cart` → conversão de 50%.
 - **Canal** — de onde o visitante veio, no formato `"<source> / <medium>"`. Exemplo: `google / cpc`.
 - **Lead** — visitante que deixou o e-mail, aqui em troca do e-book gratuito (evento `generate_lead`).
 - **Order bump** — oferta extra marcada no checkout. Aqui é a Mentoria em grupo (`BUMP-MENTORIA`, R$ 147,00).
