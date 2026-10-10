@@ -5,6 +5,9 @@
 As features só olham a landing ANTES do primeiro add_to_cart. Qualquer
 evento do checkout (view_cart em diante) praticamente entrega a resposta,
 e o modelo "acertaria" olhando a própria compra.
+
+As classes são ponderadas no treino porque compradores são raros (~6%): sem
+pesos o modelo quase nunca prevê compra e o F1 da classe positiva fica ~0.
 """
 
 from __future__ import annotations
@@ -61,24 +64,32 @@ def features_sessao(eventos: DataFrame, atributos: DataFrame) -> DataFrame:
 def treinar_propensao(dados: DataFrame, numericas: list[str] = NUMERICAS) -> tuple[DataFrame, dict]:
     dados = dados.cache()
     treino, teste = dados.randomSplit([0.8, 0.2], seed=SEED)
+    # Compradores são raros: cada classe pesa 50% do total, senão o modelo prevê "não compra" sempre.
+    p = treino.filter(F.col("rotulo") == 1.0).count() / max(treino.count(), 1)
+    peso_pos, peso_neg = (0.5 / p, 0.5 / (1 - p)) if 0 < p < 1 else (1.0, 1.0)
+    treino_pesado = treino.withColumn("peso", F.when(F.col("rotulo") == 1.0, peso_pos).otherwise(peso_neg))
     indices = [f"{c}_idx" for c in CATEGORICAS]
     vetores = [f"{c}_vec" for c in CATEGORICAS]
     pipeline = Pipeline(stages=[
         *[StringIndexer(inputCol=c, outputCol=i, handleInvalid="keep") for c, i in zip(CATEGORICAS, indices)],
         OneHotEncoder(inputCols=indices, outputCols=vetores, handleInvalid="keep"),
         VectorAssembler(inputCols=numericas + vetores, outputCol="features"),
-        LogisticRegression(labelCol="rotulo", featuresCol="features", maxIter=100),
+        LogisticRegression(labelCol="rotulo", featuresCol="features", weightCol="peso", maxIter=100),
     ])
-    modelo = pipeline.fit(treino)
+    modelo = pipeline.fit(treino_pesado)
     previsto = modelo.transform(teste)
     auc = BinaryClassificationEvaluator(labelCol="rotulo", metricName="areaUnderROC").evaluate(previsto)
     f1 = MulticlassClassificationEvaluator(labelCol="rotulo", metricName="fMeasureByLabel",
                                            metricLabel=1.0).evaluate(previsto)
+    avalia = lambda nome: MulticlassClassificationEvaluator(  # noqa: E731
+        labelCol="rotulo", metricName=nome, metricLabel=1.0).evaluate(previsto)
+    precisao, recall = avalia("precisionByLabel"), avalia("recallByLabel")
     pontuado = modelo.transform(
         treino.withColumn("conjunto", F.lit("treino")).unionByName(teste.withColumn("conjunto", F.lit("teste")))
     ).select("session_id", "conjunto", "rotulo",
              F.round(prob_compra("probability"), 4).alias("probabilidade"))
-    metricas = {"auc": round(auc, 4), "f1": round(f1, 4), "n_treino": treino.count(),
+    metricas = {"auc": round(auc, 4), "f1": round(f1, 4),
+                "precisao": round(precisao, 4), "recall": round(recall, 4), "n_treino": treino.count(),
                 "n_teste": teste.count(), "features": ", ".join(numericas + CATEGORICAS)}
     return pontuado, metricas
 
