@@ -42,6 +42,9 @@ def _cliente_boto3():
     return boto3.client("s3", endpoint_url=ENDPOINT)
 
 
+CODIGOS_BUCKET_AUSENTE = {"404", "NoSuchBucket", "NotFound"}
+
+
 class DestinoS3:
     def __init__(self, cliente=None):
         self.s3 = cliente if cliente is not None else _cliente_boto3()
@@ -51,12 +54,15 @@ class DestinoS3:
         try:
             self.s3.head_bucket(Bucket=BUCKET)
             return
-        except Exception as erro:  # ClientError (bucket ausente) ou falha de conexão
+        except Exception as erro:
             if type(erro).__name__ == "EndpointConnectionError":
                 raise SystemExit(
                     f"Não consegui falar com o S3 em {ENDPOINT}. "
                     "O floci está rodando? docker compose up -d --wait"
                 ) from None
+            codigo = getattr(erro, "response", {}).get("Error", {}).get("Code")
+            if codigo not in CODIGOS_BUCKET_AUSENTE:  # 403, timeout etc.: a causa real, sem mascarar
+                raise
         argumentos = {"Bucket": BUCKET}
         regiao = os.environ["AWS_DEFAULT_REGION"]
         if regiao != "us-east-1":
