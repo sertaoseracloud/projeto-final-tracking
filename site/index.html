@@ -136,7 +136,7 @@ body.painel-aberto .alternar-painel { right: 416px; }
 
 <header class="topo">
   <div class="wrap">
-    <a class="logo" href="#/" data-cta="logo">Dados<span>Pro</span></a>
+    <a class="logo" href="#/" data-cta="logo" data-heat="cta-logo">Dados<span>Pro</span></a>
     <nav>
       <a class="btn sec" href="#/membros" id="link-membros">Área de membros</a>
     </nav>
@@ -152,8 +152,8 @@ body.painel-aberto .alternar-painel { right: 416px; }
       <h1>Formação em Análise de Dados: do SQL ao Spark em 12 semanas</h1>
       <p class="sub">Projetos reais, mentoria semanal e certificado. Garantia incondicional de 7 dias.</p>
       <div class="acoes">
-        <a class="btn grande" href="#planos" data-cta="hero_ver_planos">Ver planos</a>
-        <a class="btn grande sec" href="#vsl" data-cta="hero_assistir">Assistir apresentação</a>
+        <a class="btn grande" href="#planos" data-cta="hero_ver_planos" data-heat="cta-hero-ver-planos">Ver planos</a>
+        <a class="btn grande sec" href="#vsl" data-cta="hero_assistir" data-heat="cta-hero-assistir">Assistir apresentação</a>
       </div>
     </div>
   </section>
@@ -165,7 +165,7 @@ body.painel-aberto .alternar-painel { right: 416px; }
       <p class="sub">O vídeo é simulado: corre 10× mais rápido e dispara <code>video_start</code>, <code>video_progress</code> (10/25/50/75%) e <code>video_complete</code>.</p>
       <div class="player" id="player">
         <span class="legenda">VSL · Formação em Análise de Dados</span>
-        <button class="tocar" id="btn-play" aria-label="Reproduzir">▶</button>
+        <button class="tocar" id="btn-play" data-heat="btn-play" aria-label="Reproduzir">▶</button>
         <span class="tempo" id="tempo">0:00 / 4:00</span>
         <div class="barra"><i id="barra"></i></div>
       </div>
@@ -184,7 +184,7 @@ body.painel-aberto .alternar-painel { right: 416px; }
         <div class="cartao"><h3>5 · Datalake medalhão</h3><p>Bronze, Silver e Gold em S3.</p></div>
         <div class="cartao"><h3>6 · Spark ML</h3><p>Classificação, regressão e clusterização.</p></div>
       </div>
-      <p style="margin-top:20px"><a href="#" id="dl-ementa">⬇ Baixar ementa completa (PDF)</a></p>
+      <p style="margin-top:20px"><a href="#" id="dl-ementa" data-heat="dl-ementa">⬇ Baixar ementa completa (PDF)</a></p>
     </div>
   </section>
 
@@ -214,7 +214,7 @@ body.painel-aberto .alternar-painel { right: 416px; }
       <span class="etiqueta">Material gratuito</span>
       <h2>Ainda não é a hora? Leve o e-book “Primeiro pipeline em PySpark”</h2>
       <p class="sub">O e-mail nunca entra no evento. Só vai <code>lead_source</code>: dado pessoal não pertence ao datalake de tracking.</p>
-      <form class="lead" id="form-lead">
+      <form class="lead" id="form-lead" data-heat="form-lead">
         <input type="email" required placeholder="seu@email.com" aria-label="E-mail">
         <button class="btn" type="submit">Quero o e-book</button>
       </form>
@@ -233,7 +233,7 @@ body.painel-aberto .alternar-painel { right: 416px; }
     <div class="wrap">
       <span class="etiqueta">Dúvidas</span>
       <h2>Perguntas frequentes</h2>
-      <input class="faq-busca" id="faq-busca" type="search" placeholder="Busque no FAQ e pressione Enter (ex.: certificado, parcelar, linux)">
+      <input class="faq-busca" id="faq-busca" data-heat="faq-busca" type="search" placeholder="Busque no FAQ e pressione Enter (ex.: certificado, parcelar, linux)">
       <div id="faq-lista">
         <details><summary>Tem certificado?</summary><p>Sim, com carga horária de 180 horas.</p></details>
         <details><summary>Posso parcelar?</summary><p>Em até 12× no cartão, ou com 5% de desconto no Pix.</p></details>
@@ -250,10 +250,10 @@ body.painel-aberto .alternar-painel { right: 416px; }
     <div class="wrap">
       DadosPro · Landing page hipotética do projeto final de tracking. Nenhum dado sai do seu navegador.
       <div class="redes">
-        <a href="https://instagram.com/dadospro" data-saida>Instagram</a>
-        <a href="https://youtube.com/@dadospro" data-saida>YouTube</a>
-        <a href="https://wa.me/5548999999999" data-saida>WhatsApp</a>
-        <a href="https://linkedin.com/company/dadospro" data-saida>LinkedIn</a>
+        <a href="https://instagram.com/dadospro" data-saida data-heat="social-instagram">Instagram</a>
+        <a href="https://youtube.com/@dadospro" data-saida data-heat="social-youtube">YouTube</a>
+        <a href="https://wa.me/5548999999999" data-saida data-heat="social-whatsapp">WhatsApp</a>
+        <a href="https://linkedin.com/company/dadospro" data-saida data-heat="social-linkedin">LinkedIn</a>
       </div>
     </div>
   </footer>
@@ -269,7 +269,7 @@ body.painel-aberto .alternar-painel { right: 416px; }
       <div class="passo">
         <h3>Resumo do pedido</h3>
         <div id="resumo"></div>
-        <label style="display:flex;gap:10px;align-items:flex-start;margin-top:14px;cursor:pointer">
+        <label style="display:flex;gap:10px;align-items:flex-start;margin-top:14px;cursor:pointer" data-heat="bump">
           <input type="checkbox" id="bump">
           <span><strong>Adicionar Mentoria em grupo (+ R$ 147,00)</strong><br><small style="color:var(--muted)">Order bump: marcar dispara <code>add_to_cart</code>; desmarcar dispara <code>remove_from_cart</code>.</small></span>
         </label>
@@ -280,26 +280,26 @@ body.painel-aberto .alternar-painel { right: 416px; }
         <h3>1 · Seus dados</h3>
         <input class="campo" id="ck-nome" placeholder="Nome completo" autocomplete="off">
         <input class="campo" id="ck-email" type="email" placeholder="E-mail de acesso" autocomplete="off">
-        <button class="btn" id="btn-continuar">Continuar</button>
+        <button class="btn" id="btn-continuar" data-heat="btn-continuar">Continuar</button>
       </div>
 
       <div class="passo bloqueado" id="passo-frete" hidden>
         <h3>2 · Entrega da apostila impressa</h3>
         <div class="opcoes">
-          <label><input type="radio" name="frete" value="PAC"> PAC · R$ 24,90 · 8 dias úteis</label>
-          <label><input type="radio" name="frete" value="SEDEX"> SEDEX · R$ 49,90 · 3 dias úteis</label>
+          <label data-heat="frete-pac"><input type="radio" name="frete" value="PAC"> PAC · R$ 24,90 · 8 dias úteis</label>
+          <label data-heat="frete-sedex"><input type="radio" name="frete" value="SEDEX"> SEDEX · R$ 49,90 · 3 dias úteis</label>
         </div>
       </div>
 
       <div class="passo bloqueado" id="passo-pagto">
         <h3 id="titulo-pagto">2 · Pagamento</h3>
         <div class="opcoes">
-          <label><input type="radio" name="pagto" value="pix"> Pix (5% off)</label>
-          <label><input type="radio" name="pagto" value="cartao_avista"> Cartão à vista</label>
-          <label><input type="radio" name="pagto" value="cartao_parcelado"> Cartão 12×</label>
+          <label data-heat="pagto-pix"><input type="radio" name="pagto" value="pix"> Pix (5% off)</label>
+          <label data-heat="pagto-cartao-avista"><input type="radio" name="pagto" value="cartao_avista"> Cartão à vista</label>
+          <label data-heat="pagto-cartao-parcelado"><input type="radio" name="pagto" value="cartao_parcelado"> Cartão 12×</label>
         </div>
         <p style="color:var(--muted);font-size:.9rem">Simulação: nenhum dado de pagamento é pedido nem gravado.</p>
-        <button class="btn grande" id="btn-comprar" disabled>Finalizar compra</button>
+        <button class="btn grande" id="btn-comprar" data-heat="btn-comprar" disabled>Finalizar compra</button>
       </div>
     </div>
   </section>
@@ -314,7 +314,7 @@ body.painel-aberto .alternar-painel { right: 416px; }
       <p class="sub" id="obrigado-texto"></p>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:20px">
         <a class="btn" href="#/membros">Criar acesso à área de membros</a>
-        <button class="btn sec" id="btn-refund">Solicitar reembolso (garantia de 7 dias)</button>
+        <button class="btn sec" id="btn-refund" data-heat="btn-refund">Solicitar reembolso (garantia de 7 dias)</button>
       </div>
     </div>
   </section>
@@ -329,8 +329,8 @@ body.painel-aberto .alternar-painel { right: 416px; }
       <div id="membros-form">
         <input class="campo" id="mb-email" type="email" placeholder="E-mail" autocomplete="off">
         <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn" id="btn-login">Entrar</button>
-          <button class="btn sec" id="btn-signup">Criar conta</button>
+          <button class="btn" id="btn-login" data-heat="btn-login">Entrar</button>
+          <button class="btn sec" id="btn-signup" data-heat="btn-signup">Criar conta</button>
         </div>
         <p style="color:var(--muted);font-size:.9rem;margin-top:14px">O e-mail vira um <code>user_id</code> pseudonimizado (hash). Daí em diante, todo evento carrega esse <code>user_id</code>, e a Silver usa isso para o identity stitching.</p>
       </div>
@@ -349,7 +349,7 @@ body.painel-aberto .alternar-painel { right: 416px; }
     <h3 id="modal-titulo"></h3>
     <p id="modal-desc" style="color:var(--muted)"></p>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <button class="btn" id="modal-comprar">Quero este plano</button>
+      <button class="btn" id="modal-comprar" data-heat="modal-comprar">Quero este plano</button>
       <button class="btn sec" id="modal-fechar">Fechar</button>
     </div>
   </div>
@@ -401,11 +401,11 @@ body.painel-aberto .alternar-painel { right: 416px; }
 
   // ---------------- catálogo ----------------
   var PLANOS = [
-    { item_id: "PLANO-BASICO",  item_name: "Plano Básico",  item_category: "plano", price: 297.00,
+    { item_id: "PLANO-BASICO",  item_name: "Plano Básico",  item_category: "plano", price: 297.00, heat: "plano-basico",
       itens: ["Acesso por 1 ano", "6 módulos gravados", "Certificado"] },
-    { item_id: "PLANO-PRO",     item_name: "Plano Pro",     item_category: "plano", price: 597.00, destaque: true,
+    { item_id: "PLANO-PRO",     item_name: "Plano Pro",     item_category: "plano", price: 597.00, heat: "plano-pro", destaque: true,
       itens: ["Acesso vitalício", "Mentoria semanal ao vivo", "Revisão de projetos", "Certificado"] },
-    { item_id: "PLANO-PREMIUM", item_name: "Plano Premium", item_category: "plano", price: 997.00,
+    { item_id: "PLANO-PREMIUM", item_name: "Plano Premium", item_category: "plano", price: 997.00, heat: "plano-premium",
       itens: ["Tudo do Pro", "Apostila impressa enviada pelos Correios", "Sessão 1:1 de carreira"] }
   ];
   var BUMP = { item_id: "BUMP-MENTORIA", item_name: "Mentoria em grupo", item_category: "order_bump", price: 147.00 };
@@ -478,6 +478,12 @@ body.painel-aberto .alternar-painel { right: 416px; }
     eventos.push(ev);
     desenharEvento(ev);
     return ev;
+  }
+  // element_id = data-heat do elemento clicado (ou do ancestral mais próximo)
+  function comElemento(params, el) {
+    var alvo = el && el.closest ? el.closest("[data-heat]") : null;
+    if (alvo) params.element_id = alvo.getAttribute("data-heat");
+    return params;
   }
   window.dataLayer = window.dataLayer || [];
 
@@ -599,17 +605,17 @@ body.painel-aberto .alternar-painel { right: 416px; }
     if (a.hasAttribute("data-saida")) {
       e.preventDefault();
       var url = new URL(a.href);
-      track("click", { link_url: a.href, link_domain: url.hostname, link_text: a.textContent.trim(), outbound: true });
+      track("click", comElemento({ link_url: a.href, link_domain: url.hostname, link_text: a.textContent.trim(), outbound: true }, a));
       toast("Saída para " + url.hostname + " (simulada)");
     } else if (a.hasAttribute("data-cta")) {
-      track("click", { link_url: a.href, link_text: a.textContent.trim(), link_id: a.getAttribute("data-cta"), outbound: false });
+      track("click", comElemento({ link_url: a.href, link_text: a.textContent.trim(), link_id: a.getAttribute("data-cta"), outbound: false }, a));
     }
   });
 
   // ---------------- file_download ----------------
   document.getElementById("dl-ementa").addEventListener("click", function (e) {
     e.preventDefault();
-    track("file_download", { file_name: "ementa-formacao-dados.pdf", file_extension: "pdf", link_url: "https://loja.exemplo/arquivos/ementa-formacao-dados.pdf" });
+    track("file_download", comElemento({ file_name: "ementa-formacao-dados.pdf", file_extension: "pdf", link_url: "https://loja.exemplo/arquivos/ementa-formacao-dados.pdf" }, this));
     toast("Download da ementa (simulado)");
   });
 
@@ -638,7 +644,7 @@ body.painel-aberto .alternar-painel { right: 416px; }
   $play.addEventListener("click", function () {
     if (video.tocando) { clearInterval(video.timer); video.tocando = false; $play.textContent = "▶"; return; }
     if (video.t >= DURACAO) { video.t = 0; video.marcos = {}; video.iniciado = false; }
-    if (!video.iniciado) { video.iniciado = true; track("video_start", paramsVideo(0)); }
+    if (!video.iniciado) { video.iniciado = true; track("video_start", comElemento(paramsVideo(0), $play)); }
     video.tocando = true; $play.textContent = "❚❚";
     video.timer = setInterval(tick, 100);
   });
@@ -648,6 +654,7 @@ body.painel-aberto .alternar-painel { right: 416px; }
   PLANOS.forEach(function (p, i) {
     var div = document.createElement("div");
     div.className = "plano" + (p.destaque ? " destaque" : "");
+    div.setAttribute("data-heat", p.heat);
     div.innerHTML =
       (p.destaque ? '<span class="etiqueta" style="margin:0">Mais escolhido</span>' : "") +
       "<h3 style=\"margin:0\">" + p.item_name + "</h3>" +
@@ -681,10 +688,10 @@ body.painel-aberto .alternar-painel { right: 416px; }
     if (!bt) return;
     var i = +(bt.getAttribute("data-detalhe") || bt.getAttribute("data-comprar"));
     var p = PLANOS[i];
-    track("select_item", { item_list_id: LISTA.item_list_id, item_list_name: LISTA.item_list_name },
+    track("select_item", comElemento({ item_list_id: LISTA.item_list_id, item_list_name: LISTA.item_list_name }, bt),
       [item(p, { index: i, item_list_id: LISTA.item_list_id, item_list_name: LISTA.item_list_name })]);
     if (bt.hasAttribute("data-detalhe")) abrirModal(p);
-    else escolherPlano(p);
+    else escolherPlano(p, bt);
   });
   function abrirModal(p) {
     planoModal = p;
@@ -696,20 +703,20 @@ body.painel-aberto .alternar-painel { right: 416px; }
   function fecharModal() { document.getElementById("modal").classList.remove("aberto"); }
   document.getElementById("modal-fechar").addEventListener("click", fecharModal);
   document.getElementById("modal").addEventListener("click", function (e) { if (e.target.id === "modal") fecharModal(); });
-  document.getElementById("modal-comprar").addEventListener("click", function () { fecharModal(); escolherPlano(planoModal); });
+  document.getElementById("modal-comprar").addEventListener("click", function () { fecharModal(); escolherPlano(planoModal, this); });
 
   // ---------------- carrinho ----------------
   function totalItens() { return arred(estado.carrinho.reduce(function (s, it) { return s + it.price * it.quantity; }, 0)); }
-  function escolherPlano(p) {
+  function escolherPlano(p, origem) {
     if (estado.plano && estado.plano.item_id !== p.item_id) {
       var antigo = estado.plano;
-      track("remove_from_cart", { currency: "BRL", value: antigo.price }, [item(antigo)]);
+      track("remove_from_cart", comElemento({ currency: "BRL", value: antigo.price }, origem), [item(antigo)]);
       estado.carrinho = estado.carrinho.filter(function (it) { return it.item_id !== antigo.item_id; });
     }
     if (!estado.plano || estado.plano.item_id !== p.item_id) {
       estado.plano = p;
       estado.carrinho.unshift(item(p));
-      track("add_to_cart", { currency: "BRL", value: p.price }, [item(p)]);
+      track("add_to_cart", comElemento({ currency: "BRL", value: p.price }, origem), [item(p)]);
     }
     location.hash = "#/checkout";
   }
@@ -742,10 +749,10 @@ body.painel-aberto .alternar-painel { right: 416px; }
   $bump.addEventListener("change", function () {
     if ($bump.checked) {
       estado.carrinho.push(item(BUMP));
-      track("add_to_cart", { currency: "BRL", value: BUMP.price }, [item(BUMP)]);
+      track("add_to_cart", comElemento({ currency: "BRL", value: BUMP.price }, $bump), [item(BUMP)]);
     } else {
       estado.carrinho = estado.carrinho.filter(function (it) { return it.item_id !== BUMP.item_id; });
-      track("remove_from_cart", { currency: "BRL", value: BUMP.price }, [item(BUMP)]);
+      track("remove_from_cart", comElemento({ currency: "BRL", value: BUMP.price }, $bump), [item(BUMP)]);
     }
     desenharResumo();
   });
@@ -755,14 +762,14 @@ body.painel-aberto .alternar-painel { right: 416px; }
   document.getElementById("btn-continuar").addEventListener("click", function () {
     if (!ck.iniciado) {
       ck.iniciado = true;
-      track("begin_checkout", { currency: "BRL", value: totalItens() }, estado.carrinho.slice());
+      track("begin_checkout", comElemento({ currency: "BRL", value: totalItens() }, this), estado.carrinho.slice());
     }
     document.getElementById(premium() ? "passo-frete" : "passo-pagto").classList.remove("bloqueado");
   });
   document.querySelectorAll('input[name="frete"]').forEach(function (r) {
     r.addEventListener("change", function () {
       ck.frete = r.value;
-      track("add_shipping_info", { currency: "BRL", value: totalItens(), shipping_tier: r.value, shipping: FRETE[r.value] }, estado.carrinho.slice());
+      track("add_shipping_info", comElemento({ currency: "BRL", value: totalItens(), shipping_tier: r.value, shipping: FRETE[r.value] }, r), estado.carrinho.slice());
       document.getElementById("passo-pagto").classList.remove("bloqueado");
       desenharResumo();
     });
@@ -770,7 +777,7 @@ body.painel-aberto .alternar-painel { right: 416px; }
   document.querySelectorAll('input[name="pagto"]').forEach(function (r) {
     r.addEventListener("change", function () {
       ck.pagto = r.value;
-      track("add_payment_info", { currency: "BRL", value: totalItens(), payment_type: r.value }, estado.carrinho.slice());
+      track("add_payment_info", comElemento({ currency: "BRL", value: totalItens(), payment_type: r.value }, r), estado.carrinho.slice());
       document.getElementById("btn-comprar").disabled = false;
     });
   });
@@ -780,11 +787,11 @@ body.painel-aberto .alternar-painel { right: 416px; }
     var desconto = ck.pagto === "pix" ? arred(bruto * 0.05) : 0;
     var valor = arred(bruto - desconto);           // receita dos itens, sem frete
     var frete = valorFrete();
-    var ev = track("purchase", {
+    var ev = track("purchase", comElemento({
       transaction_id: "T-" + uuid().slice(0, 8).toUpperCase(),
       value: valor, tax: arred(valor * ALIQUOTA_ISS), shipping: frete, currency: "BRL",
       payment_type: ck.pagto, coupon: ck.pagto === "pix" ? "PIX5" : null
-    }, itens);
+    }, this), itens);
     estado.ultimaCompra = ev; estado.pedidoReembolsado = false;
     estado.carrinho = []; estado.plano = null;
     location.hash = "#/obrigado";
@@ -799,7 +806,7 @@ body.painel-aberto .alternar-painel { right: 416px; }
   }
   document.getElementById("btn-refund").addEventListener("click", function () {
     var c = estado.ultimaCompra;
-    track("refund", { transaction_id: c.params.transaction_id, value: c.params.value, tax: c.params.tax, shipping: c.params.shipping, currency: "BRL", reason: "garantia_7_dias" }, c.items);
+    track("refund", comElemento({ transaction_id: c.params.transaction_id, value: c.params.value, tax: c.params.tax, shipping: c.params.shipping, currency: "BRL", reason: "garantia_7_dias" }, this), c.items);
     estado.pedidoReembolsado = true;
     this.disabled = true;
     toast("Reembolso registrado: a receita líquida já desconta este pedido");
@@ -808,7 +815,7 @@ body.painel-aberto .alternar-painel { right: 416px; }
   // ---------------- lead ----------------
   document.getElementById("form-lead").addEventListener("submit", function (e) {
     e.preventDefault();
-    track("generate_lead", { lead_source: "ebook_primeiro_pipeline", currency: "BRL", value: 0 });
+    track("generate_lead", comElemento({ lead_source: "ebook_primeiro_pipeline", currency: "BRL", value: 0 }, this));
     this.reset();
     toast("E-book enviado (simulado). O e-mail não foi para o evento.");
   });
@@ -829,7 +836,7 @@ body.painel-aberto .alternar-painel { right: 416px; }
     if (e.key !== "Enter") return;
     var termo = $busca.value.trim().toLowerCase();
     if (!termo) return;
-    track("site_search", { search_term: termo, search_results: filtrarFaq(termo), search_area: "faq" });
+    track("site_search", comElemento({ search_term: termo, search_results: filtrarFaq(termo), search_area: "faq" }, $busca));
   });
 
   // ---------------- área de membros: sign_up / login ----------------
@@ -840,17 +847,17 @@ body.painel-aberto .alternar-painel { right: 416px; }
     document.getElementById("membros-titulo").textContent = logado ? "Área de membros" : "Entrar ou criar conta";
     document.getElementById("mb-uid").textContent = estado.userId || "";
   }
-  function autenticar(evento) {
+  function autenticar(evento, botao) {
     var email = document.getElementById("mb-email").value.trim().toLowerCase();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast("Digite um e-mail válido"); return; }
     estado.userId = "u-" + hashCurto(email);
     gravar("lp_user_id", estado.userId);
-    track(evento, { method: "email" });
+    track(evento, comElemento({ method: "email" }, botao));
     document.getElementById("mb-email").value = "";
     desenharContexto(); atualizarMembros();
   }
-  document.getElementById("btn-login").addEventListener("click", function () { autenticar("login"); });
-  document.getElementById("btn-signup").addEventListener("click", function () { autenticar("sign_up"); });
+  document.getElementById("btn-login").addEventListener("click", function () { autenticar("login", this); });
+  document.getElementById("btn-signup").addEventListener("click", function () { autenticar("sign_up", this); });
   document.getElementById("btn-sair").addEventListener("click", function () {
     estado.userId = null; gravar("lp_user_id", null); desenharContexto(); atualizarMembros();
   });
