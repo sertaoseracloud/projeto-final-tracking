@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+dados/
+spark-warehouse/
+*.jsonl
+.env
