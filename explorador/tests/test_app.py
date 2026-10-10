@@ -78,3 +78,22 @@ def test_app_mostra_aviso_quando_corta_o_resultado(bucket_local):
     at.button(key="executar").click().run()
     assert len(at.dataframe[-1].value) == 5
     assert any("cortado em 5 linhas" in w.value for w in at.warning)
+
+
+def test_erro_inesperado_vira_mensagem_sem_stack_trace(monkeypatch):
+    def negado(*_, **__):
+        raise RuntimeError("AccessDenied")
+    monkeypatch.setattr(s3, "listar", negado)
+    at = _rodar()
+    assert not at.exception
+    assert "Algo deu errado" in at.error[0].value
+
+
+def test_resultado_continua_na_tela_apos_outra_interacao(bucket_local):
+    at = _rodar()
+    at.text_area(key="sql").input("SELECT count(*) AS n FROM silver_eventos").run()
+    at.button(key="executar").click().run()
+    assert at.dataframe[-1].value["n"].tolist() == [4]
+    at.number_input(key="limite").set_value(7).run()
+    assert not at.exception
+    assert at.dataframe[-1].value["n"].tolist() == [4]

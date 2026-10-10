@@ -18,6 +18,8 @@ import duckdb
 import pandas as pd
 import streamlit as st
 
+from streamlit.runtime.scriptrunner_utils.exceptions import RerunException, StopException
+
 from explorador import consultas, particoes, s3
 
 EXEMPLOS = {
@@ -81,6 +83,9 @@ def _aba_particoes(objetos, datasets, con):
         return
     escolha = st.selectbox("Dataset", [d.prefixo for d in datasets], key="dataset")
     linhas = particoes.tabela_particoes(objetos, escolha)
+    if not linhas:
+        st.info("Nenhum arquivo de dados neste dataset.")
+        return
     tabela = pd.DataFrame([asdict(l) for l in linhas])
     tabela["tamanho"] = tabela["bytes"].map(particoes.tamanho_legivel)
     st.dataframe(tabela, hide_index=True)
@@ -109,25 +114,28 @@ def _aba_sql(colunas, con):
                  placeholder="SELECT * FROM silver_eventos LIMIT 10")
     limite = st.number_input("Limite de linhas", min_value=1, max_value=consultas.LIMITE_MAXIMO,
                              value=consultas.LIMITE_PADRAO, step=100, key="limite")
-    if not st.button("Executar", key="executar", type="primary"):
+    if st.button("Executar", key="executar", type="primary"):
+        try:
+            st.session_state["ultimo_resultado"] = (
+                consultas.executar(con.cursor(), st.session_state.get("sql", ""), limite), limite)
+        except consultas.SqlNaoPermitido as erro:
+            st.session_state.pop("ultimo_resultado", None)
+            st.warning(str(erro))
+        except duckdb.Error as erro:
+            st.session_state.pop("ultimo_resultado", None)
+            st.error(f"Erro no SQL: {erro}")
+            st.info("Confira os nomes em \"Views disponíveis\", logo acima.")
+    if "ultimo_resultado" not in st.session_state:
         return
-    try:
-        resultado = consultas.executar(con.cursor(), st.session_state.get("sql", ""), limite)
-    except consultas.SqlNaoPermitido as erro:
-        st.warning(str(erro))
-        return
-    except duckdb.Error as erro:
-        st.error(f"Erro no SQL: {erro}")
-        st.info("Confira os nomes em \"Views disponíveis\", logo acima.")
-        return
+    resultado, limite_usado = st.session_state["ultimo_resultado"]
     if resultado.cortado:
-        st.warning(f"Resultado cortado em {int(limite)} linhas. Aumente o limite ou filtre a consulta.")
+        st.warning(f"Resultado cortado em {int(limite_usado)} linhas. Aumente o limite ou filtre a consulta.")
     st.dataframe(resultado.tabela, hide_index=True)
     st.download_button("Baixar CSV", resultado.tabela.to_csv(index=False).encode("utf-8"),
-                       file_name="resultado.csv", mime="text/csv", key="baixar")
+                       file_name="resultado.csv", mime="text/csv", key="baixar", on_click="ignore")
 
 
-def main() -> None:
+def _pagina() -> None:
     st.set_page_config(page_title="Explorador do datalake", layout="wide")
     st.title("Explorador do datalake")
     topo, botao = st.columns([5, 1])
@@ -162,6 +170,16 @@ def main() -> None:
         _aba_particoes(objetos, datasets, con)
     with sql:
         _aba_sql(colunas, con)
+
+
+def main() -> None:
+    try:
+        _pagina()
+    except (StopException, RerunException):
+        raise
+    except Exception as erro:
+        st.error("Algo deu errado no explorador. Clique em Recarregar; se continuar, veja `docker compose logs explorador`.")
+        st.caption(f"Detalhe técnico: {type(erro).__name__}: {erro}")
 
 
 main()
