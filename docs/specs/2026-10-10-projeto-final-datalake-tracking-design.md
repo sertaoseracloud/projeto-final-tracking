@@ -81,8 +81,9 @@ Projeto final de engenharia de dados. O aluno recebe um problema de negócio e u
 | --- | --- |
 | `site/index.html` | landing de exemplo que dispara os 20 eventos e exporta JSONL; serve para ver o evento nascer |
 | `gerador/` | simulador do coletor: popula `landing/` no S3 com semanas de eventos sintéticos, inclusive defeitos |
-| `docker-compose.yml` | S3 emulado localmente (floci); nenhuma conta de nuvem é necessária |
-| `SETUP.md` | ambiente do zero: Python 3.11, Java 17, PySpark 3.5.3, `winutils.exe` (Windows), Docker |
+| `docker-compose.yml` + `Dockerfile` | dois contêineres: `floci` (S3 emulado) e `app` (Python 3.11, Java 17, PySpark 3.5.3 com o conector `s3a`, `boto3`, `pytest`). **Nada é instalado na máquina além do Docker**; nenhuma conta de nuvem é necessária |
+| `infra/verificar_ambiente.py` | confere, de dentro do contêiner `app`, que o Spark lê e grava no floci por `s3a://` |
+| `SETUP.md` | ambiente do zero com Docker: subir os contêineres, popular a landing, rodar o pipeline |
 | `docs/ENUNCIADO.md` | problema, requisitos, entregáveis e rubrica (seções 1–6 e 8 deste spec) |
 | `docs/CONTRATO_EVENTO.md` | formato do evento e layout da landing no S3 (seção 5) |
 
@@ -123,7 +124,7 @@ projeto-final-tracking/
 │   ├── jornadas.py               máquina de estados da jornada na landing
 │   ├── sujeira.py                defeitos injetados
 │   ├── importar_site.py          sobe um JSONL exportado do site/ para a landing
-│   ├── s3.py                     cliente boto3 do gerador
+│   ├── destinos.py               destino S3 (boto3) ou pasta local (--saida-local)
 │   └── README.md
 ├── pipeline/                     VAZIO no pacote do aluno (só um README com o que se espera)
 ├── docs/
@@ -134,14 +135,18 @@ projeto-final-tracking/
 │   ├── solucao/                  pipeline de referência completo (seção 7)
 │   ├── GABARITO.md               números esperados para a seed padrão + roteiro de correção
 │   └── README.md                 como gerar o pacote do aluno
-├── docker-compose.yml            floci
-├── requirements.txt              pyspark==3.5.3, boto3
+├── infra/verificar_ambiente.py   Spark ↔ floci por s3a (leitura da landing + escrita/leitura de teste)
+├── Dockerfile                    imagem app: Python 3.11 + Java 17 + PySpark 3.5.3 + hadoop-aws
+├── docker-compose.yml            serviços floci e app
+├── requirements.txt              pyspark==3.5.3, boto3 (só o gerador), pytest
 ├── .gitattributes                professor/ export-ignore
 ├── SETUP.md
 └── README.md
 ```
 
-**Pacote do aluno.** `git archive --format=zip -o projeto-final-aluno.zip HEAD` gera o zip sem `professor/` (por causa do `export-ignore`). O professor distribui o zip, nunca o repositório. Isso fica documentado em `professor/README.md`.
+**Pacote do aluno.** `git archive --format=zip -o projeto-final-aluno.zip HEAD` gera o zip sem `professor/`, `docs/specs/` e `docs/superpowers/` (todos `export-ignore` no `.gitattributes`, porque descrevem a solução). O professor distribui o zip, nunca o repositório. Isso fica documentado em `professor/README.md`.
+
+**Execução em contêiner.** Todo comando roda no serviço `app`: `docker compose run --rm app python <script>`. O repositório é montado em `/projeto`, e o `app` alcança o floci em `http://floci:4566`.
 
 ### Layout da landing no S3
 
@@ -209,7 +214,7 @@ Um evento por linha de JSON. É o mesmo formato que `site/index.html` produz e q
 
 ### 6.1 Obrigatórios de arquitetura
 
-- **R1.** PySpark, lendo de `landing/` e gravando todas as camadas no mesmo bucket S3 (floci), em Parquet.
+- **R1.** PySpark, lendo de `landing/` e gravando todas as camadas no mesmo bucket S3 (floci), em Parquet, **diretamente pelo Spark com `s3a://`**. O pipeline não usa `boto3` nem outro SDK de nuvem, não baixa arquivos para o disco local e roda no contêiner `app`.
 - **R2.** **Um job por camada**, executáveis separadamente:
   - um job Bronze, um job Silver e **quatro jobs Gold, cada um num arquivo próprio** (funil, engajamento, receita e aquisição, ML);
   - cada job verifica que a camada de que depende existe e, se não existir, para com uma mensagem que diz o que rodar antes.
@@ -264,10 +269,10 @@ Nomes de colunas são livres; o **conteúdo** é obrigatório, porque é o que a
 Pipeline completo que atende à seção 6. É com ele que o professor gera os números de `GABARITO.md`. Decisões da referência, que servem de roteiro de correção sem obrigar o aluno a segui-las:
 
 - **Arquivos:**
-  - `comum.py` (sessão Spark, cliente S3, `subir_pasta`, `baixar_pasta`, `prefixo_existe`);
+  - `comum.py` (sessão Spark com `s3a`, `caminho(camada)`, `camada_existe(spark, camada)`);
   - os jobs `01_bronze_ingestao.py`, `02_silver_eventos.py`, `03_gold_funil.py`, `04_gold_engajamento.py`, `05_gold_receita_aquisicao.py`, `06_gold_ml.py`;
-  - `executar_pipeline.py` e `verificar_ambiente.py`.
-- **Acesso ao S3:** o Spark roda local. `boto3` baixa a camada de origem para um diretório temporário, o Spark processa e `boto3` sobe o resultado, sem o conector `s3a`. Isso evita dependências de JAR no Windows.
+  - `executar_pipeline.py`.
+- **Acesso ao S3:** `comum.py` cria a `SparkSession` com o conector `s3a` (`hadoop-aws` 3.3.4, o mesmo Hadoop do PySpark 3.5.3) apontado para o floci: endpoint `http://floci:4566`, `path.style.access=true`, SSL desligado, credenciais fixas de teste. Cada job lê e grava direto em `s3a://<bucket>/<camada>/`. Para saber se a camada anterior existe, usa a API `FileSystem` do Hadoop pela JVM do Spark (`spark._jvm.org.apache.hadoop.fs.Path`), sem SDK.
 - **Bronze:** `params` como `map<string,string>`, `items` como `array<struct>`. A proveniência vem de `input_file_name()` e `current_timestamp()`; a partição é `dt`.
 - **Silver, nesta ordem:**
   1. deduplicação (primeira ocorrência por instante de ingestão);
@@ -323,7 +328,7 @@ O formato (individual ou em dupla) e o prazo ficam a critério do professor.
 
 ## 10. O gerador
 
-**`gerar_eventos.py`** — Python puro + `boto3`, sem Spark, sem dependência do pipeline.
+**`gerar_eventos.py`** — Python puro + `boto3`, sem Spark, sem dependência do pipeline. O gerador é o "mundo externo" (o coletor), por isso continua usando o SDK; a regra "só Spark" vale para o pipeline.
 
 | Parâmetro | Padrão |
 | --- | --- |
@@ -382,4 +387,4 @@ O formato (individual ou em dupla) e o prazo ficam a critério do professor.
 - [ ] `GABARITO.md` traz os números medidos e as tolerâncias.
 - [ ] `git archive` gera um zip sem `professor/`, conferido listando o conteúdo do zip.
 - [ ] `ENUNCIADO.md` e `CONTRATO_EVENTO.md` batem com este spec.
-- [ ] `SETUP.md` permite rodar do zero numa máquina Windows.
+- [ ] `SETUP.md` permite rodar do zero numa máquina com apenas Docker instalado (Windows, macOS ou Linux).

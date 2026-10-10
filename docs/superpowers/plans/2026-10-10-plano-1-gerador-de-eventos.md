@@ -12,7 +12,7 @@ simular (jornadas.py) → aplicar_sujeira (sujeira.py) → montar_lotes (lotes.p
 
 `gerar_eventos.py` só orquestra e imprime o resumo. O destino é o S3 via `boto3` ou uma pasta local (`--saida-local`), o que permite testar tudo sem Docker.
 
-**Tech Stack:** Python 3.11 (o código roda em 3.10+), `boto3`, `pytest`, floci (S3 emulado) via Docker Compose.
+**Tech Stack:** Docker Compose com dois serviços: `floci` (S3 emulado) e `app` (Python 3.11, Java 17, PySpark 3.5.3 + conector `s3a`, `boto3`, `pytest`). Nada é instalado na máquina além do Docker. O gerador usa `boto3`, porque simula o coletor externo; o pipeline (Plano 2) acessa o storage **só pelo Spark via `s3a://`**, e este plano já valida esse caminho na Task 9.
 
 **Spec:** `docs/specs/2026-10-10-projeto-final-datalake-tracking-design.md`, seções 2, 4, 5, 9 e 10.
 
@@ -25,8 +25,10 @@ simular (jornadas.py) → aplicar_sujeira (sujeira.py) → montar_lotes (lotes.p
 | Arquivo | Responsabilidade |
 | --- | --- |
 | `pyproject.toml` | configuração do pytest (`pythonpath = ["."]`) |
-| `requirements.txt` | `pyspark==3.5.3`, `boto3`, `pytest` |
-| `docker-compose.yml` | floci na porta 4566 |
+| `requirements.txt` | `pyspark==3.5.3`, `boto3` (só o gerador), `pytest` |
+| `Dockerfile`, `.dockerignore` | imagem `app`: Python 3.11 + Java 17 + PySpark 3.5.3 + `hadoop-aws` 3.3.4 |
+| `docker-compose.yml` | serviços `floci` (porta 4566) e `app` (repositório montado em `/projeto`) |
+| `infra/verificar_ambiente.py` | prova que o Spark lê e grava no floci por `s3a://` |
 | `.gitattributes` | `export-ignore` de `professor/`, `docs/specs/` e `docs/superpowers/` |
 | `.gitignore` | ambiente, saídas locais e artefatos |
 | `gerador/__init__.py` | marca o pacote |
@@ -42,16 +44,18 @@ simular (jornadas.py) → aplicar_sujeira (sujeira.py) → montar_lotes (lotes.p
 | `tests/gerador/*.py` | testes unitários de cada módulo |
 | `SETUP.md`, `README.md` | ambiente do zero e visão geral do repositório |
 
-**Desvio do spec, registrado na Task 11:** o cliente S3 do gerador fica em `destinos.py`, junto com o destino local, em vez de `s3.py`. Além de `professor/`, também `docs/specs/` e `docs/superpowers/` saem do pacote do aluno, porque descrevem a solução.
+O spec já reflete estas decisões: execução em contêiner, pipeline só via `s3a`, `destinos.py` no lugar de `s3.py`, e `docs/specs/` + `docs/superpowers/` fora do pacote do aluno.
 
-Todos os comandos abaixo são PowerShell, executados na raiz `C:\Repo\projeto-final-tracking`.
+Todos os comandos abaixo rodam na raiz `C:\Repo\projeto-final-tracking`. Código Python e testes rodam **sempre** dentro do contêiner: `docker compose run --rm app ...`. Só `git` e `docker` rodam direto na máquina.
 
 ---
 
-### Task 1: Esqueleto do repositório e ambiente
+### Task 1: Esqueleto do repositório e contêineres
+
+Nada é instalado na máquina: todo comando roda no serviço `app` do Docker Compose, com Python 3.11, Java 17, PySpark 3.5.3, o conector `s3a`, `boto3` e `pytest`. O repositório é montado em `/projeto`.
 
 **Files:**
-- Create: `pyproject.toml`, `requirements.txt`, `docker-compose.yml`, `.gitattributes`, `gerador/__init__.py`, `tests/gerador/__init__.py`
+- Create: `pyproject.toml`, `requirements.txt`, `Dockerfile`, `.dockerignore`, `docker-compose.yml`, `.gitattributes`, `gerador/__init__.py`, `tests/gerador/__init__.py`
 - Modify: `.gitignore`
 
 - [ ] **Step 1: Criar `pyproject.toml`**
@@ -60,7 +64,7 @@ Todos os comandos abaixo são PowerShell, executados na raiz `C:\Repo\projeto-fi
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-q"
+addopts = "-q -p no:cacheprovider"
 ```
 
 - [ ] **Step 2: Criar `requirements.txt`**
@@ -71,7 +75,50 @@ boto3
 pytest
 ```
 
-- [ ] **Step 3: Criar `docker-compose.yml`**
+`boto3` é usado **só pelo gerador**, que simula o coletor externo. O pipeline acessa o storage apenas pelo Spark (`s3a://`).
+
+- [ ] **Step 3: Criar `Dockerfile`**
+
+```dockerfile
+# Imagem única do projeto: gerador, testes e pipeline PySpark.
+FROM python:3.11-slim-bookworm
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openjdk-17-jre-headless curl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /projeto
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Conector s3a: hadoop-aws na mesma versão do Hadoop embutido no PySpark 3.5.3 (3.3.4),
+# mais o bundle Java que ele exige. Vão para a pasta de jars do próprio PySpark.
+ARG HADOOP_AWS=3.3.4
+ARG AWS_JAVA_SDK_BUNDLE=1.12.262
+RUN JARS="$(python -c 'import os, pyspark; print(os.path.join(os.path.dirname(pyspark.__file__), "jars"))')" \
+ && curl -fsSL -o "$JARS/hadoop-aws-$HADOOP_AWS.jar" \
+      "https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/$HADOOP_AWS/hadoop-aws-$HADOOP_AWS.jar" \
+ && curl -fsSL -o "$JARS/aws-java-sdk-bundle-$AWS_JAVA_SDK_BUNDLE.jar" \
+      "https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/$AWS_JAVA_SDK_BUNDLE/aws-java-sdk-bundle-$AWS_JAVA_SDK_BUNDLE.jar"
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYSPARK_PYTHON=python \
+    PYSPARK_DRIVER_PYTHON=python
+```
+
+- [ ] **Step 4: Criar `.dockerignore`**
+
+```text
+.git
+.venv
+saida
+dados
+camadas
+*.zip
+```
+
+- [ ] **Step 5: Criar `docker-compose.yml`**
 
 ```yaml
 services:
@@ -80,66 +127,79 @@ services:
     container_name: floci-datalake-tracking
     ports:
       - "4566:4566"
+
+  app:
+    build: .
+    image: datalake-tracking-app
+    working_dir: /projeto
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/projeto
+    environment:
+      AWS_ENDPOINT_URL: http://floci:4566
+      AWS_S3_BUCKET: datalake-tracking
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+    depends_on:
+      - floci
 ```
 
-- [ ] **Step 4: Criar `.gitattributes`**
+O floci roda **sem** o `docker.sock` montado. O projeto só usa S3, e o socket daria ao contêiner controle sobre o Docker da máquina. Se o floci não subir sem ele (Task 9), pare e reporte; não acrescente o socket por conta própria.
+
+- [ ] **Step 6: Criar `.gitattributes`**
 
 ```text
 * text=auto eol=lf
-*.ps1 text eol=crlf
 professor/ export-ignore
 docs/specs/ export-ignore
 docs/superpowers/ export-ignore
 ```
 
-- [ ] **Step 5: Substituir `.gitignore`**
+- [ ] **Step 7: Substituir `.gitignore`**
 
 ```text
-.venv/
 __pycache__/
 *.pyc
 .pytest_cache/
-hadoop/
+.venv/
+saida/
 dados/
 camadas/
-saida/
 spark-warehouse/
 *.jsonl
 *.zip
 .env
 ```
 
-- [ ] **Step 6: Criar `gerador/__init__.py` e `tests/gerador/__init__.py`**
+- [ ] **Step 8: Criar `gerador/__init__.py` e `tests/gerador/__init__.py`**
 
-Os dois com o mesmo conteúdo:
+Dois arquivos vazios.
 
-```python
-```
-
-(arquivos vazios)
-
-- [ ] **Step 7: Criar o venv e instalar**
+- [ ] **Step 9: Construir a imagem e conferir o ambiente**
 
 ```powershell
-py -3.11 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+docker compose build app
+docker compose run --rm app python -c "import sys, pyspark, boto3, pytest; print(sys.version.split()[0], pyspark.__version__)"
+docker compose run --rm app sh -c "java -version 2>&1 | head -1; ls /usr/local/lib/python3.11/site-packages/pyspark/jars | grep -E 'hadoop-aws|aws-java-sdk-bundle'"
 ```
 
-Se `py -3.11` não existir, **pare e pergunte ao usuário** antes de instalar Python (`winget install -e --id Python.Python.3.11`). Para as Tasks 2–8, um venv com qualquer Python 3.10+ serve (`py -m venv .venv` + `pip install boto3 pytest`). O PySpark só é necessário no Plano 2.
+Expected:
+- Linha 1: `3.11.x 3.5.3`.
+- Linha 2: `openjdk version "17...`.
+- Os dois jars aparecem: `hadoop-aws-3.3.4.jar` e `aws-java-sdk-bundle-1.12.262.jar`.
 
-- [ ] **Step 8: Rodar o pytest vazio**
+Se o Docker não responder, **peça ao usuário para abrir o Docker Desktop** e espere.
 
-Run: `.\.venv\Scripts\python.exe -m pytest`
+- [ ] **Step 10: Rodar o pytest vazio**
+
+Run: `docker compose run --rm app python -m pytest`
 Expected: `no tests ran` (código de saída 5)
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 11: Commit**
 
 ```powershell
-git add pyproject.toml requirements.txt docker-compose.yml .gitattributes .gitignore gerador/__init__.py tests/gerador/__init__.py
-git commit -m "Infra: pytest, requirements, floci e export-ignore do pacote do aluno"
+git add pyproject.toml requirements.txt Dockerfile .dockerignore docker-compose.yml .gitattributes .gitignore gerador/__init__.py tests/gerador/__init__.py
+git commit -m "Infra: imagem app (Python 3.11, Java 17, PySpark + s3a) e floci em conteiner"
 ```
 
 ---
@@ -207,7 +267,7 @@ def test_catalogo_tem_os_22_nomes_de_evento():
 
 - [ ] **Step 2: Rodar e ver falhar**
 
-Run: `.\.venv\Scripts\python.exe -m pytest tests/gerador/test_eventos.py -v`
+Run: `docker compose run --rm app python -m pytest tests/gerador/test_eventos.py -v`
 Expected: FAIL com `ModuleNotFoundError: No module named 'gerador.catalogo'`
 
 - [ ] **Step 3: Criar `gerador/catalogo.py`**
@@ -394,7 +454,7 @@ def criar_evento(rng: random.Random, nome: str, ts: datetime, ctx: Contexto,
 
 - [ ] **Step 5: Rodar e ver passar**
 
-Run: `.\.venv\Scripts\python.exe -m pytest tests/gerador/test_eventos.py -v`
+Run: `docker compose run --rm app python -m pytest tests/gerador/test_eventos.py -v`
 Expected: 5 passed
 
 - [ ] **Step 6: Commit**
@@ -576,7 +636,7 @@ def test_simular_e_deterministico():
 
 - [ ] **Step 3: Rodar e ver falhar**
 
-Run: `.\.venv\Scripts\python.exe -m pytest tests/gerador/test_jornadas.py -v`
+Run: `docker compose run --rm app python -m pytest tests/gerador/test_jornadas.py -v`
 Expected: ERROR com `ModuleNotFoundError: No module named 'gerador.jornadas'`
 
 - [ ] **Step 4: Criar `gerador/jornadas.py`**
@@ -872,7 +932,7 @@ A sessão de reembolso começa entre 1 e 6,9 dias depois da compra. Com isso, o 
 
 - [ ] **Step 5: Rodar e ver passar**
 
-Run: `.\.venv\Scripts\python.exe -m pytest tests/gerador/test_jornadas.py -v`
+Run: `docker compose run --rm app python -m pytest tests/gerador/test_jornadas.py -v`
 Expected: 13 passed
 
 Se um teste estatístico falhar (por exemplo, nenhum lead que volta e compra), **aumente `visitantes` na fixture** para 2500. Não mexa nas probabilidades do catálogo para fazer o teste passar.
@@ -956,7 +1016,7 @@ def test_fracao_zero_nao_altera_nada(simulacao):
 
 - [ ] **Step 2: Rodar e ver falhar**
 
-Run: `.\.venv\Scripts\python.exe -m pytest tests/gerador/test_sujeira.py -v`
+Run: `docker compose run --rm app python -m pytest tests/gerador/test_sujeira.py -v`
 Expected: FAIL com `ModuleNotFoundError: No module named 'gerador.sujeira'`
 
 - [ ] **Step 3: Criar `gerador/sujeira.py`**
@@ -1104,7 +1164,7 @@ def aplicar_sujeira(rng: random.Random, eventos: list[dict], fracao: float) -> d
 
 - [ ] **Step 4: Rodar e ver passar**
 
-Run: `.\.venv\Scripts\python.exe -m pytest tests/gerador/test_sujeira.py -v`
+Run: `docker compose run --rm app python -m pytest tests/gerador/test_sujeira.py -v`
 Expected: 5 passed
 
 - [ ] **Step 5: Commit**
@@ -1183,7 +1243,7 @@ def test_evento_sem_timestamp_vai_para_o_dia_de_coleta():
 
 - [ ] **Step 2: Rodar e ver falhar**
 
-Run: `.\.venv\Scripts\python.exe -m pytest tests/gerador/test_lotes.py -v`
+Run: `docker compose run --rm app python -m pytest tests/gerador/test_lotes.py -v`
 Expected: FAIL com `ModuleNotFoundError: No module named 'gerador.lotes'`
 
 - [ ] **Step 3: Criar `gerador/lotes.py`**
@@ -1242,7 +1302,7 @@ def montar_lotes(rng: random.Random, eventos: list[dict], origem: str, seed: int
 
 - [ ] **Step 4: Rodar e ver passar**
 
-Run: `.\.venv\Scripts\python.exe -m pytest tests/gerador/test_lotes.py -v`
+Run: `docker compose run --rm app python -m pytest tests/gerador/test_lotes.py -v`
 Expected: 5 passed
 
 - [ ] **Step 5: Commit**
@@ -1303,7 +1363,7 @@ def test_destino_s3_cria_o_bucket_e_grava_utf8():
 
 - [ ] **Step 2: Rodar e ver falhar**
 
-Run: `.\.venv\Scripts\python.exe -m pytest tests/gerador/test_destinos.py -v`
+Run: `docker compose run --rm app python -m pytest tests/gerador/test_destinos.py -v`
 Expected: FAIL com `ModuleNotFoundError: No module named 'gerador.destinos'`
 
 - [ ] **Step 3: Criar `gerador/destinos.py`**
@@ -1384,7 +1444,7 @@ class DestinoS3:
 
 - [ ] **Step 4: Rodar e ver passar**
 
-Run: `.\.venv\Scripts\python.exe -m pytest tests/gerador/test_destinos.py -v`
+Run: `docker compose run --rm app python -m pytest tests/gerador/test_destinos.py -v`
 Expected: 2 passed
 
 - [ ] **Step 5: Commit**
@@ -1454,7 +1514,7 @@ def test_main_recusa_fracao_de_sujeira_absurda(tmp_path):
 
 - [ ] **Step 2: Rodar e ver falhar**
 
-Run: `.\.venv\Scripts\python.exe -m pytest tests/gerador/test_gerar.py -v`
+Run: `docker compose run --rm app python -m pytest tests/gerador/test_gerar.py -v`
 Expected: FAIL com `ModuleNotFoundError: No module named 'gerador.gerar_eventos'`
 
 - [ ] **Step 3: Criar `gerador/gerar_eventos.py`**
@@ -1561,13 +1621,13 @@ if __name__ == "__main__":
 
 - [ ] **Step 4: Rodar e ver passar**
 
-Run: `.\.venv\Scripts\python.exe -m pytest tests/gerador/test_gerar.py -v`
+Run: `docker compose run --rm app python -m pytest tests/gerador/test_gerar.py -v`
 Expected: 5 passed
 
 - [ ] **Step 5: Conferir que o script roda pelo caminho do arquivo**
 
-Run: `.\.venv\Scripts\python.exe gerador/gerar_eventos.py --dias 2 --visitantes 30 --saida-local saida`
-Expected: o resumo é impresso, com `Destino:` apontando para `...\saida`. Depois apague a pasta: `Remove-Item -Recurse -Force saida`.
+Run: `docker compose run --rm app python gerador/gerar_eventos.py --dias 2 --visitantes 30 --saida-local saida`
+Expected: o resumo é impresso, com `Destino:` apontando para `/projeto/saida`. Depois apague a pasta: `Remove-Item -Recurse -Force saida`.
 
 - [ ] **Step 6: Commit**
 
@@ -1639,7 +1699,7 @@ def test_main_devolve_1_e_explica_quando_o_arquivo_e_invalido(tmp_path, capsys):
 
 - [ ] **Step 2: Rodar e ver falhar**
 
-Run: `.\.venv\Scripts\python.exe -m pytest tests/gerador/test_importar.py -v`
+Run: `docker compose run --rm app python -m pytest tests/gerador/test_importar.py -v`
 Expected: FAIL com `ModuleNotFoundError: No module named 'gerador.importar_site'`
 
 - [ ] **Step 3: Criar `gerador/importar_site.py`**
@@ -1714,12 +1774,12 @@ if __name__ == "__main__":
 
 - [ ] **Step 4: Rodar e ver passar**
 
-Run: `.\.venv\Scripts\python.exe -m pytest tests/gerador/test_importar.py -v`
+Run: `docker compose run --rm app python -m pytest tests/gerador/test_importar.py -v`
 Expected: 8 passed
 
 - [ ] **Step 5: Rodar a suíte inteira**
 
-Run: `.\.venv\Scripts\python.exe -m pytest`
+Run: `docker compose run --rm app python -m pytest`
 Expected: 43 passed
 
 - [ ] **Step 6: Commit**
@@ -1731,55 +1791,139 @@ git commit -m "Gerador: importacao do JSONL exportado pelo site"
 
 ---
 
-### Task 9: Integração com o floci
+### Task 9: Integração com o floci (gerador por boto3, Spark por s3a)
 
-Esta tarefa precisa do Docker rodando. Se `docker ps` falhar, **peça ao usuário para abrir o Docker Desktop** e espere a confirmação.
-
-**Files:** nenhum arquivo novo (só execução e conferência).
+**Files:**
+- Create: `infra/verificar_ambiente.py`
 
 - [ ] **Step 1: Subir o floci**
 
 ```powershell
-docker compose up -d --wait
+docker compose up -d floci
 docker ps --filter name=floci-datalake-tracking
 ```
 
-Expected: o contêiner `floci-datalake-tracking` com status `Up` e porta `0.0.0.0:4566->4566/tcp`.
+Expected: o contêiner `floci-datalake-tracking` com status `Up`.
 
 - [ ] **Step 2: Gerar com os parâmetros padrão**
 
-Run: `.\.venv\Scripts\python.exe gerador/gerar_eventos.py`
-Expected: o resumo começa com `Destino:            s3://datalake-tracking (http://127.0.0.1:4566)`. **Guarde a saída inteira**: ela vai para o `gerador/README.md` na Task 10.
+Run: `docker compose run --rm app python gerador/gerar_eventos.py`
+Expected: o resumo começa com `Destino:            s3://datalake-tracking (http://floci:4566)`. **Guarde a saída inteira**: ela vai para o `gerador/README.md` na Task 10.
 
-- [ ] **Step 3: Conferir o que chegou ao bucket**
+- [ ] **Step 3: Conferir o que chegou ao bucket (pelo SDK, do lado do gerador)**
 
 ```powershell
-.\.venv\Scripts\python.exe -c "import boto3, collections; s3 = boto3.client('s3', endpoint_url='http://127.0.0.1:4566', aws_access_key_id='test', aws_secret_access_key='test', region_name='us-east-1'); chaves = [o['Key'] for p in s3.get_paginator('list_objects_v2').paginate(Bucket='datalake-tracking', Prefix='landing/eventos/') for o in p.get('Contents', [])]; dias = collections.Counter(k.split('/')[2] for k in chaves); print(len(chaves), 'arquivos'); print(min(dias.values()), 'a', max(dias.values()), 'lotes por dia'); print(sorted(dias)[0], '...', sorted(dias)[-1])"
+docker compose run --rm app python -c "import os, boto3, collections; s3 = boto3.client('s3', endpoint_url=os.environ['AWS_ENDPOINT_URL']); chaves = [o['Key'] for p in s3.get_paginator('list_objects_v2').paginate(Bucket='datalake-tracking', Prefix='landing/eventos/') for o in p.get('Contents', [])]; dias = collections.Counter(k.split('/')[2] for k in chaves); print(len(chaves), 'arquivos'); print(min(dias.values()), 'a', max(dias.values()), 'lotes por dia'); print(sorted(dias)[0], '...', sorted(dias)[-1])"
 ```
 
 Expected: o mesmo número de arquivos do resumo; de 3 a 6 lotes por dia; dias de `dt=2026-09-01` até `dt=2026-09-14` (pode haver um `dt=2026-09-15`, de sessões que viram a meia-noite).
 
 - [ ] **Step 4: Conferir a idempotência**
 
-Run: `.\.venv\Scripts\python.exe gerador/gerar_eventos.py` (segunda vez, mesma seed)
-Then: repita o comando do Step 3.
-Expected: o mesmo número de arquivos. A mesma seed sobrescreve as mesmas chaves; só uma seed diferente acumula arquivos novos.
+Rode o Step 2 de novo (mesma seed) e depois o Step 3.
+Expected: o mesmo número de arquivos.
 
-- [ ] **Step 5: Conferir a importação do site**
+- [ ] **Step 5: Criar `infra/verificar_ambiente.py`**
 
-Gere um JSONL pequeno a partir do próprio gerador, com o mesmo formato que o site exporta, e importe:
+Confere o caminho que o pipeline vai usar: Spark falando com o floci por `s3a://`, sem SDK.
+
+```python
+"""Confere que o Spark lê e grava no floci por s3a:// (rode dentro do contêiner app).
+
+    docker compose run --rm app python infra/verificar_ambiente.py
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+
+from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
+
+ENDPOINT = os.environ.get("AWS_ENDPOINT_URL", "http://floci:4566")
+BUCKET = os.environ.get("AWS_S3_BUCKET", "datalake-tracking")
+
+
+def criar_sessao() -> SparkSession:
+    spark = (
+        SparkSession.builder
+        .appName("verificar-ambiente")
+        .master("local[2]")
+        .config("spark.ui.enabled", "false")
+        .config("spark.sql.session.timeZone", "UTC")
+        .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+        .config("spark.hadoop.fs.s3a.endpoint", ENDPOINT)
+        .config("spark.hadoop.fs.s3a.path.style.access", "true")
+        .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false")
+        .config("spark.hadoop.fs.s3a.aws.credentials.provider",
+                "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider")
+        .config("spark.hadoop.fs.s3a.access.key", os.environ.get("AWS_ACCESS_KEY_ID", "test"))
+        .config("spark.hadoop.fs.s3a.secret.key", os.environ.get("AWS_SECRET_ACCESS_KEY", "test"))
+        .getOrCreate()
+    )
+    spark.sparkContext.setLogLevel("ERROR")
+    return spark
+
+
+def main() -> int:
+    spark = criar_sessao()
+    landing = f"s3a://{BUCKET}/landing/eventos/"
+    teste = f"s3a://{BUCKET}/_verificacao/"
+    try:
+        eventos = spark.read.json(landing)
+        print(f"[ok] landing lida por s3a: {eventos.count()} linhas em {landing}")
+        eventos.groupBy("event_name").count().orderBy(F.desc("count")).show(25, truncate=False)
+
+        spark.range(5).write.mode("overwrite").parquet(teste)
+        lidos = spark.read.parquet(teste).count()
+        print(f"[ok] escrita e leitura de Parquet por s3a: {lidos} linhas em {teste}")
+
+        caminho = spark._jvm.org.apache.hadoop.fs.Path(teste)
+        caminho.getFileSystem(spark._jsc.hadoopConfiguration()).delete(caminho, True)
+        print("[ok] pasta de verificação removida")
+    except Exception as erro:  # diagnóstico para o aluno
+        print(f"[erro] {type(erro).__name__}: {str(erro).splitlines()[0]}", file=sys.stderr)
+        print("Confira: docker compose up -d floci, e rode o gerador antes.", file=sys.stderr)
+        return 1
+    finally:
+        spark.stop()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+```
+
+- [ ] **Step 6: Rodar a verificação**
+
+Run: `docker compose run --rm app python infra/verificar_ambiente.py`
+Expected:
+- `[ok] landing lida por s3a: N linhas`, em que N é igual a `linhas gravadas` do resumo do Step 2.
+- A tabela de contagem por `event_name`, que inclui `add_to_wishlist` (o defeito injetado).
+- `[ok] escrita e leitura de Parquet por s3a: 5 linhas`.
+- `[ok] pasta de verificação removida`.
+
+Se o s3a falhar com `NoSuchBucket` ou `403`, confira `path.style.access` e o endpoint. Se falhar com `ClassNotFoundException: S3AFileSystem`, os jars da Task 1 não estão na imagem; rode `docker compose build app` de novo.
+
+- [ ] **Step 7: Conferir a importação do site**
+
+Gere um JSONL pequeno numa pasta local e importe o primeiro arquivo:
 
 ```powershell
-.\.venv\Scripts\python.exe gerador/gerar_eventos.py --dias 1 --visitantes 5 --sujeira 0 --saida-local saida
-Get-ChildItem saida -Recurse -Filter *.jsonl | Select-Object -First 1 | ForEach-Object { .\.venv\Scripts\python.exe gerador/importar_site.py $_.FullName }
+docker compose run --rm app python gerador/gerar_eventos.py --dias 1 --visitantes 5 --sujeira 0 --saida-local saida
+docker compose run --rm app sh -c 'python gerador/importar_site.py "$(ls saida/landing/eventos/dt=*/*.jsonl | head -1)"'
 Remove-Item -Recurse -Force saida
 ```
 
-Expected: `N eventos enviados para s3://datalake-tracking (...) em landing/eventos/dt=2026-09-01/site-<instante>.jsonl`.
+Expected: `N eventos enviados para s3://datalake-tracking (http://floci:4566) em landing/eventos/dt=2026-09-01/site-<instante>.jsonl`.
 
-- [ ] **Step 6: Sem commit**
+- [ ] **Step 8: Commit**
 
-Nada mudou no repositório. Siga para a Task 10 com a saída do Step 2 em mãos.
+```powershell
+git add infra/verificar_ambiente.py
+git commit -m "Infra: verificacao Spark <-> floci por s3a"
+```
 
 ---
 
@@ -1802,8 +1946,8 @@ Não usa Spark: é Python puro mais `boto3`.
 ## Uso
 
 ```powershell
-docker compose up -d --wait                                     # S3 local (floci)
-.\.venv\Scripts\python.exe gerador/gerar_eventos.py              # 3000 visitantes, 14 dias, seed 42
+docker compose up -d floci                                      # S3 local
+docker compose run --rm app python gerador/gerar_eventos.py              # 3000 visitantes, 14 dias, seed 42
 ```
 
 | Opção | Padrão | O que faz |
@@ -1822,7 +1966,7 @@ Rodar de novo com a **mesma** seed sobrescreve os mesmos arquivos. Uma seed **di
 Navegue por `site/index.html`, clique em **Exportar JSONL** no painel lateral e suba o arquivo:
 
 ```powershell
-.\.venv\Scripts\python.exe gerador/importar_site.py C:\Users\voce\Downloads\eventos_2026-10-10.jsonl
+docker compose run --rm app python gerador/importar_site.py C:\Users\voce\Downloads\eventos_2026-10-10.jsonl
 ```
 
 O arquivo vai para `landing/eventos/dt=<data do primeiro evento>/site-<instante>.jsonl`.
@@ -1866,7 +2010,7 @@ Um `purchase` que perde o `transaction_id` ou o valor deixa o `refund` dele sem 
 ## Testes
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest tests/gerador
+docker compose run --rm app python -m pytest tests/gerador
 ```
 ````
 
@@ -1875,96 +2019,83 @@ Um `purchase` que perde o `transaction_id` ou o valor deixa o `refund` dele sem 
 ````markdown
 # Setup — o que instalar e configurar
 
-Tempo total: **cerca de 10 minutos** se você já tem Docker e Java.
+Só é preciso o **Docker**. Python, Java, PySpark e o conector do Spark para S3 vêm dentro da imagem do projeto, e o S3 é emulado pelo floci. Nenhuma conta de nuvem é necessária.
 
-## O que é preciso, e por quê
+Tempo total: **cerca de 10 minutos** na primeira vez, a maior parte baixando imagens.
 
-| Item | Versão | Por quê |
+## O que roda em cada contêiner
+
+| Serviço | Imagem | O que tem |
 | --- | --- | --- |
-| **Docker Desktop** (Engine + Compose) | atual | roda o floci, o S3 local; nenhuma conta AWS é necessária |
-| **floci** | `floci/floci:latest` | emulador de AWS compatível com o `boto3` |
-| **Python** | **3.11** (3.8 a 3.12 funcionam) | o PySpark 3.5 não suporta 3.13 nem 3.14 |
-| **Java (JDK)** | 8, 11 ou 17 | o Spark roda numa JVM |
-| **PySpark** | 3.5.3 | o motor do pipeline, sempre local |
-| **boto3** | atual | quem fala com o S3 é o Python, não o Spark |
-| **pytest** | atual | testes do gerador |
-| **`winutils.exe` + `hadoop.dll`** | série 3.3.5 | **só no Windows**: o Spark grava Parquet por uma camada de Hadoop |
+| `floci` | `floci/floci:latest` | S3 emulado em `http://floci:4566` (e `localhost:4566` na sua máquina) |
+| `app` | construída pelo `Dockerfile` | Python 3.11, Java 17, PySpark 3.5.3, conector `s3a` (`hadoop-aws` 3.3.4), `boto3`, `pytest` |
 
-## Passo 1 — floci (o S3 local)
+O repositório é montado em `/projeto` dentro do `app`: o que você edita na sua máquina vale na hora, sem reconstruir a imagem.
 
-O `docker-compose.yml` já está na raiz do repositório.
+## Passo 1 — Docker
 
-```powershell
-docker compose up -d --wait
-docker ps --filter name=floci-datalake-tracking
+Instale o Docker Desktop (Windows ou macOS) ou o Docker Engine com o plugin Compose (Linux) e confira:
+
+```bash
+docker compose version
 ```
 
-> A linha do `docker.sock` no compose dá ao contêiner acesso ao daemon Docker do seu computador. É o que a documentação do floci pede. Use só numa máquina de estudo.
-
-## Passo 2 — Python e Java
-
-```powershell
-py -0             # precisa listar -V:3.11 (ou 3.8 a 3.12)
-java -version     # 1.8, 11 ou 17
-```
-
-Sem o Python 3.11: `winget install -e --id Python.Python.3.11`. Sem o Java: `winget install -e --id EclipseAdoptium.Temurin.17.JDK`, depois feche e reabra o terminal.
-
-## Passo 3 — Ambiente virtual
+## Passo 2 — Construir a imagem e subir o S3
 
 Na raiz do repositório:
 
-```powershell
-py -3.11 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```bash
+docker compose build app
+docker compose up -d floci
 ```
 
-## Passo 4 — `winutils.exe` (só no Windows)
+## Passo 3 — Popular a landing do datalake
 
-```powershell
-New-Item -ItemType Directory -Force hadoop\bin | Out-Null
-$R = "https://raw.githubusercontent.com/cdarlint/winutils/master/hadoop-3.3.5/bin"
-curl.exe -sSL -o hadoop\bin\winutils.exe $R/winutils.exe
-curl.exe -sSL -o hadoop\bin\hadoop.dll   $R/hadoop.dll
-```
-
-A pasta `hadoop/` fica na raiz do repositório e está no `.gitignore`.
-
-## Passo 5 — Popular a landing do datalake
-
-```powershell
-.\.venv\Scripts\python.exe gerador/gerar_eventos.py
+```bash
+docker compose run --rm app python gerador/gerar_eventos.py
 ```
 
 O resumo impresso diz quantos eventos e defeitos foram gerados. Detalhes em [gerador/README.md](gerador/README.md).
 
-## Trocando o floci por uma conta AWS real
+## Passo 4 — Conferir o Spark falando com o S3
 
-```powershell
-$env:AWS_ENDPOINT_URL = ""
-$env:AWS_ACCESS_KEY_ID = "SEU_ACCESS_KEY"
-$env:AWS_SECRET_ACCESS_KEY = "SUA_SECRET_KEY"
-$env:AWS_DEFAULT_REGION = "sa-east-1"
-$env:AWS_S3_BUCKET = "um-bucket-seu"
+```bash
+docker compose run --rm app python infra/verificar_ambiente.py
 ```
 
-## Problemas de instalação
+Precisa terminar com três linhas `[ok]`. O script mostra a configuração `s3a` que o pipeline usa.
+
+## Como rodar qualquer coisa
+
+```bash
+docker compose run --rm app python <script.py>
+docker compose run --rm app python -m pytest
+```
+
+## Trocando o floci por uma conta AWS real
+
+No `docker-compose.yml`, no serviço `app`, ajuste:
+- `AWS_ENDPOINT_URL`: vazio (`""`) para o gerador usar a AWS real;
+- o endpoint `s3a` do Spark: o da sua região;
+- as credenciais e o `AWS_S3_BUCKET`.
+
+O código não muda.
+
+## Problemas comuns
 
 | O que você vê | Causa | Solução |
 | --- | --- | --- |
-| `Não consegui falar com o S3 em http://127.0.0.1:4566` | o floci não está rodando | `docker compose up -d --wait` |
-| porta `4566` já em uso | outro floci está rodando | pare o outro contêiner, ou use o mesmo (o bucket é outro) |
-| `boto3 não está instalado` | venv errado | use `.\.venv\Scripts\python.exe` |
-| `Python worker exited unexpectedly` / erro de `pyspark` ao importar | Python 3.13 ou 3.14 no venv | recrie o venv com `py -3.11` |
-| `HADOOP_HOME and hadoop.home.dir are unset` | falta o Passo 4 | baixe `winutils.exe` e `hadoop.dll` |
-| `JAVA_HOME is not set` | Java ausente ou terminal antigo | instale o JDK e reabra o terminal |
+| `Cannot connect to the Docker daemon` | Docker parado | abra o Docker Desktop |
+| `Não consegui falar com o S3 em http://floci:4566` | floci parado | `docker compose up -d floci` |
+| porta `4566` já em uso | outro emulador rodando | pare o outro contêiner |
+| `ClassNotFoundException: org.apache.hadoop.fs.s3a.S3AFileSystem` | imagem antiga, sem os jars | `docker compose build --no-cache app` |
+| `[erro]` no `verificar_ambiente.py` lendo a landing | o gerador ainda não rodou | Passo 3 |
 
 ## Desinstalar
 
-```powershell
+```bash
 docker compose down -v
-Remove-Item -Recurse -Force .venv, hadoop
+docker image rm datalake-tracking-app
 ```
 ````
 
@@ -1987,7 +2118,7 @@ Uma empresa vende um curso online por uma landing page de conversão, e cada int
 ## Começar
 
 1. Prepare o ambiente: [SETUP.md](SETUP.md).
-2. Popule a landing: `.\.venv\Scripts\python.exe gerador/gerar_eventos.py`.
+2. Popule a landing: `docker compose run --rm app python gerador/gerar_eventos.py`.
 3. Leia o enunciado em `docs/ENUNCIADO.md` e construa o pipeline em `pipeline/`.
 ```
 
@@ -2000,54 +2131,34 @@ git commit -m "Docs: README do gerador com resumo medido, SETUP e README"
 
 ---
 
-### Task 11: Alinhar o spec com o que foi construído
+### Task 11: Fechar os critérios de pronto do spec
+
+O spec já foi atualizado antes deste plano (contêineres, s3a, `destinos.py`, pacote do aluno). Esta tarefa só marca o que o Plano 1 entregou e confere o zip do aluno.
 
 **Files:**
-- Modify: `docs/specs/2026-10-10-projeto-final-datalake-tracking-design.md`
+- Modify: `docs/specs/2026-10-10-projeto-final-datalake-tracking-design.md` (seção 12)
 
-- [ ] **Step 1: Trocar `s3.py` por `destinos.py` na árvore da seção 4**
-
-Substitua a linha:
-
-```text
-│   ├── s3.py                     cliente boto3 do gerador
-```
-
-por:
-
-```text
-│   ├── destinos.py               destino S3 (boto3) ou pasta local (--saida-local)
-```
-
-- [ ] **Step 2: Atualizar a nota do pacote do aluno na seção 4**
-
-Substitua o parágrafo que começa com `**Pacote do aluno.**` por:
-
-```markdown
-**Pacote do aluno.** `git archive --format=zip -o projeto-final-aluno.zip HEAD` gera o zip sem `professor/`, `docs/specs/` e `docs/superpowers/` (todos `export-ignore` no `.gitattributes`, porque descrevem a solução). O professor distribui o zip, nunca o repositório. Isso fica documentado em `professor/README.md`.
-```
-
-- [ ] **Step 3: Marcar os critérios de pronto concluídos na seção 12**
+- [ ] **Step 1: Marcar os critérios concluídos na seção 12**
 
 Troque `- [ ]` por `- [x]` nas duas linhas que começam com "O gerador roda com os padrões" e "As cinco armadilhas da seção 9".
 
 A observabilidade das armadilhas 1, 2, 4 e 5 é garantida pelos testes de `tests/gerador/`. A armadilha 3 (vazamento) depende só das features escolhidas e é conferida no Plano 2.
 
-- [ ] **Step 4: Conferir o pacote do aluno**
+- [ ] **Step 2: Conferir o pacote do aluno**
 
 ```powershell
-git archive --format=zip -o $env:TEMP\aluno.zip HEAD
-tar -tf $env:TEMP\aluno.zip | Select-String -Pattern "^(professor|docs/specs|docs/superpowers)/"
-Remove-Item $env:TEMP\aluno.zip
+git archive --format=zip -o $env:TEMPluno.zip HEAD
+tar -tf $env:TEMPluno.zip | Select-String -Pattern "^(professor|docs/specs|docs/superpowers)/"
+Remove-Item $env:TEMPluno.zip
 ```
 
 Expected: nenhuma linha impressa pelo `Select-String`.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 3: Commit**
 
 ```powershell
 git add docs/specs/2026-10-10-projeto-final-datalake-tracking-design.md
-git commit -m "Spec: alinha estrutura do gerador e pacote do aluno com o implementado"
+git commit -m "Spec: marca criterios de pronto entregues pelo Plano 1"
 ```
 
 ---
