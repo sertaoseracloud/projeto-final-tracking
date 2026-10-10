@@ -10,7 +10,7 @@ Este documento descreve o formato dos eventos de tracking e o layout da landing 
 s3://datalake-tracking/landing/eventos/dt=AAAA-MM-DD/<origem>-...jsonl
 ```
 
-- Cada dia (`dt=`) tem de 3 a 6 lotes, como um coletor que descarrega em intervalos.
+- Cada dia (`dt=`) tem de 3 a 6 lotes, como um coletor que descarrega em intervalos. O dia seguinte ao último pode ter 1 ou 2 lotes (sessões que atravessam a meia-noite).
 - `<origem>` é `coletor` (eventos do gerador) ou `site` (eventos que você exportou da página de exemplo e subiu com `gerador/importar_site.py`).
 - Cada arquivo é JSON Lines: um evento por linha.
 

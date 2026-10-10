@@ -113,7 +113,7 @@ s3://datalake-tracking/
   | evento fora do catálogo | `event_name` fora dos 20 eventos do contrato |
   | timestamp ausente ou futuro | `event_ts` nulo ou posterior ao instante de ingestão |
   | transação sem id | `purchase` ou `refund` sem `transaction_id` |
-  | valor monetário inválido | `value` negativo, ou `currency` ≠ BRL |
+  | valor monetário inválido | `value` negativo, ou `currency` diferente de `BRL` em evento que tem `value` |
   | marco fora do padrão | `percent_scrolled` ∉ {25, 50, 75, 90} ou `video_percent` ∉ {0, 10, 25, 50, 75, 100} |
   | reembolso sem compra | `refund` cujo `transaction_id` não existe em nenhum `purchase` válido |
 
@@ -144,6 +144,25 @@ Nomes de colunas são livres; o **conteúdo** é obrigatório, porque é o que a
 **Restrição do modelo de propensão:** as features só podem usar o comportamento na landing **antes do primeiro `add_to_cart` da sessão**: rolagem, vídeo, tabela de planos vista, plano selecionado, detalhe aberto, buscas, downloads, cliques, canal e dispositivo. Qualquer evento do checkout (`view_cart` em diante) já praticamente revela a compra.
 
 **Recomendação:** como compradores são raros, registre também precisão e recall em `metricas_modelo`, além de AUC e F1. Isso ajuda a interpretar o modelo.
+
+### 5.4 Definições que valem para a correção
+
+Para que a sua tabela possa ser comparada com o esperado, use exatamente estas definições.
+
+1. **Caminhos das camadas.** `bronze/eventos/`, `silver/eventos/`, `silver/itens/`, `silver/eventos_rejeitados/` e `gold/<nome da tabela>/`, no bucket `datalake-tracking`, em Parquet.
+2. **Receita.**
+   - Bruta: soma de `value` dos `purchase` válidos (sem frete, já com o desconto do Pix, incluindo o order bump).
+   - Reembolsada: soma de `value` dos `refund` válidos, atribuída à compra pelo `transaction_id`.
+   - Líquida: bruta − reembolsada.
+   - Ticket médio: bruta ÷ pedidos.
+3. **Canal e plano.**
+   - Canal de uma sessão: `"<source> / <medium>"` do primeiro evento da sessão.
+   - Plano de uma sessão: `item_id` do primeiro `select_item` da sessão (`(nenhum)` se não houver).
+   - Plano de uma compra: o item de categoria `plano` no `items` do `purchase`.
+   - Canal de uma compra: o canal da sessão em que ela aconteceu.
+4. **Funil.** Uma sessão conta numa etapa se teve aquele evento em qualquer momento, sem exigir as etapas anteriores. Conversão sobre a etapa anterior = sessões da etapa ÷ sessões da etapa anterior.
+5. **Lead → compra.** A unidade é a pessoa (`user_id` resolvido; se não houver, `user_pseudo_id`). Vale o primeiro `generate_lead` da pessoa e a primeira compra estritamente depois dele. Dias = diferença em segundos ÷ 86400 (fracionário); use a mediana desses dias.
+6. **Propensão.** Uma linha por sessão (todas as sessões da Silver). O rótulo é verdadeiro quando a sessão contém um `purchase`.
 
 ## 6. Como rodar
 
