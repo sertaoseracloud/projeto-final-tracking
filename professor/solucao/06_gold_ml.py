@@ -17,6 +17,7 @@ from pyspark.ml.evaluation import (BinaryClassificationEvaluator, ClusteringEval
 from pyspark.ml.feature import OneHotEncoder, StandardScaler, StringIndexer, VectorAssembler
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
+from pyspark.sql.types import DoubleType
 
 from comum import caminho, criar_sessao, exigir_camada, titulo
 from sessoes import atributos_sessao
@@ -28,7 +29,7 @@ NUMERICAS = ["scroll_max", "video_max", "viu_planos", "selecionou_plano", "abriu
 PERFIL = ["sessoes", "eventos_medios", "scroll_medio", "taxa_video", "fez_lead", "comprou"]
 
 # pyspark.ml.functions.vector_to_array exige pandas, que a imagem não tem.
-prob_compra = F.udf(lambda v: float(v[1]), "double")
+prob_compra = F.udf(lambda v: float(v[1]), DoubleType())
 
 
 def features_sessao(eventos: DataFrame, atributos: DataFrame) -> DataFrame:
