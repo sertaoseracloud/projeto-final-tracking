@@ -8,6 +8,8 @@ from __future__ import annotations
 from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
 
+from comum import caminho, criar_sessao, exigir_camada, titulo
+
 EVENTOS = (
     "page_view", "scroll", "click", "site_search",
     "video_start", "video_progress", "video_complete", "file_download",
@@ -88,3 +90,67 @@ def validar(df: DataFrame) -> tuple[DataFrame, DataFrame]:
     aprovados = com_motivo.filter(c("motivo_rejeicao").isNull()).drop("motivo_rejeicao")
     rejeitados = com_motivo.filter(c("motivo_rejeicao").isNotNull())
     return aprovados, rejeitados
+
+
+GAP_SESSAO_S = 30 * 60
+
+
+def sessionizar(df: DataFrame) -> DataFrame:
+    """Sessão nova quando o mesmo user_pseudo_id fica mais de 30 minutos sem evento."""
+    w = Window.partitionBy("user_pseudo_id").orderBy("ts", "event_id")
+    segundos = F.col("ts").cast("long")
+    intervalo = segundos - F.lag(segundos).over(w)
+    return (
+        df.withColumn("_nova", F.when(intervalo.isNull() | (intervalo > GAP_SESSAO_S), 1).otherwise(0))
+          .withColumn("_n", F.sum("_nova").over(w.rowsBetween(Window.unboundedPreceding, Window.currentRow)))
+          .withColumn("session_id", F.concat_ws("-", "user_pseudo_id", F.col("_n").cast("string")))
+          .drop("_nova", "_n")
+    )
+
+
+def resolver_identidade(df: DataFrame) -> DataFrame:
+    """O user_id mais recente do user_pseudo_id vale para todos os eventos dele."""
+    w = (Window.partitionBy("user_pseudo_id").orderBy(F.col("ts").desc())
+         .rowsBetween(Window.unboundedPreceding, Window.unboundedFollowing))
+    return df.withColumn("user_id_resolvido", F.first("user_id", ignorenulls=True).over(w))
+
+
+def explodir_itens(df: DataFrame) -> DataFrame:
+    return (
+        df.filter(F.size("items") > 0)
+          .select("event_id", "event_name", "ts", "dt", "session_id", "user_pseudo_id",
+                  "user_id_resolvido", "transaction_id", F.posexplode("items").alias("posicao", "item"))
+          .select("*", "item.*").drop("item")
+    )
+
+
+def main() -> None:
+    spark = criar_sessao("silver")
+    exigir_camada(spark, "bronze/eventos", "python professor/solucao/01_bronze_ingestao.py")
+    bronze = spark.read.parquet(caminho("bronze/eventos"))
+    total = bronze.count()
+
+    unicos = deduplicar(bronze).cache()
+    aprovados, rejeitados = validar(tipar(unicos))
+    silver = resolver_identidade(sessionizar(aprovados)).cache()
+
+    silver.drop("page", "traffic", "device", "params", "items") \
+        .write.mode("overwrite").partitionBy("dt").parquet(caminho("silver/eventos"))
+    explodir_itens(silver).write.mode("overwrite").partitionBy("dt").parquet(caminho("silver/itens"))
+    rejeitados.select("event_id", "event_name", "event_ts", "user_pseudo_id", "params", "motivo_rejeicao",
+                      "_arquivo_origem", "_ingerido_em", "dt") \
+        .write.mode("overwrite").parquet(caminho("silver/eventos_rejeitados"))
+
+    titulo("Silver")
+    n_unicos = unicos.count()
+    print(f"linhas na Bronze:      {total}")
+    print(f"duplicatas removidas:  {total - n_unicos}")
+    print(f"aprovados:             {silver.count()}")
+    print(f"sessões:               {silver.select('session_id').distinct().count()}")
+    print("rejeitados por motivo:")
+    rejeitados.groupBy("motivo_rejeicao").count().orderBy(F.desc("count")).show(truncate=False)
+    spark.stop()
+
+
+if __name__ == "__main__":
+    main()

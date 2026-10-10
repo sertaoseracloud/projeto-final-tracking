@@ -91,3 +91,53 @@ def test_validar_aplica_os_seis_motivos_com_prioridade(silver, bronze_df):
         "compra-invalida": "valor monetario invalido",
         "cascata": "reembolso sem compra",
     }
+
+
+def _tipados(silver, bronze_df, *linhas):
+    return silver.tipar(bronze_df(*linhas))
+
+
+def test_sessionizar_abre_sessao_depois_de_30_minutos(silver, bronze_df):
+    df = _tipados(silver, bronze_df,
+        linha("a", "page_view", ts="2026-09-01T10:00:00.000Z"),
+        linha("b", "scroll", ts="2026-09-01T10:20:00.000Z", params={"percent_scrolled": "25"}),
+        linha("c", "page_view", ts="2026-09-01T10:50:01.000Z"),
+        linha("d", "page_view", ts="2026-09-01T10:55:00.000Z"),
+        linha("x", "page_view", ts="2026-09-01T10:00:00.000Z", pseudo="anon-2"),
+    )
+    r = {x.event_id: x.session_id for x in silver.sessionizar(df).collect()}
+    assert r == {"a": "anon-1-1", "b": "anon-1-1", "c": "anon-1-2", "d": "anon-1-2", "x": "anon-2-1"}
+
+
+def test_sessao_que_vira_a_meia_noite_continua_uma_so(silver, bronze_df):
+    df = _tipados(silver, bronze_df,
+        linha("a", "page_view", ts="2026-09-01T23:50:00.000Z"),
+        linha("b", "scroll", ts="2026-09-02T00:10:00.000Z", params={"percent_scrolled": "25"}),
+    )
+    assert {x.session_id for x in silver.sessionizar(df).collect()} == {"anon-1-1"}
+
+
+def test_resolver_identidade_preenche_eventos_anteriores_ao_cadastro(silver, bronze_df):
+    df = _tipados(silver, bronze_df,
+        linha("a", "page_view", ts="2026-09-01T10:00:00.000Z"),
+        linha("b", "sign_up", ts="2026-09-01T10:05:00.000Z", user_id="u-1", params={"method": "email"}),
+        linha("c", "refund", ts="2026-09-03T09:00:00.000Z", user_id=None),
+        linha("x", "page_view", pseudo="anon-2"),
+    )
+    r = {x.event_id: x.user_id_resolvido for x in silver.resolver_identidade(df).collect()}
+    assert r == {"a": "u-1", "b": "u-1", "c": "u-1", "x": None}
+
+
+def test_explodir_itens_gera_uma_linha_por_item(silver, bronze_df):
+    itens = [
+        ("PLANO-PRO", "Plano Pro", "plano", 597.0, 1, None, None, None),
+        ("BUMP-MENTORIA", "Mentoria em grupo", "order_bump", 147.0, 1, None, None, None),
+    ]
+    df = _tipados(silver, bronze_df,
+        linha("p", "purchase", params={"transaction_id": "T-1", "value": "744.0", "currency": "BRL"}, items=itens),
+        linha("v", "page_view"),
+    )
+    r = silver.explodir_itens(silver.resolver_identidade(silver.sessionizar(df))).collect()
+    assert sorted(x.item_id for x in r) == ["BUMP-MENTORIA", "PLANO-PRO"]
+    assert all(x.transaction_id == "T-1" and x.session_id == "anon-1-1" for x in r)
+    assert sorted(x.posicao for x in r) == [0, 1]
