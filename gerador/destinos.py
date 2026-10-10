@@ -58,7 +58,7 @@ class DestinoS3:
             if type(erro).__name__ == "EndpointConnectionError":
                 raise SystemExit(
                     f"Não consegui falar com o S3 em {ENDPOINT}. "
-                    "O floci está rodando? docker compose up -d --wait"
+                    "O floci está rodando? docker compose up -d floci"
                 ) from None
             codigo = getattr(erro, "response", {}).get("Error", {}).get("Code")
             if codigo not in CODIGOS_BUCKET_AUSENTE:  # 403, timeout etc.: a causa real, sem mascarar
