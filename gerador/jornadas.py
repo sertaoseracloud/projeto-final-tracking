@@ -18,7 +18,7 @@ from gerador import catalogo as cat
 from gerador.eventos import Contexto, criar_evento, hex8, item, ler_iso
 
 P_RECARGA = 0.25          # chance de um page_view ser recarga completa (novo session_hint)
-P_REEMBOLSO = 0.08
+P_REEMBOLSO = 0.11         # ~8% observado: compras da última semana perdem o reembolso fora da janela
 
 
 @dataclass
