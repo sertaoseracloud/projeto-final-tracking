@@ -66,3 +66,16 @@ def test_outros_erros_sobem_como_estao():
 
 def test_raiz_usa_o_bucket():
     assert s3.raiz() == f"s3://{s3.BUCKET}"
+
+
+class ConnectionError(Exception):  # noqa: A001 — imita a classe-base do botocore
+    pass
+
+
+class SSLError(ConnectionError):
+    pass
+
+
+def test_filhas_de_erro_de_conexao_viram_mensagem_amigavel():
+    with pytest.raises(s3.S3Indisponivel, match="docker compose up -d floci"):
+        s3.listar(cliente=S3Falso(erro=SSLError("certificado")))

@@ -39,7 +39,17 @@ def _listar() -> list[particoes.Objeto]:
     return s3.listar()
 
 
-@st.cache_resource(max_entries=2, show_spinner="Conectando ao S3 e criando as views…")
+def _fechar(valor) -> None:
+    """Fecha a conexão DuckDB quando ela sai do cache (Recarregar ou datasets novos)."""
+    valor[0].close()
+
+
+def _mostrar_erro(titulo: str, erro: Exception) -> None:
+    st.error(f"{titulo} {consultas.explicar_erro(erro)}")
+    st.caption(f"Mensagem original do DuckDB: {erro}")
+
+
+@st.cache_resource(max_entries=2, on_release=_fechar, show_spinner="Conectando ao S3 e criando as views…")
 def _conexao(datasets: tuple[particoes.Dataset, ...], raiz: str):
     con = consultas.conectar(endpoint=s3.ENDPOINT, chave=s3.CHAVE, segredo=s3.SEGREDO, regiao=s3.REGIAO)
     views = consultas.criar_views(con, raiz, list(datasets))
@@ -73,16 +83,21 @@ def _aba_arquivos(objetos, con, raiz):
         try:
             st.dataframe(consultas.previa(con.cursor(), raiz, pasta + escolhido), hide_index=True)
             st.caption(f"Primeiras {consultas.LINHAS_PREVIA} linhas, no máximo.")
+        except ValueError as erro:
+            st.warning(str(erro))
         except duckdb.Error as erro:
-            st.error(f"Não consegui ler o arquivo: {erro}")
+            _mostrar_erro("Não consegui ler o arquivo.", erro)
 
 
 def _aba_particoes(objetos, datasets, con):
     if not datasets:
         st.info("Ainda não há datasets (pastas com .parquet ou .jsonl) no bucket.")
         return
-    escolha = st.selectbox("Dataset", [d.prefixo for d in datasets], key="dataset")
-    linhas = particoes.tabela_particoes(objetos, escolha)
+    repetidos = {d.prefixo for d in datasets if sum(o.prefixo == d.prefixo for o in datasets) > 1}
+    rotulos = {d.nome_view: d.prefixo + (f" ({d.formato})" if d.prefixo in repetidos else "") for d in datasets}
+    nome = st.selectbox("Dataset", list(rotulos), format_func=rotulos.get, key="dataset")
+    dataset = next(d for d in datasets if d.nome_view == nome)
+    linhas = particoes.tabela_particoes(objetos, dataset.prefixo, dataset.formato)
     if not linhas:
         st.info("Nenhum arquivo de dados neste dataset.")
         return
@@ -92,14 +107,15 @@ def _aba_particoes(objetos, datasets, con):
     st.caption(f"{len(linhas)} partição(ões) · {int(tabela['arquivos'].sum())} arquivo(s) · "
                f"{particoes.tamanho_legivel(int(tabela['bytes'].sum()))}")
     if st.button("Contar linhas por partição", key="contar"):
-        view = next(d.nome_view for d in datasets if d.prefixo == escolha)
         particionado = any(l.year != particoes.SEM_PARTICAO for l in linhas)
-        sql = (f'SELECT year, month, day, count(*) AS linhas FROM "{view}" GROUP BY ALL ORDER BY ALL'
-               if particionado else f'SELECT count(*) AS linhas FROM "{view}"')
+        sql = (f'SELECT year, month, day, count(*) AS linhas FROM "{nome}" GROUP BY ALL ORDER BY ALL'
+               if particionado else f'SELECT count(*) AS linhas FROM "{nome}"')
         try:
-            st.dataframe(consultas.executar(con.cursor(), sql, consultas.LIMITE_MAXIMO).tabela, hide_index=True)
+            with st.spinner("Contando linhas… (lê todos os arquivos do dataset)"):
+                contagem = consultas.executar(con.cursor(), sql, consultas.LIMITE_MAXIMO).tabela
+            st.dataframe(contagem, hide_index=True)
         except duckdb.Error as erro:
-            st.error(f"Não consegui contar: {erro}")
+            _mostrar_erro("Não consegui contar.", erro)
 
 
 def _aba_sql(colunas, con):
@@ -115,19 +131,22 @@ def _aba_sql(colunas, con):
     limite = st.number_input("Limite de linhas", min_value=1, max_value=consultas.LIMITE_MAXIMO,
                              value=consultas.LIMITE_PADRAO, step=100, key="limite")
     if st.button("Executar", key="executar", type="primary"):
+        sql = st.session_state.get("sql", "")
         try:
-            st.session_state["ultimo_resultado"] = (
-                consultas.executar(con.cursor(), st.session_state.get("sql", ""), limite), limite)
+            with st.spinner("Rodando a consulta…"):
+                st.session_state["ultimo_resultado"] = (consultas.executar(con.cursor(), sql, limite), limite, sql)
         except consultas.SqlNaoPermitido as erro:
             st.session_state.pop("ultimo_resultado", None)
             st.warning(str(erro))
         except duckdb.Error as erro:
             st.session_state.pop("ultimo_resultado", None)
-            st.error(f"Erro no SQL: {erro}")
+            _mostrar_erro("Erro no SQL.", erro)
             st.info("Confira os nomes em \"Views disponíveis\", logo acima.")
     if "ultimo_resultado" not in st.session_state:
         return
-    resultado, limite_usado = st.session_state["ultimo_resultado"]
+    resultado, limite_usado, sql_usado = st.session_state["ultimo_resultado"]
+    st.caption("Resultado desta consulta:")
+    st.code(sql_usado, language="sql")
     if resultado.cortado:
         st.warning(f"Resultado cortado em {int(limite_usado)} linhas. Aumente o limite ou filtre a consulta.")
     st.dataframe(resultado.tabela, hide_index=True)
@@ -160,7 +179,7 @@ def _pagina() -> None:
     try:
         con, colunas = _conexao(tuple(datasets), raiz)
     except duckdb.Error as erro:
-        st.error(f"Não consegui preparar as views no DuckDB: {erro}")
+        _mostrar_erro("Não consegui preparar as views no DuckDB.", erro)
         st.stop()
 
     arquivos, particoes_, sql = st.tabs(["Arquivos", "Partições", "Consultas SQL"])

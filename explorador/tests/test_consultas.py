@@ -94,3 +94,25 @@ def test_conexao_travada_nao_le_fora_da_raiz(lago):
         consultas.executar(con, "SELECT * FROM read_text('/etc/hostname')")
     with pytest.raises(duckdb.Error):
         con.sql("SET enable_external_access = true")
+
+
+@pytest.mark.parametrize("sql, trecho", [
+    ("SELECT * FROM nao_existe", "tabela ou view não existe"),
+    ("SELECT coluna_inventada FROM silver_eventos", "coluna ou função não foi encontrada"),
+    ("SELECT CAST('abc' AS INTEGER)", "não pôde ser convertido"),
+])
+def test_explicar_erro_traduz_erros_comuns(lago, sql, trecho):
+    con, _, _ = lago
+    with pytest.raises(duckdb.Error) as erro:
+        consultas.executar(con, sql)
+    assert trecho in consultas.explicar_erro(erro.value)
+
+
+def test_explicar_erro_tem_frase_padrao():
+    assert consultas.explicar_erro(duckdb.Error("x")) == "O DuckDB não conseguiu rodar a consulta."
+
+
+def test_previa_recusa_caminho_com_ponto_ponto(lago):
+    con, _, raiz = lago
+    with pytest.raises(ValueError, match="dentro do bucket"):
+        consultas.previa(con, str(raiz), "silver/../../etc/x.parquet")

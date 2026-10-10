@@ -11,8 +11,10 @@ BUCKET = os.environ.get("AWS_S3_BUCKET") or "datalake-tracking"
 CHAVE = os.environ.get("AWS_ACCESS_KEY_ID") or "test"
 SEGREDO = os.environ.get("AWS_SECRET_ACCESS_KEY") or "test"
 REGIAO = os.environ.get("AWS_DEFAULT_REGION") or "us-east-1"
-ERROS_DE_CONEXAO = {"EndpointConnectionError", "ConnectTimeoutError", "ConnectionClosedError",
-                    "ReadTimeoutError", "ConnectionError"}
+# Classes-base do botocore (e do Python) para falhas de rede; as filhas, como SSLError,
+# ProxyConnectionError e EndpointConnectionError, são reconhecidas pela herança.
+ERROS_DE_CONEXAO = {"ConnectionError", "HTTPClientError", "EndpointConnectionError", "ConnectTimeoutError",
+                    "ConnectionClosedError", "ReadTimeoutError", "TimeoutError"}
 
 
 class S3Indisponivel(RuntimeError):
@@ -44,7 +46,7 @@ def listar(prefixo: str = "", cliente=None) -> list[Objeto]:
         codigo = getattr(erro, "response", {}).get("Error", {}).get("Code")
         if codigo in ("NoSuchBucket", "404"):
             return []
-        if type(erro).__name__ in ERROS_DE_CONEXAO:
+        if any(c.__name__ in ERROS_DE_CONEXAO for c in type(erro).__mro__):
             raise S3Indisponivel(
                 f"Não consegui falar com o S3 em {ENDPOINT}. Rode `docker compose up -d floci`."
             ) from None
