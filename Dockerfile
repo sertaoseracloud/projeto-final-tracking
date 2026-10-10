@@ -8,6 +8,8 @@ RUN apt-get update \
 WORKDIR /projeto
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
+# Extensão S3 do DuckDB baixada no build: o explorador funciona sem internet.
+RUN python -c "import duckdb; duckdb.sql('INSTALL httpfs')"
 
 # Conector s3a: hadoop-aws na mesma versão do Hadoop embutido no PySpark 3.5.3 (3.3.4),
 # mais o bundle Java que ele exige. Vão para a pasta de jars do próprio PySpark.

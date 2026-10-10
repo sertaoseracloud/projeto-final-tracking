@@ -9,3 +9,4 @@ spark-warehouse/
 *.jsonl
 *.zip
 .env
+.tmp/

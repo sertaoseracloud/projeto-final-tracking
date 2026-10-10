@@ -20,14 +20,15 @@ E mais dois termos do projeto:
 
 ## O que roda em cada contêiner
 
-O projeto usa dois contêineres, chamados de **serviços** no `docker-compose.yml`:
+O projeto usa três contêineres, chamados de **serviços** no `docker-compose.yml`:
 
 | Serviço | Imagem | O que tem |
 | --- | --- | --- |
 | `floci` | `floci/floci:latest` | S3 emulado em `http://floci:4566` (e `localhost:4566` na sua máquina) |
 | `app` | construída pelo `Dockerfile` | Python 3.11, Java 17, PySpark 3.5.3, conector `s3a` (`hadoop-aws` 3.3.4), `boto3`, `pytest` |
+| `explorador` | a mesma imagem do `app` | site Streamlit em `http://localhost:8501` para explorar o bucket |
 
-Em outras palavras: o `floci` guarda os arquivos e o `app` roda o seu código. O conector `s3a` é a peça que permite ao Spark ler e gravar no S3 com caminhos que começam com `s3a://`.
+Em outras palavras: o `floci` guarda os arquivos e o `app` roda o seu código. O `explorador` é um site para olhar o bucket (Passo 5). O conector `s3a` é a peça que permite ao Spark ler e gravar no S3 com caminhos que começam com `s3a://`.
 
 O repositório é montado em `/projeto` dentro do `app`: o que você edita na sua máquina vale na hora, sem reconstruir a imagem. Ou seja, você edita os arquivos no seu editor de sempre, e o contêiner enxerga a mesma pasta.
 
@@ -81,6 +82,18 @@ docker compose run --rm app python infra/verificar_ambiente.py
 
 **O que você deve ver:** precisa terminar com três linhas `[ok]`. No meio delas aparece uma tabela com a contagem de eventos por nome. A configuração `s3a` usada pelo Spark está no início do próprio script (`infra/verificar_ambiente.py`). Se aparecer `[erro]`, veja a tabela de problemas comuns abaixo.
 
+## Passo 5 — Explore o bucket
+
+Este passo liga um site que mostra o que está dentro do bucket, sem você escrever código: os arquivos, as partições por dia e consultas SQL.
+
+```bash
+docker compose up -d explorador
+```
+
+**O que faz:** liga o contêiner `explorador` em segundo plano. Ele é um site feito com Streamlit, que lê o bucket do floci.
+
+**O que você deve ver:** abra **http://localhost:8501** no navegador. Deve aparecer o título "Explorador do datalake" e as abas **Arquivos**, **Partições** e **Consultas SQL**. Para saber o que cada aba faz, leia [explorador/README.md](explorador/README.md).
+
 ## Como rodar qualquer coisa
 
 Todo comando Python do projeto roda dentro do contêiner `app`, nesta forma:
@@ -101,7 +114,9 @@ Se algo der errado, procure a mensagem na primeira coluna.
 | `Cannot connect to the Docker daemon` | Docker parado | abra o Docker Desktop |
 | `Não consegui falar com o S3 em http://floci:4566` | floci parado | `docker compose up -d floci` |
 | porta `4566` já em uso | outro emulador rodando | pare o outro contêiner |
+| a página `localhost:8501` não abre | o serviço não está rodando ou a porta 8501 está ocupada | `docker compose up -d explorador`; veja `docker compose logs explorador` |
 | `ClassNotFoundException: org.apache.hadoop.fs.s3a.S3AFileSystem` | imagem antiga, sem os jars | `docker compose build --no-cache app` |
+| `ModuleNotFoundError: No module named 'streamlit'` (ou `'duckdb'`) | imagem antiga, de antes do explorador | `docker compose build app` |
 | `[erro]` no `verificar_ambiente.py` lendo a landing | o gerador ainda não rodou | Passo 3 |
 
 Dica: para ver quais contêineres estão ligados, use `docker compose ps`.
