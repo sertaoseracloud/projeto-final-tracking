@@ -1,3 +1,4 @@
 pyspark==3.5.3
-boto3
-pytest
+numpy==1.26.4
+boto3==1.43.111
+pytest==9.1.1

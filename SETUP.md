@@ -44,7 +44,7 @@ O resumo impresso diz quantos eventos e defeitos foram gerados. Detalhes em [ger
 docker compose run --rm app python infra/verificar_ambiente.py
 ```
 
-Precisa terminar com três linhas `[ok]`. O script mostra a configuração `s3a` que o pipeline usa.
+Precisa terminar com três linhas `[ok]`. A configuração `s3a` usada pelo Spark está no início do próprio script (`infra/verificar_ambiente.py`).
 
 ## Como rodar qualquer coisa
 
@@ -52,15 +52,6 @@ Precisa terminar com três linhas `[ok]`. O script mostra a configuração `s3a`
 docker compose run --rm app python <script.py>
 docker compose run --rm app python -m pytest
 ```
-
-## Trocando o floci por uma conta AWS real
-
-No `docker-compose.yml`, no serviço `app`, ajuste:
-- `AWS_ENDPOINT_URL`: vazio (`""`) para o gerador usar a AWS real;
-- o endpoint `s3a` do Spark: o da sua região;
-- as credenciais e o `AWS_S3_BUCKET`.
-
-O código não muda.
 
 ## Problemas comuns
 

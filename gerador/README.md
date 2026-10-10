@@ -6,15 +6,15 @@ Não usa Spark: é Python puro mais `boto3`.
 
 ## Uso
 
-```powershell
+```bash
 docker compose up -d floci                                      # S3 local
-docker compose run --rm app python gerador/gerar_eventos.py     # 3000 visitantes, 14 dias, seed 42
+docker compose run --rm app python gerador/gerar_eventos.py     # 6000 visitantes, 14 dias, seed 42
 ```
 
 | Opção | Padrão | O que faz |
 | --- | --- | --- |
 | `--dias` | 14 | dias simulados a partir de `--data-inicial` |
-| `--visitantes` | 3000 | visitantes únicos (cada um faz de 1 a 4 sessões) |
+| `--visitantes` | 6000 | visitantes únicos (cada um faz de 1 a 4 sessões) |
 | `--seed` | 42 | mesma seed, mesmos arquivos, byte a byte |
 | `--sujeira` | 0.03 | fração de eventos com defeito (0 a 0.5) |
 | `--data-inicial` | 2026-09-01 | primeiro dia, em UTC |
@@ -26,11 +26,11 @@ Rodar de novo com a **mesma** seed sobrescreve os mesmos arquivos. Uma seed **di
 
 Navegue por `site/index.html`, clique em **Exportar JSONL** no painel lateral e copie o arquivo exportado para dentro da pasta do repositório (por exemplo, `saida/`), porque o comando roda no contêiner e só enxerga o repositório:
 
-```powershell
+```bash
 docker compose run --rm app python gerador/importar_site.py saida/eventos_2026-10-10.jsonl
 ```
 
-O arquivo vai para `landing/eventos/dt=<data do primeiro evento>/site-<instante>.jsonl`. Arquivos com BOM e quebras de linha CRLF são aceitos.
+O arquivo vai para `landing/eventos/dt=<data do primeiro evento>/site-<instante com microssegundos>.jsonl`. Arquivos com BOM e quebras de linha CRLF são aceitos.
 
 ## O que é gravado
 
@@ -40,11 +40,11 @@ O arquivo vai para `landing/eventos/dt=<data do primeiro evento>/site-<instante>
 
 Cada visitante recebe um canal de origem e um dispositivo, que mudam as chances de rolar a página, ver o vídeo, escolher um plano e comprar. Na ordem da página: hero → vídeo → módulos → tabela de planos → checkout → obrigado → área de membros.
 
-- **Quem vira lead** volta outro dia, em geral pela newsletter, com mais intenção de compra.
+- **Parte dos leads** volta outro dia, em geral pela newsletter, com mais intenção de compra.
 - **Quem compra** pode criar conta (`sign_up`) e, em visitas seguintes, faz `login`.
-- **Reembolsos:** cerca de 8% das compras recebem `refund` de 1 a 7 dias depois (compras da última semana podem ficar sem reembolso, porque ele cairia fora da janela).
+- **Reembolsos:** cerca de 8% das compras recebem `refund` de 1 a 7 dias depois — bem mais nas que vieram do Instagram, bem menos nas de newsletter e acesso direto (compras da última semana podem ficar sem reembolso, porque ele cairia fora da janela).
 - **Frete:** só o plano Premium tem `add_shipping_info`, porque inclui apostila impressa.
-- **`session_hint`:** muda em cerca de 25% das trocas de página, como uma recarga do navegador. Por isso não serve para contar sessões.
+- **`session_hint`:** muda em cerca de 25% das trocas de página, como uma recarga do navegador, e também quando o visitante recarrega a landing (cerca de 1 em 4 sessões). Por isso não serve para contar sessões.
 
 ## Defeitos injetados
 
@@ -60,7 +60,7 @@ Cada visitante recebe um canal de origem e um dispositivo, que mudam as chances 
 | `evento_fora_catalogo` | `event_name = "add_to_wishlist"` |
 | reenvio de lote | cerca de 1% dos eventos aparece de novo, com o mesmo `event_id`, no lote vizinho |
 
-Os tipos que alteram um evento existente atingem no máximo 5% dos candidatos; a cota que sobra vai para `ts_futuro`.
+Os tipos que alteram um evento existente atingem no máximo 5% dos candidatos; a cota que sobra vai para `ts_futuro`. Nenhum tipo de evento tem mais de 5% das suas ocorrências alterado.
 
 Um `purchase` que perde o `transaction_id` ou o valor deixa o `refund` dele sem compra válida. Esse efeito em cascata é proposital.
 
@@ -69,49 +69,49 @@ Um `purchase` que perde o `transaction_id` ou o valor deixa o `refund` dele sem 
 ```text
 Destino:            s3://datalake-tracking (http://floci:4566)
 Período:            2026-09-01 a 2026-09-14   seed: 42
-visitantes              3000
-sessões simuladas       4472
-eventos limpos         31107
-duplicatas (lote)        299
-linhas gravadas        31553   em 63 arquivos
+visitantes              6000
+sessões simuladas       8805
+eventos limpos         63414
+duplicatas (lote)        656
+linhas gravadas        64372   em 66 arquivos
 
 Eventos por nome (antes da sujeira):
-  page_view               5557
-  scroll                 10446
-  click                   1449
-  site_search              196
-  video_start             1473
-  video_progress          3713
-  video_complete           436
-  file_download            191
-  view_item_list          2750
-  select_item              886
-  view_item                547
-  add_to_cart              930
-  remove_from_cart         129
-  view_cart                666
-  begin_checkout           477
-  add_shipping_info         86
-  add_payment_info         339
-  purchase                 267
-  refund                    21
-  generate_lead            274
-  sign_up                  190
-  login                     84
+  page_view              13235
+  scroll                 20035
+  click                   2952
+  site_search              307
+  video_start             2940
+  video_progress          7495
+  video_complete           905
+  file_download            343
+  view_item_list          5335
+  select_item             1755
+  view_item               1037
+  add_to_cart             1789
+  remove_from_cart         251
+  view_cart               1322
+  begin_checkout           961
+  add_shipping_info        188
+  add_payment_info         721
+  purchase                 604
+  refund                    52
+  generate_lead            550
+  sign_up                  453
+  login                    184
 
 Defeitos injetados:
-  purchase_sem_id           14
-  valor_negativo           134
-  moeda_usd                134
-  scroll_33                133
-  ts_nulo                  133
-  ts_futuro                238
-  refund_orfao              14
-  evento_fora_catalogo     133
+  purchase_sem_id           31
+  valor_negativo           272
+  moeda_usd                 77
+  scroll_33                272
+  ts_nulo                  272
+  ts_futuro                676
+  refund_orfao              31
+  evento_fora_catalogo     271
 ```
 
 ## Testes
 
-```powershell
+```bash
 docker compose run --rm app python -m pytest tests/gerador
 ```
