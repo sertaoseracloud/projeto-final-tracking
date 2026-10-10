@@ -130,6 +130,13 @@ body.painel-aberto .alternar-painel { right: 416px; }
 @media (max-width: 900px) { body.painel-aberto .alternar-painel { right: 16px; bottom: calc(55vh + 12px); } }
 
 [hidden] { display: none !important; }
+/* ---------------- mapa de calor (overlay; não recebe cliques) ---------------- */
+#calor-raiz { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 30; }
+.calor-camada { position: absolute; pointer-events: none; border-radius: 10px; outline: 2px solid rgba(0,0,0,.2); }
+.calor-etiqueta { position: absolute; top: -12px; right: -6px; background: #111827; color: #fff; font: 600 11px/1.4 system-ui, sans-serif; padding: 2px 7px; border-radius: 6px; white-space: nowrap; }
+.calor-faixa { position: absolute; width: 72px; pointer-events: none; border-left: 2px solid rgba(0,0,0,.25); }
+.calor-marco { position: absolute; right: 6px; transform: translateY(-50%); background: #111827; color: #fff; font: 600 11px/1.4 system-ui, sans-serif; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
+#mapa-calor.ligado { background: #b91c1c; color: #fff; }
 </style>
 </head>
 <body class="painel-aberto">
@@ -370,6 +377,7 @@ body.painel-aberto .alternar-painel { right: 416px; }
       <option value="newsletter|email|ebook_nutricao">newsletter / email</option>
     </select>
     <button id="exportar">Exportar JSONL</button>
+    <button id="mapa-calor" title="Liga/desliga o mapa de calor da Gold (site/mapa_calor.js)">Mapa de calor</button>
     <button id="nova-sessao" title="Novo visitante anônimo">Novo visitante</button>
     <button id="limpar">Limpar</button>
   </header>
@@ -377,6 +385,7 @@ body.painel-aberto .alternar-painel { right: 416px; }
   <ol id="lista-eventos"></ol>
 </aside>
 
+<script src="mapa_calor.js"></script>
 <script>
 (function () {
   "use strict";
@@ -861,6 +870,88 @@ body.painel-aberto .alternar-painel { right: 416px; }
   document.getElementById("btn-sair").addEventListener("click", function () {
     estado.userId = null; gravar("lp_user_id", null); desenharContexto(); atualizarMembros();
   });
+
+  // ---------------- mapa de calor (lê window.MAPA_CALOR; não dispara eventos) ----------------
+  var calor = { ligado: false };
+  var $calorRaiz = document.createElement("div");
+  $calorRaiz.id = "calor-raiz";
+  document.body.appendChild($calorRaiz);
+
+  function paginaAtual() { var r = rotaAtual(); return r === "landing" ? "/" : "/" + r; }
+  function corCalor(i) {             // 0 = azul (frio) … 1 = vermelho (quente)
+    var t = Math.max(0, Math.min(1, +i || 0));
+    return "hsla(" + Math.round(240 - 240 * t) + ", 90%, 50%, .45)";
+  }
+  function pct(v) { return v === null || v === undefined ? "—" : (v * 100).toFixed(1).replace(".", ",") + "%"; }
+
+  function desenharCalor() {
+    $calorRaiz.innerHTML = "";
+    if (!calor.ligado || !window.MAPA_CALOR) return;
+    var pagina = paginaAtual(), porElemento = {};
+    (window.MAPA_CALOR.cliques || []).forEach(function (l) { if (l.pagina === pagina) porElemento[l.element_id] = l; });
+    document.querySelectorAll("[data-heat]").forEach(function (el) {
+      var l = porElemento[el.getAttribute("data-heat")];
+      var r = el.getBoundingClientRect();
+      if (!l || !r.width || !r.height) return;          // sem dado, escondido ou de outra tela
+      var c = document.createElement("div");
+      c.className = "calor-camada";
+      c.style.left = (r.left + window.scrollX) + "px";
+      c.style.top = (r.top + window.scrollY) + "px";
+      c.style.width = r.width + "px";
+      c.style.height = r.height + "px";
+      c.style.background = corCalor(l.intensidade);
+      var e = document.createElement("span");
+      e.className = "calor-etiqueta";
+      e.textContent = l.cliques + " cliques · " + pct(l.taxa_clique) + " das sessões";
+      c.appendChild(e);
+      $calorRaiz.appendChild(c);
+    });
+    if (pagina === "/") desenharRolagem();
+  }
+
+  function desenharRolagem() {
+    var linhas = (window.MAPA_CALOR.rolagem || []).filter(function (l) { return l.pagina === "/"; })
+      .sort(function (a, b) { return a.marco - b.marco; });
+    if (!linhas.length) return;
+    var vista = document.querySelector('[data-view="landing"]').getBoundingClientRect();
+    var altura = document.documentElement.scrollHeight, janela = window.innerHeight;
+    // marco m% = a pessoa rolou m% do percurso: viu até m/100*(altura - janela) + janela
+    function y(m) { return Math.min(altura, (m / 100) * Math.max(0, altura - janela) + janela); }
+    var faixa = document.createElement("div");
+    faixa.className = "calor-faixa";
+    faixa.style.left = (vista.right + window.scrollX - 72) + "px";
+    faixa.style.top = "0px";
+    faixa.style.height = altura + "px";
+    var paradas = linhas.map(function (l) {
+      return "rgba(17,24,39," + (0.55 * (1 - (l.pct_sessoes || 0))).toFixed(3) + ") " + (y(l.marco) / altura * 100).toFixed(2) + "%";
+    });
+    faixa.style.background = "linear-gradient(to bottom, " + paradas.join(", ") + ")";
+    linhas.forEach(function (l) {
+      if (l.marco === 0) return;
+      var m = document.createElement("span");
+      m.className = "calor-marco";
+      m.style.top = y(l.marco) + "px";
+      m.textContent = l.marco + "% · " + pct(l.pct_sessoes);
+      faixa.appendChild(m);
+    });
+    $calorRaiz.appendChild(faixa);
+  }
+
+  document.getElementById("mapa-calor").addEventListener("click", function () {
+    if (!window.MAPA_CALOR) {
+      toast("Ainda não há mapa. Rode o pipeline (jobs 07 e 08) para gerar site/mapa_calor.js e recarregue a página.");
+      return;
+    }
+    calor.ligado = !calor.ligado;
+    this.classList.toggle("ligado", calor.ligado);
+    desenharCalor();
+    if (calor.ligado) toast("Mapa de calor gerado em " + window.MAPA_CALOR.gerado_em);
+  });
+  var tCalor;
+  function redesenharCalorDepois() { clearTimeout(tCalor); tCalor = setTimeout(desenharCalor, 120); }
+  window.addEventListener("resize", redesenharCalorDepois);
+  window.addEventListener("hashchange", redesenharCalorDepois);
+  document.getElementById("alternar-painel").addEventListener("click", redesenharCalorDepois);
 
   irPara(true);
 })();
