@@ -39,6 +39,8 @@ def test_aceita_consultas_de_leitura(sql):
     ("WITH x AS (SELECT 1) INSERT INTO t SELECT * FROM x", "INSERT"),
     ("", "Escreva uma consulta"),
     ("   -- só comentário", "Escreva uma consulta"),
+    ("SELECT $$'$$; COPY (SELECT 42 AS a) TO '/tmp/pwn1.csv'; SELECT $$'$$", "um comando por vez"),
+    ("SELECT E'\\'; ' ; COPY (SELECT 1) TO '/tmp/x.csv'", "um comando por vez"),
 ])
 def test_recusa_o_que_nao_e_leitura(sql, trecho):
     with pytest.raises(SqlNaoPermitido, match=re.escape(trecho)):

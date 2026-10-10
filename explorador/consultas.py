@@ -1,8 +1,12 @@
-"""Consultas SQL no bucket com DuckDB — somente leitura."""
+"""Consultas SQL no bucket com DuckDB — somente leitura.
+
+A validação final usa o parser do próprio DuckDB (1 comando, só SELECT/EXPLAIN)."""
 
 from __future__ import annotations
 
 import re
+
+import duckdb
 
 MENSAGEM_SO_LEITURA = "O explorador só faz consultas de leitura (SELECT, WITH, DESCRIBE…)."
 INICIOS_PERMITIDOS = ("select", "with", "describe", "show", "summarize", "from", "explain", "pragma")
@@ -46,6 +50,7 @@ def _somente_codigo(sql: str) -> str:
 
 
 def validar_sql(sql: str) -> None:
+    """Recusa o que não é uma única consulta de leitura; o último passo confirma com o parser do DuckDB."""
     codigo = _somente_codigo(sql).strip().rstrip(";").strip()
     if not codigo:
         raise SqlNaoPermitido("Escreva uma consulta SQL.")
@@ -60,3 +65,13 @@ def validar_sql(sql: str) -> None:
     proibida = next((p for p in palavras if p in PROIBIDAS), None)
     if proibida:
         raise SqlNaoPermitido(f"{MENSAGEM_SO_LEITURA} O comando `{proibida.upper()}` não é permitido.")
+    # Confirmação autoritativa com o parser do DuckDB (strings $$...$$, E'...' etc.).
+    try:
+        comandos = duckdb.extract_statements(sql)
+    except duckdb.Error:
+        return  # erro de sintaxe: deixa o DuckDB explicar na execução
+    if len(comandos) != 1:
+        raise SqlNaoPermitido("Rode um comando por vez (sem `;` no meio).")
+    tipo = comandos[0].type.name
+    if tipo not in ("SELECT", "EXPLAIN"):
+        raise SqlNaoPermitido(f"{MENSAGEM_SO_LEITURA} O comando `{tipo}` não é permitido.")
