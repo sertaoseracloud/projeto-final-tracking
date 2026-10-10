@@ -19,3 +19,20 @@ services:
       AWS_DEFAULT_REGION: us-east-1
     depends_on:
       - floci
+
+  explorador:
+    image: datalake-tracking-app
+    working_dir: /projeto
+    volumes:
+      - .:/projeto
+    environment:
+      AWS_ENDPOINT_URL: http://floci:4566
+      AWS_S3_BUCKET: datalake-tracking
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+    command: streamlit run explorador/app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true --browser.gatherUsageStats false
+    ports:
+      - "8501:8501"
+    depends_on:
+      - floci
