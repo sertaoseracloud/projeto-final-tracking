@@ -383,8 +383,8 @@ O formato (individual ou em dupla) e o prazo ficam a critério do professor.
 - [x] `site/index.html` dispara os 20 eventos no contrato da seção 5 (verificado no navegador).
 - [x] O gerador roda com os padrões, grava em `landing/`, imprime o resumo e é determinístico pela seed.
 - [x] As cinco armadilhas da seção 9 são observáveis nos dados gerados.
-- [ ] `professor/solucao/` roda os seis jobs do início ao fim contra o floci e produz as 13 tabelas Gold.
-- [ ] `GABARITO.md` traz os números medidos e as tolerâncias.
-- [ ] `git archive` gera um zip sem `professor/`, conferido listando o conteúdo do zip.
-- [ ] `ENUNCIADO.md` e `CONTRATO_EVENTO.md` batem com este spec.
-- [ ] `SETUP.md` permite rodar do zero numa máquina com apenas Docker instalado (Windows, macOS ou Linux).
+- [x] `professor/solucao/` roda os seis jobs do início ao fim contra o floci e produz as 13 tabelas Gold.
+- [x] `GABARITO.md` traz os números medidos e as tolerâncias.
+- [x] `git archive` gera um zip sem `professor/`, conferido listando o conteúdo do zip.
+- [x] `ENUNCIADO.md` e `CONTRATO_EVENTO.md` batem com este spec.
+- [x] `SETUP.md` permite rodar do zero numa máquina com apenas Docker instalado (Windows, macOS ou Linux).

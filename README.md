@@ -8,11 +8,11 @@ Uma empresa vende um curso online por uma landing page de conversão, e cada int
 | --- | --- |
 | [`site/`](site/index.html) | a landing page de exemplo. Abra no navegador, navegue e veja cada evento nascer no painel lateral |
 | [`gerador/`](gerador/README.md) | o coletor simulado: popula o bucket com 14 dias de eventos, inclusive com defeitos |
-| `pipeline/` | onde o datalake é construído |
-| `docs/` | enunciado e contrato do evento |
+| [`pipeline/`](pipeline/README.md) | onde o datalake é construído |
+| `docs/` | [enunciado](docs/ENUNCIADO.md) e [contrato do evento](docs/CONTRATO_EVENTO.md) |
 
 ## Começar
 
 1. Prepare o ambiente: [SETUP.md](SETUP.md).
 2. Popule a landing: `docker compose run --rm app python gerador/gerar_eventos.py`.
-3. Leia o enunciado em `docs/ENUNCIADO.md` e construa o pipeline em `pipeline/`.
+3. Leia o [enunciado](docs/ENUNCIADO.md) e construa o pipeline em `pipeline/` (veja [pipeline/README.md](pipeline/README.md)).
