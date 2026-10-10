@@ -246,7 +246,7 @@ Nomes de colunas são livres; o **conteúdo** é obrigatório, porque é o que a
 
 | Job | Tabela | Conteúdo mínimo |
 | --- | --- | --- |
-| Funil | `funil_compra` | sessões que atingiram cada etapa de `view_item_list → select_item → view_item → add_to_cart → view_cart → begin_checkout → add_payment_info → purchase`, conversão sobre a etapa anterior e sobre o topo; total e por plano × canal |
+| Funil | `funil_compra` | sessões que atingiram cada etapa de `view_item_list → select_item → add_to_cart → view_cart → begin_checkout → add_payment_info → purchase`, conversão sobre a etapa anterior e sobre o topo; total e por plano × canal. `view_item` (abrir o detalhe do plano) é opcional na jornada e **não** entra na sequência: aparece como taxa à parte (sessões com `view_item` ÷ sessões com `select_item`) |
 | | `funil_lead` | `page_view` da landing → `scroll` ≥ 50% → `generate_lead`, por canal |
 | Engajamento | `sessoes` | uma linha por sessão: duração, eventos, scroll máximo, maior `video_percent`, fez lead, comprou, canal, dispositivo |
 | | `retencao_video` | das sessões com `video_start`, percentual que atingiu 10, 25, 50, 75 e 100% |
@@ -260,7 +260,7 @@ Nomes de colunas são livres; o **conteúdo** é obrigatório, porque é o que a
 | | `metricas_modelo` | AUC e F1 no conjunto de teste, e a lista de features usadas |
 | | `segmentos_visitantes` | grupo de cada visitante (clusterização) e perfil médio de cada grupo |
 
-**Restrição do modelo de propensão:** as features só podem usar o que acontece **antes** de `begin_checkout`.
+**Restrição do modelo de propensão:** as features só podem usar o comportamento na landing **antes do primeiro `add_to_cart` da sessão**: rolagem, vídeo, tabela de planos vista, plano selecionado, detalhe aberto, buscas, downloads, cliques, canal e dispositivo. Qualquer evento do checkout (`view_cart` em diante) já praticamente revela a compra.
 
 ---
 
@@ -320,7 +320,7 @@ O formato (individual ou em dupla) e o prazo ficam a critério do professor.
 
 1. **Frete no funil.** Incluir `add_shipping_info` como etapa obrigatória zera a conversão de Básico e Pro.
 2. **Reembolso na data errada.** Atribuir o `refund` à data do próprio evento produz dias com receita líquida negativa. A receita líquida pertence à data da compra.
-3. **Vazamento no modelo.** Usar `begin_checkout` ou `add_payment_info` como feature leva a AUC perto de 0,99.
+3. **Vazamento no modelo.** Usar eventos do checkout (`view_cart`, `begin_checkout`, `add_payment_info`) como feature leva a AUC perto de 0,99; com só o comportamento na landing, o AUC fica bem abaixo. O `GABARITO.md` registra as duas faixas medidas.
 4. **Duplicata de lote.** O gerador reenvia lotes. Sem deduplicação, receita e conversões saem infladas.
 5. **`session_hint` do cliente.** Ele muda a cada recarga. Contar sessões por ele infla a métrica.
 
@@ -333,7 +333,7 @@ O formato (individual ou em dupla) e o prazo ficam a critério do professor.
 | Parâmetro | Padrão |
 | --- | --- |
 | `--dias` | 14 |
-| `--visitantes` | 3000 |
+| `--visitantes` | 6000 |
 | `--seed` | 42 |
 | `--sujeira` | 0,03 |
 | `--data-inicial` | 2026-09-01 |
