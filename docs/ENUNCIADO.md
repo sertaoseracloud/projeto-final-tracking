@@ -44,7 +44,7 @@ Uma ordem sugerida de trabalho. Faça uma etapa de cada vez e só avance quando 
 
 1. **Suba o ambiente.** Siga o [`SETUP.md`](../SETUP.md) até ver as três linhas `[ok]`.
 2. **Gere os dados.** Rode o gerador (Passo 3 do `SETUP.md`) e leia o resumo que ele imprime.
-3. **Olhe alguns eventos.** Abra `site/index.html` no navegador e veja os eventos nascendo no painel lateral. Depois, leia algumas linhas da landing com o Spark e compare com o [`CONTRATO_EVENTO.md`](CONTRATO_EVENTO.md).
+3. **Olhe alguns eventos.** Abra `site/index.html` no navegador e veja os eventos nascendo no painel lateral. Depois, leia algumas linhas da landing com o Spark, com o [`CONTRATO_EVENTO.md`](CONTRATO_EVENTO.md) aberto ao lado para entender cada campo.
 4. **Construa a Bronze.** Leia a landing com schema explícito e grave em Parquet, com as colunas de proveniência (R1, R2, R4).
 5. **Construa a Silver.** Deduplique, extraia os `params`, valide, sessionize, faça o stitching e exploda os itens (R5 a R10). Confira as contagens a cada passo.
 6. **Construa a Gold, uma tabela por vez.** Comece pelas mais simples e confira cada número com uma consulta à mão antes de seguir (seção 5.3 e 5.4).
@@ -223,7 +223,7 @@ Em outras palavras, a pergunta que cada tabela responde:
 
 **Restrição do modelo de propensão:** as features só podem usar o comportamento na landing **antes do primeiro `add_to_cart` da sessão**: rolagem, vídeo, tabela de planos vista, plano selecionado, detalhe aberto, buscas, downloads, cliques, canal e dispositivo. Qualquer evento do checkout (`view_cart` em diante) já praticamente revela a compra.
 
-Por que isso importa: **features** são as informações que o modelo usa para prever. Se você der ao modelo um evento que só acontece em quem já está comprando, ele "acerta" sem aprender nada útil. Isso é **vazamento de informação**. Exemplo: quem chegou a `add_payment_info` quase sempre compra; usar esse evento daria um modelo com nota altíssima e inútil para a empresa, que quer prever a compra **antes** do checkout.
+Por que isso importa: **features** são as informações que o modelo usa para prever. Se você der ao modelo um evento que só acontece em quem já está comprando, ele "acerta" sem aprender nada útil. Isso é **vazamento de informação**. Exemplo: um evento do checkout (de `view_cart` em diante) só aparece em quem já decidiu comprar; usá-lo daria um modelo com nota altíssima e inútil para a empresa, que quer prever a compra **antes** do checkout.
 
 **Recomendação:** como compradores são raros, registre também precisão e recall em `metricas_modelo`, além de AUC e F1. Isso ajuda a interpretar o modelo.
 
@@ -348,7 +348,7 @@ Os termos estão agrupados por assunto. Os exemplos usam a landing da DadosPro.
 ### Negócio
 
 - **Funil** — sequência de etapas até a compra, como ver os planos → escolher → pôr no carrinho → pagar. Em cada etapa, parte das pessoas desiste.
-- **Conversão** — fração de sessões que chegou a uma etapa, comparada a outra etapa. Exemplo: 200 sessões com `select_item` e 100 com `add_to_cart` → conversão de 50%.
+- **Conversão** — fração das sessões de uma etapa que também aparecem na etapa seguinte. Exemplo: 200 sessões com `select_item` e 100 com `add_to_cart` → conversão de 50%.
 - **Canal** — de onde o visitante veio, no formato `"<source> / <medium>"`. Exemplo: `google / cpc`.
 - **Lead** — visitante que deixou o e-mail, aqui em troca do e-book gratuito (evento `generate_lead`).
 - **Order bump** — oferta extra marcada no checkout. Aqui é a Mentoria em grupo (`BUMP-MENTORIA`, R$ 147,00).

@@ -40,7 +40,7 @@ docker compose run --rm app python gerador/importar_site.py saida/eventos_2026-1
 
 Troque `saida/eventos_2026-10-10.jsonl` pelo nome do arquivo que você exportou.
 
-O arquivo vai para `landing/eventos/year=…/month=…/day=… (data do primeiro evento)/site-<instante com microssegundos>.jsonl`. Arquivos com BOM e quebras de linha CRLF são aceitos. (BOM e CRLF são detalhes de como o Windows às vezes salva arquivos de texto; você não precisa se preocupar com eles.)
+O arquivo vai para `landing/eventos/year=…/month=…/day=… (data do primeiro evento)/site-<instante com microssegundos>.jsonl`. Arquivos com BOM e quebras de linha CRLF são aceitos. (BOM e CRLF são detalhes de como o Windows às vezes salva arquivos de texto; o importador aceita os dois formatos.)
 
 ## O que é gravado
 

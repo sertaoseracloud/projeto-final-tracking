@@ -41,7 +41,7 @@ docker compose version
 
 **O que faz:** pergunta ao Docker qual versão do Compose está instalada.
 
-**O que você deve ver:** uma linha parecida com `Docker Compose version v2...`. Se aparecer "comando não encontrado", o Docker não está instalado ou não está no PATH. No Windows e no macOS, deixe o Docker Desktop **aberto** enquanto trabalha: é ele que mantém o Docker funcionando.
+**O que você deve ver:** uma linha com `Docker Compose version` seguida de um número de versão (por exemplo, `v2.29.1` ou mais nova). Se aparecer "comando não encontrado", o Docker não está instalado ou não está no PATH (a lista de pastas onde o terminal procura os programas). No Windows e no macOS, deixe o Docker Desktop **aberto** enquanto trabalha: é ele que mantém o Docker funcionando.
 
 ## Passo 2 — Construir a imagem e subir o S3
 
@@ -115,5 +115,5 @@ docker compose down -v
 docker image rm datalake-tracking-app
 ```
 
-- `docker compose down -v` desliga e apaga os contêineres do projeto, junto com os volumes (os dados guardados por eles). **Atenção:** os eventos e as camadas gravadas no floci se perdem.
+- `docker compose down -v` desliga e apaga os contêineres do projeto. **Atenção:** os eventos e as camadas gravadas no floci se perdem.
 - `docker image rm datalake-tracking-app` apaga a imagem do `app` para liberar espaço em disco.
