@@ -21,6 +21,14 @@ def test_compras_sem_id_ficam_limitadas_a_5_por_cento(simulacao):
     assert contagem["purchase_sem_id"] <= -(-compras * 5 // 100)
 
 
+def test_reembolsos_orfaos_ficam_limitados_a_5_por_cento_das_compras(simulacao):
+    eventos = copy.deepcopy(simulacao[0])
+    compras = sum(1 for e in eventos if e["event_name"] == "purchase")
+    contagem = aplicar_sujeira(random.Random(1), eventos, 0.03)
+    assert contagem["refund_orfao"] <= -(-compras * 5 // 100)
+    assert contagem["refund_orfao"] > 0
+
+
 def test_cada_defeito_e_visivel_no_dado(simulacao):
     eventos = copy.deepcopy(simulacao[0])
     ids_compra = {e["params"]["transaction_id"] for e in eventos if e["event_name"] == "purchase"}

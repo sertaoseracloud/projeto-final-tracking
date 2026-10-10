@@ -3,7 +3,8 @@
 Cada tipo recebe uma cota proporcional ao seu peso. Os defeitos que
 alteram um evento existente atingem no máximo 5% dos candidatos daquele
 tipo, para não destruir a receita (por exemplo, tirar o id de metade das
-compras). O que sobra das cotas vai para "ts_futuro", que tem candidatos
+compras); os reembolsos órfãos inseridos também ficam em 5% das compras,
+para não superar os reembolsos reais. O que sobra das cotas vai para "ts_futuro", que tem candidatos
 de sobra. Um evento recebe no máximo um defeito.
 """
 
@@ -109,13 +110,20 @@ def _cotas(alvo: int) -> dict[str, int]:
     return cotas
 
 
+def _limitar_orfaos(cota: int, originais: list[dict]) -> tuple[int, int]:
+    """Aplica o teto de 5% das compras aos reembolsos órfãos. Devolve (cota, sobra)."""
+    n_compras = sum(1 for e in originais if e["event_name"] == "purchase")
+    n = min(cota, math.ceil(n_compras * TETO))
+    return n, cota - n
+
+
 def aplicar_sujeira(rng: random.Random, eventos: list[dict], fracao: float) -> dict[str, int]:
     """Altera `eventos` no lugar e acrescenta os inseridos. Devolve a contagem por tipo."""
     originais = list(eventos)
     cotas = _cotas(round(len(originais) * fracao))
+    cotas["refund_orfao"], sobra = _limitar_orfaos(cotas["refund_orfao"], originais)
     contagem = dict.fromkeys(TIPOS, 0)
     usados: set[int] = set()
-    sobra = 0
 
     for tipo, mutar in MUTACOES.items():
         candidatos = [e for e in originais if id(e) not in usados and FILTROS[tipo](e)]
