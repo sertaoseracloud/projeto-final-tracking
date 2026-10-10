@@ -44,3 +44,26 @@ def test_main_devolve_1_e_explica_quando_o_arquivo_e_invalido(tmp_path, capsys):
     assert main([str(origem), "--saida-local", str(tmp_path / "s3")]) == 1
     assert "linha 1" in capsys.readouterr().err
     assert not (tmp_path / "s3").exists()
+
+
+def test_validar_aceita_texto_com_crlf():
+    assert len(validar(UM + "\r\n" + UM.replace('"a"', '"b"') + "\r\n")) == 2
+
+
+def test_validar_aceita_u2028_cru_dentro_de_string():
+    linha = '{"event_id":"a","event_ts":"2026-10-10T12:00:00.000Z","params":{"search_term":"x y"}}'
+    assert len(validar(linha + "\n")) == 1
+
+
+def test_main_aceita_arquivo_com_bom_e_grava_sem_bom(tmp_path):
+    origem = tmp_path / "eventos.jsonl"
+    origem.write_bytes(("﻿" + UM + "\n").encode("utf-8"))
+    assert main([str(origem), "--saida-local", str(tmp_path / "s3")]) == 0
+    gravados = list((tmp_path / "s3").glob("landing/eventos/dt=2026-10-10/site-*.jsonl"))
+    assert len(gravados) == 1
+    assert gravados[0].read_text(encoding="utf-8") == UM + "\n"
+
+
+def test_main_devolve_1_quando_o_arquivo_nao_existe(tmp_path, capsys):
+    assert main([str(tmp_path / "nao_existe.jsonl"), "--saida-local", str(tmp_path / "s3")]) == 1
+    assert "erro" in capsys.readouterr().err

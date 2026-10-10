@@ -21,7 +21,8 @@ from gerador.lotes import PREFIXO
 
 def validar(texto: str) -> list[dict]:
     eventos = []
-    for n, linha in enumerate(texto.splitlines(), start=1):
+    for n, linha in enumerate(texto.split("\n"), start=1):
+        linha = linha.removesuffix("\r")
         if not linha.strip():
             continue
         try:
@@ -47,10 +48,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--saida-local", type=Path, help="grava nesta pasta em vez do S3")
     a = ap.parse_args(argv)
 
-    texto = a.arquivo.read_text(encoding="utf-8")
     try:
+        texto = a.arquivo.read_text(encoding="utf-8-sig")
         eventos = validar(texto)
-    except ValueError as erro:
+    except (OSError, UnicodeDecodeError, ValueError) as erro:
         print(f"erro: {erro}", file=sys.stderr)
         return 1
 
