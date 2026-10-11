@@ -48,8 +48,8 @@ EXEMPLOS = {
 
 
 @st.cache_data(ttl=30, show_spinner="Listando o bucket…")
-def _listar() -> list[particoes.Objeto]:
-    return s3.listar()
+def _listar(bucket: str | None = None) -> list[particoes.Objeto]:
+    return s3.listar(bucket=bucket or s3.BUCKET)
 
 
 def _fechar(valor) -> None:
@@ -81,21 +81,47 @@ def _escolher(**valores) -> None:
 
 # ------------------------------------------------------------------ S3 ------------------------------------------------------------------
 
-def _ir_para(pasta: str | None) -> None:
-    """None = lista de buckets; "" = raiz do bucket; "silver/…/" = uma pasta."""
+@st.cache_data(ttl=30, show_spinner="Listando os buckets…")
+def _buckets() -> list[str]:
+    return s3.listar_buckets()
+
+
+@st.cache_resource(max_entries=4, on_release=lambda con: con.close(), show_spinner=False)
+def _conexao_bucket(bucket: str):
+    """Conexão só para a prévia e a contagem da tela S3, trancada no bucket aberto (cada bucket tem a sua)."""
+    con = consultas.conectar(endpoint=s3.ENDPOINT, chave=s3.CHAVE, segredo=s3.SEGREDO, regiao=s3.REGIAO)
+    consultas.travar(con, s3.raiz(bucket))
+    return con
+
+
+def _ir_para(pasta: str | None, bucket: str | None = None) -> None:
+    """pasta None = lista de buckets; "" = raiz do bucket; "silver/…/" = uma pasta."""
+    if bucket is not None:
+        st.session_state["bucket_sel"] = bucket
     st.session_state["bucket_aberto"] = pasta is not None
     st.session_state["pasta"] = pasta or ""
     st.session_state.pop("arquivo", None)
 
 
-def _lista_de_buckets(objetos) -> None:
+def _lista_de_buckets(buckets: list[str]) -> None:
     _contexto("s3-buckets")
     ui.trilha([("Buckets", None, None, {})], "s3")
-    ui.titulo("Buckets", 1, "Os buckets são contêineres de objetos armazenados no S3. Aqui há um só, emulado pelo floci.")
-    with ui.painel("buckets", "Buckets", 1):
-        ui.tabela("buckets", [("Nome", 3), ("Região", 2), ("Objetos", 1), ("Tamanho", 1)], [[
-            ui.Link(s3.BUCKET, "abrir_bucket", _ir_para, ("",)),
-            s3.REGIAO, str(len(objetos)), particoes.tamanho_legivel(sum(o.tamanho for o in objetos))]])
+    ui.titulo("Buckets", len(buckets), "Os buckets são contêineres de objetos armazenados no S3, aqui emulado pelo "
+              f"floci. Todos aparecem aqui, só para leitura; o <code>{s3.BUCKET}</code> é o do datalake, o que "
+              "alimenta o Data Catalog e o Athena.")
+    linhas, vazio_datalake = [], s3.BUCKET not in buckets
+    for nome in buckets:
+        objetos = _listar(nome)
+        vazio_datalake = vazio_datalake or (nome == s3.BUCKET and not objetos)
+        linhas.append([ui.Link(nome, f"bucket:{nome}", _ir_para, ("", nome)), s3.REGIAO, str(len(objetos)),
+                       particoes.tamanho_legivel(sum(o.tamanho for o in objetos)),
+                       "Data Catalog e Athena" if nome == s3.BUCKET else "só nesta tela"])
+    if vazio_datalake:
+        st.info(f"O bucket {s3.BUCKET} está vazio (ou ainda não existe). Gere os eventos com "
+                "`docker compose run --rm app python gerador/gerar_eventos.py` e clique em Recarregar.")
+    with ui.painel("buckets", "Buckets", len(buckets)):
+        ui.tabela("buckets", [("Nome", 3), ("Região", 1.5), ("Objetos", 1), ("Tamanho", 1), ("Usado por", 1.8)], linhas,
+                  localizar=len(linhas) > 8, vazio="Nenhum bucket no floci ainda.")
 
 
 def _tipo(chave: str) -> str:
@@ -103,7 +129,7 @@ def _tipo(chave: str) -> str:
     return particoes.formato_do_arquivo(chave) or (nome.rsplit(".", 1)[-1] if "." in nome else "—")
 
 
-def _aba_objetos(objetos, con, raiz, pasta: str) -> None:
+def _aba_objetos(objetos, con, bucket: str, pasta: str) -> None:
     subpastas, arquivos = particoes.navegar(objetos, pasta)
     linhas = [[ui.Link(f"📁 {sub}/", f"obj:{pasta}{sub}/", _ir_para, (f"{pasta}{sub}/",)), "Pasta", "—", "—"]
               for sub in subpastas]
@@ -117,12 +143,12 @@ def _aba_objetos(objetos, con, raiz, pasta: str) -> None:
 
     arquivo = st.session_state.get("arquivo")
     if arquivo and arquivo.startswith(pasta):
-        with ui.painel("previa", f"Prévia: {arquivo.rsplit('/', 1)[-1]}", descricao=f"s3://{s3.BUCKET}/{arquivo}"):
+        with ui.painel("previa", f"Prévia: {arquivo.rsplit('/', 1)[-1]}", descricao=f"s3://{bucket}/{arquivo}"):
             if particoes.formato_do_arquivo(arquivo) is None:
                 st.info("Prévia só para arquivos .parquet e .jsonl.")
                 return
             try:
-                st.dataframe(consultas.previa(con.cursor(), raiz, arquivo), hide_index=True)
+                st.dataframe(consultas.previa(con.cursor(), s3.raiz(bucket), arquivo), hide_index=True)
                 st.caption(f"Primeiras {consultas.LINHAS_PREVIA} linhas, no máximo.")
             except ValueError as erro:
                 st.warning(str(erro))
@@ -130,13 +156,15 @@ def _aba_objetos(objetos, con, raiz, pasta: str) -> None:
                 _mostrar_erro("Não consegui ler o arquivo.", erro)
 
 
-def _aba_particoes(objetos, datasets, con) -> None:
+def _aba_particoes(objetos, datasets, con, bucket: str) -> None:
     with ui.painel("particoes", "Partições", descricao="Uma linha por partição: quantos arquivos e quantos bytes ela tem."):
         if not datasets:
-            st.info("Ainda não há datasets (pastas com .parquet ou .jsonl) no bucket.")
+            st.info("Ainda não há datasets (pastas com .parquet ou .jsonl) neste bucket.")
             return
         repetidos = {d.prefixo for d in datasets if sum(o.prefixo == d.prefixo for o in datasets) > 1}
         rotulos = {d.nome_view: d.prefixo + (f" ({d.formato})" if d.prefixo in repetidos else "") for d in datasets}
+        if st.session_state.get("dataset") not in rotulos:
+            st.session_state.pop("dataset", None)        # trocou de bucket: o dataset escolhido antes não existe aqui
         nome = st.selectbox("Dataset", list(rotulos), format_func=rotulos.get, key="dataset")
         dataset = next(d for d in datasets if d.nome_view == nome)
         linhas = particoes.tabela_particoes(objetos, dataset.prefixo, dataset.formato)
@@ -150,8 +178,9 @@ def _aba_particoes(objetos, datasets, con) -> None:
                    f"{particoes.tamanho_legivel(int(tabela['bytes'].sum()))}")
         if st.button("Contar linhas por partição", key="contar"):
             campos = [c for c in particoes.CAMPOS if any(getattr(l, c) != particoes.SEM_PARTICAO for l in linhas)]
-            sql = (f'SELECT {", ".join(campos)}, count(*) AS linhas FROM {particoes.sql_nome(nome)} GROUP BY ALL ORDER BY ALL'
-                   if campos else f'SELECT count(*) AS linhas FROM {particoes.sql_nome(nome)}')
+            leitura = consultas.origem(s3.raiz(bucket), dataset)
+            sql = (f'SELECT {", ".join(campos)}, count(*) AS linhas FROM {leitura} GROUP BY ALL ORDER BY ALL'
+                   if campos else f'SELECT count(*) AS linhas FROM {leitura}')
             try:
                 with st.spinner("Contando linhas… (lê todos os arquivos do dataset)"):
                     contagem = consultas.executar(con.cursor(), sql, consultas.LIMITE_MAXIMO).tabela
@@ -160,33 +189,44 @@ def _aba_particoes(objetos, datasets, con) -> None:
                 _mostrar_erro("Não consegui contar.", erro)
 
 
-def _aba_propriedades(objetos, datasets) -> None:
+def _aba_propriedades(objetos, datasets, bucket: str) -> None:
     with ui.painel("bucket-visao", "Visão geral do bucket"):
         ui.pares({
-            "Nome": s3.BUCKET, "Região": s3.REGIAO, "Endpoint": s3.ENDPOINT, "Objetos": str(len(objetos)),
+            "Nome": bucket, "Região": s3.REGIAO, "Endpoint": s3.ENDPOINT, "Objetos": str(len(objetos)),
             "Tamanho total": particoes.tamanho_legivel(sum(o.tamanho for o in objetos)),
-            "Tabelas no catálogo": str(len(datasets)), "Acesso": "somente leitura",
+            "Datasets (pastas com dados)": str(len(datasets)),
+            "Usado por": "Data Catalog e Athena" if bucket == s3.BUCKET else "só pela tela S3",
+            "Acesso": "somente leitura",
         })
 
 
-def _tela_s3(objetos, datasets, con, raiz) -> None:
-    if not st.session_state.get("bucket_aberto"):
-        _lista_de_buckets(objetos)
+def _tela_s3() -> None:
+    try:
+        buckets = _buckets()
+        if not st.session_state.get("bucket_aberto"):
+            _lista_de_buckets(buckets)
+            return
+        bucket = st.session_state.get("bucket_sel") or s3.BUCKET
+        objetos = _listar(bucket)
+    except s3.S3Indisponivel as erro:
+        st.error(str(erro))
         return
     _contexto("s3-bucket")
+    datasets = particoes.datasets(o.chave for o in objetos)
+    con = _conexao_bucket(bucket)
     pasta = st.session_state.get("pasta", "")
     trilha = [("Buckets", "migalha:buckets", _ir_para, {"pasta": None}),
-              (s3.BUCKET, "migalha:", _ir_para, {"pasta": ""})]
+              (bucket, "migalha:", _ir_para, {"pasta": ""})]
     trilha += [(rotulo, f"migalha:{caminho}", _ir_para, {"pasta": caminho}) for rotulo, caminho in particoes.migalhas(pasta)]
     ui.trilha(trilha, "s3")
-    ui.titulo(s3.BUCKET)
+    ui.titulo(bucket)
     aba_objetos, aba_particoes, aba_propriedades = st.tabs(["Objetos", "Partições", "Propriedades"])
     with aba_objetos:
-        _aba_objetos(objetos, con, raiz, pasta)
+        _aba_objetos(objetos, con, bucket, pasta)
     with aba_particoes:
-        _aba_particoes(objetos, datasets, con)
+        _aba_particoes(objetos, datasets, con, bucket)
     with aba_propriedades:
-        _aba_propriedades(objetos, datasets)
+        _aba_propriedades(objetos, datasets, bucket)
 
 
 # ---------------------------------------------------------------- Athena ----------------------------------------------------------------
@@ -528,7 +568,7 @@ def _workflow_do_form() -> workflows.Workflow:
 
 
 def _encadear() -> None:
-    """Atalho: cada job depende do anterior, em sequência, como o executar_pipeline.py."""
+    """Atalho: cada job depende do anterior, em sequência, na ordem em que foram escolhidos."""
     escolhidos = list(st.session_state.get("wf_form_jobs", []))
     for anterior, job in zip([None] + escolhidos, escolhidos):
         st.session_state[f"wf_form_dep:{job}"] = [anterior] if anterior else []
@@ -692,7 +732,7 @@ def _tela_workflows() -> None:
         with titulo:
             ui.titulo("Workflows", len(lista), "Grafos de jobs salvos em "
                       f"<code>{_relativo(workflows.pasta_definicoes(pasta_jobs))}/</code>. Executar um workflow é como "
-                      "rodar o executar_pipeline.py, seguindo as dependências do grafo.")
+                      "rodar os jobs um depois do outro no terminal, mas seguindo as dependências do grafo.")
         botao.button("Criar workflow", key="criar_workflow", type="primary", on_click=_abrir_form,
                      args=(None, disponiveis))
         _avisos_workflow()
@@ -749,7 +789,7 @@ def _tela_workflows() -> None:
         arquivo = workflows.pasta_definicoes(pasta_jobs) / f"{wf.nome}.json"
         with ui.painel("definicao", _relativo(arquivo)):
             st.code(json.dumps(wf.para_dict(), ensure_ascii=False, indent=2), language="json")
-            st.caption("Para rodar pelo terminal, como o executar_pipeline.py:")
+            st.caption("Para rodar o mesmo workflow pelo terminal:")
             st.code(f"docker compose run --rm app python -m explorador.workflows {_relativo(arquivo)}", language="bash")
 
 
@@ -887,7 +927,10 @@ def _pagina() -> None:
 
 
 def _conteudo(tela: str) -> None:
-    if tela == TELA_WORKFLOWS:                 # jobs e workflows não dependem do bucket já ter dados
+    if tela == TELA_S3:                        # S3, jobs e workflows não dependem do bucket do datalake ter dados
+        _tela_s3()
+        return
+    if tela == TELA_WORKFLOWS:
         _tela_workflows()
         return
     if tela == TELA_JOBS:
@@ -900,7 +943,7 @@ def _conteudo(tela: str) -> None:
         st.error(str(erro))
         st.stop()
     if not objetos:
-        st.info("O bucket está vazio. Gere os eventos com "
+        st.info(f"O bucket {s3.BUCKET} está vazio. Gere os eventos com "
                 "`docker compose run --rm app python gerador/gerar_eventos.py` e clique em Recarregar.")
         st.stop()
 
@@ -912,9 +955,7 @@ def _conteudo(tela: str) -> None:
         _mostrar_erro("Não consegui preparar as tabelas no DuckDB.", erro)
         st.stop()
 
-    if tela == TELA_S3:
-        _tela_s3(objetos, datasets, con, raiz)
-    elif tela == TELA_CATALOGO:
+    if tela == TELA_CATALOGO:
         _tela_catalogo(objetos, datasets, colunas)
     else:
         _tela_athena(objetos, datasets, con, colunas)

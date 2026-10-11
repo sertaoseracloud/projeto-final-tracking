@@ -79,3 +79,30 @@ class SSLError(ConnectionError):
 def test_filhas_de_erro_de_conexao_viram_mensagem_amigavel():
     with pytest.raises(s3.S3Indisponivel, match="docker compose up -d floci"):
         s3.listar(cliente=S3Falso(erro=SSLError("certificado")))
+
+
+class S3ComBuckets:
+    def __init__(self, nomes=(), erro=None):
+        self.nomes, self.erro = list(nomes), erro
+
+    def list_buckets(self):
+        if self.erro:
+            raise self.erro
+        return {"Buckets": [{"Name": n} for n in self.nomes]}
+
+
+def test_listar_buckets_poe_o_do_datalake_primeiro():
+    nomes = s3.listar_buckets(cliente=S3ComBuckets(["arquivo-morto", s3.BUCKET, "brutos"]))
+    assert nomes == [s3.BUCKET, "arquivo-morto", "brutos"]
+
+
+def test_listar_buckets_com_floci_desligado_vira_mensagem_amigavel():
+    with pytest.raises(s3.S3Indisponivel, match="docker compose up -d floci"):
+        s3.listar_buckets(cliente=S3ComBuckets(erro=EndpointConnectionError("sem rede")))
+
+
+def test_listar_outro_bucket():
+    falso = S3Falso([{"Contents": [{"Key": "x.csv", "Size": 1, "LastModified": AGORA}]}])
+    assert s3.listar(cliente=falso, bucket="brutos") == [Objeto("x.csv", 1, AGORA)]
+    assert falso.paginador.argumentos == {"Bucket": "brutos", "Prefix": ""}
+    assert s3.raiz("brutos") == "s3://brutos"

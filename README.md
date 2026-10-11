@@ -33,7 +33,7 @@ A tabela abaixo mostra as pastas principais do repositório.
 | [`site/`](site/index.html) | a landing page de exemplo. Abra no navegador, navegue e veja cada evento nascer no painel lateral. O botão **Mapa de calor** do painel mostra, por cima da página, a sua Gold de cliques e de rolagem (requisito R11) |
 | [`gerador/`](gerador/README.md) | o coletor simulado: popula o bucket com 14 dias de eventos, inclusive com defeitos |
 | [`pipeline/`](pipeline/README.md) | onde o datalake é construído |
-| [`explorador/`](explorador/README.md) | um console de estudo no estilo do S3, do Glue e do Athena: ver os arquivos, o catálogo de tabelas, rodar os seus jobs e fazer consultas SQL (http://localhost:8501) |
+| [`explorador/`](explorador/README.md) | um console de estudo no estilo do S3, do Glue e do Athena (http://localhost:8501): ver os arquivos de todos os buckets, o catálogo de tabelas, rodar os seus jobs, juntá-los em **workflows** e fazer consultas SQL. Tem tutorial em cada tela e opções de acessibilidade |
 | `docs/` | [enunciado](docs/ENUNCIADO.md) e [contrato do evento](docs/CONTRATO_EVENTO.md) |
 
 Em outras palavras: `site/` e `gerador/` produzem os dados; você escreve o código em `pipeline/`; `docs/` diz o que construir.
@@ -44,18 +44,20 @@ flowchart TB
         site["site/<br/>página de exemplo"]
         gerador["gerador/<br/>simula 14 dias de visitas"]
         comum["pipeline/comum.py<br/>peças reutilizáveis"]
-        explorador["explorador/<br/>olhar o bucket"]
+        explorador["explorador/<br/>console: olhar o bucket,<br/>rodar jobs e workflows"]
         docs["docs/<br/>enunciado e contrato"]
     end
     subgraph SEU["Você constrói"]
         jobs["pipeline/seus_jobs.py<br/>Bronze, Silver, Golds"]
+        workflow["pipeline/workflows/*.json<br/>a ordem dos jobs (opcional)"]
         relatorio["RELATORIO.md"]
     end
     gerador -->|grava eventos| bucket[("bucket S3<br/>datalake-tracking")]
     site -->|exporta JSONL| bucket
     comum --> jobs
     jobs <-->|lê e grava pelo Spark| bucket
-    explorador -->|só lê| bucket
+    explorador -->|lê, e grava só pelos seus jobs| bucket
+    workflow -.->|ordem| jobs
     docs -.->|diz o que construir| jobs
 ```
 

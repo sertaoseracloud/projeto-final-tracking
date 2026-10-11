@@ -11,7 +11,7 @@ até `paralelo` jobs ao mesmo tempo. Se um job falha (ou alguém clica em Parar)
 os que já rodam terminam e o resto fica "Não executado". Cada etapa é uma execução de job comum
 (glue.iniciar), então aparece também na tela Jobs ETL, marcada com a origem.
 
-Também roda pelo terminal, como o executar_pipeline.py:
+Também roda pelo terminal:
 
     docker compose run --rm app python -m explorador.workflows pipeline/workflows/medalhao.json
 """

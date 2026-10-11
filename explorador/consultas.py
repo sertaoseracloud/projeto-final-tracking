@@ -137,7 +137,8 @@ def conectar(s3: bool = True, endpoint: str = "http://floci:4566", chave: str = 
     return con
 
 
-def _origem(raiz: str, dataset: Dataset) -> str:
+def origem(raiz: str, dataset: Dataset) -> str:
+    """A leitura de um dataset (read_parquet ou read_json_auto), usada nas views e na contagem por partição."""
     extensao = "parquet" if dataset.formato == "parquet" else "jsonl"
     funcao = "read_parquet" if dataset.formato == "parquet" else "read_json_auto"
     # Particionado: só as pastas k=v, para não misturar as vizinhas (silver/itens ao lado de silver/event_name=…).
@@ -150,11 +151,11 @@ def criar_views(con: duckdb.DuckDBPyConnection, raiz: str, datasets: list[Datase
     """Uma view por dataset, num schema por camada (como os bancos do Glue): silver.eventos, gold.funil_compra…"""
     views = {}
     for dataset in datasets:
-        origem = _origem(raiz, dataset)
+        leitura = origem(raiz, dataset)
         banco, _ = banco_e_tabela(dataset.nome_view)
         con.sql(f'CREATE SCHEMA IF NOT EXISTS "{banco}"')
-        con.sql(f"CREATE OR REPLACE VIEW {sql_nome(dataset.nome_view)} AS SELECT * FROM {origem}")
-        views[dataset.nome_view] = origem
+        con.sql(f"CREATE OR REPLACE VIEW {sql_nome(dataset.nome_view)} AS SELECT * FROM {leitura}")
+        views[dataset.nome_view] = leitura
     return views
 
 
