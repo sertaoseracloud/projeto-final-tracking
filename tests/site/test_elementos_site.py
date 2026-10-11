@@ -59,3 +59,9 @@ def test_overlay_redesenha_quando_o_conteudo_muda_de_tamanho():
 def test_overlay_redesenha_a_cada_interacao_mesmo_sem_resizeobserver():
     assert '["click", "input", "change"].forEach' in HTML
     assert "if (calor.ligado) redesenharCalorDepois();" in HTML
+
+
+def test_avisos_do_site_falam_a_lingua_do_aluno():
+    assert "jobs 07 e 08" not in HTML
+    assert "job de exportação do mapa de calor (R11)" in HTML
+    assert "O mapa não tem cliques" in HTML        # landing antiga, sem element_id

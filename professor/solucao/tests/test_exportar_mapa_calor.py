@@ -29,3 +29,14 @@ def test_gravar_cria_a_pasta_e_substitui_o_arquivo(exportar, tmp_path):
 def test_destino_e_a_pasta_site_do_repositorio(exportar):
     assert exportar.DESTINO.parts[-2:] == ("site", "mapa_calor.js")
     assert (exportar.DESTINO.parent / "index.html").exists()
+
+
+def test_avisos_quando_o_mapa_vem_vazio(exportar):
+    assert exportar.avisos([{"pagina": "/"}], [{"marco": 0}]) == []
+    aviso, = exportar.avisos([], [{"marco": 0}])
+    assert "element_id" in aviso and "gerar_eventos.py" in aviso
+
+
+def test_gitignore_cobre_o_temporario_da_gravacao(exportar):
+    ignorados = (exportar.DESTINO.parents[1] / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert "site/mapa_calor.js" in ignorados and "site/mapa_calor.js.tmp" in ignorados

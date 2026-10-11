@@ -1016,13 +1016,18 @@ body.painel-aberto .alternar-painel { right: 416px; }
 
   document.getElementById("mapa-calor").addEventListener("click", function () {
     if (!window.MAPA_CALOR) {
-      toast("Ainda não há mapa. Rode o pipeline (jobs 07 e 08) para gerar site/mapa_calor.js e recarregue a página.");
+      toast("Ainda não há mapa. Rode o job de exportação do mapa de calor (R11) para gerar site/mapa_calor.js e recarregue a página.");
       return;
     }
     calor.ligado = !calor.ligado;
     this.classList.toggle("ligado", calor.ligado);
     desenharCalor();
-    if (calor.ligado) toast("Mapa de calor gerado em " + window.MAPA_CALOR.gerado_em);
+    if (!calor.ligado) return;
+    if (!(window.MAPA_CALOR.cliques || []).length) {
+      toast("O mapa não tem cliques: a landing foi gerada antes do element_id. Rode o gerador de novo e o pipeline inteiro.");
+    } else {
+      toast("Mapa de calor gerado em " + window.MAPA_CALOR.gerado_em);
+    }
   });
   var tCalor;
   function redesenharCalorDepois() { clearTimeout(tCalor); tCalor = setTimeout(desenharCalor, 120); }

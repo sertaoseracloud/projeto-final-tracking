@@ -33,6 +33,14 @@ def gravar(texto: str, destino: Path) -> None:
     os.replace(temporario, destino)
 
 
+def avisos(cliques: list[dict], rolagem: list[dict]) -> list[str]:
+    """Explica um mapa vazio em vez de deixar o site sem cor e sem motivo."""
+    if cliques:
+        return []
+    return ["Nenhum clique com element_id na Silver: a landing provavelmente foi gerada antes do element_id. "
+            "Rode de novo `python gerador/gerar_eventos.py` e o pipeline inteiro."]
+
+
 def _linhas(spark, tabela: str, ordem: list[str]) -> list[dict]:
     return [linha.asDict() for linha in spark.read.parquet(caminho(f"gold/{tabela}")).orderBy(*ordem).collect()]
 
@@ -49,6 +57,8 @@ def main() -> None:
     gravar(montar_js(cliques, rolagem, gerado_em), DESTINO)
     titulo("Mapa de calor exportado")
     print(f"{len(cliques)} elementos e {len(rolagem)} marcos de rolagem em {DESTINO}")
+    for aviso in avisos(cliques, rolagem):
+        print(f"AVISO: {aviso}")
     print("Abra site/index.html e clique em \"Mapa de calor\" no painel.")
 
 
