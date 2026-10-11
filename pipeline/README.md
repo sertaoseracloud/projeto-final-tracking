@@ -87,3 +87,24 @@ Rode estes três comandos, nesta ordem:
 1. `docker compose up -d floci` (liga o S3 local)
 2. `docker compose run --rm app python gerador/gerar_eventos.py` (grava os eventos na landing)
 3. `docker compose run --rm app python infra/verificar_ambiente.py`, que precisa mostrar três linhas `[ok]`
+
+## Exportar um resultado pequeno para o site
+
+O requisito R11 pede um arquivo `site/mapa_calor.js` com os números do mapa de calor. Esse arquivo não fica no S3: o site lê do disco. Então o job lê a Gold pelo Spark e, no fim, grava um arquivo comum com Python.
+
+- **Trazer o resultado para o Python:** `collect()` traz as linhas de um DataFrame do Spark para uma lista do Python. Use só com tabelas pequenas, como as duas do mapa de calor, que têm poucas dezenas de linhas. **Nunca** faça isso com a Bronze ou a Silver: são dezenas de milhares de linhas e o job fica lento ou estoura a memória.
+- **Onde gravar:** o contêiner enxerga o repositório em `/projeto`, então `site/` é `/projeto/site/`. A partir de um arquivo em `pipeline/`, o caminho é `Path(__file__).resolve().parents[1] / "site" / "mapa_calor.js"`.
+
+```python
+import json
+from pathlib import Path
+
+cliques = [linha.asDict() for linha in spark.read.parquet("s3a://datalake-tracking/gold/mapa_calor_cliques").collect()]
+rolagem = [linha.asDict() for linha in spark.read.parquet("s3a://datalake-tracking/gold/mapa_calor_rolagem").collect()]
+dados = {"gerado_em": "2026-10-10T21:00:00Z", "cliques": cliques, "rolagem": rolagem}
+
+destino = Path(__file__).resolve().parents[1] / "site" / "mapa_calor.js"
+destino.write_text("window.MAPA_CALOR = " + json.dumps(dados, ensure_ascii=False) + ";\n", encoding="utf-8")
+```
+
+Depois, abra `site/index.html` no navegador e clique em **Mapa de calor**, no painel lateral. Se você rodar o job de novo, recarregue a página para ver os números novos.
