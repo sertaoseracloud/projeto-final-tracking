@@ -97,14 +97,20 @@ O requisito R11 pede um arquivo `site/mapa_calor.js` com os números do mapa de 
 
 ```python
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 cliques = [linha.asDict() for linha in spark.read.parquet("s3a://datalake-tracking/gold/mapa_calor_cliques").collect()]
 rolagem = [linha.asDict() for linha in spark.read.parquet("s3a://datalake-tracking/gold/mapa_calor_rolagem").collect()]
-dados = {"gerado_em": "2026-10-10T21:00:00Z", "cliques": cliques, "rolagem": rolagem}
+agora = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+dados = {"gerado_em": agora, "cliques": cliques, "rolagem": rolagem}
 
 destino = Path(__file__).resolve().parents[1] / "site" / "mapa_calor.js"
-destino.write_text("window.MAPA_CALOR = " + json.dumps(dados, ensure_ascii=False) + ";\n", encoding="utf-8")
+texto = json.dumps(dados, ensure_ascii=False, default=float)
+destino.write_text("window.MAPA_CALOR = " + texto + ";\n", encoding="utf-8")
 ```
+
+- `default=float` cuida das colunas do tipo `Decimal` (por exemplo, quando você usa `cast("decimal(…)")`): o `json.dumps` não sabe escrever `Decimal` e daria `TypeError`. Prefira gravar as taxas da Gold como `double`.
+- Se o mapa sair sem cliques, a sua landing provavelmente foi gerada antes do campo `element_id` existir. Rode de novo `python gerador/gerar_eventos.py` e o pipeline inteiro.
 
 Depois, abra `site/index.html` no navegador e clique em **Mapa de calor**, no painel lateral. Se você rodar o job de novo, recarregue a página para ver os números novos.

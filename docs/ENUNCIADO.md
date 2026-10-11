@@ -283,6 +283,7 @@ Por que isso importa: "receita" ou "canal" podem ser calculados de vários jeito
   ```
 
   - Cada linha é um objeto JSON com os nomes de coluna **exatos** da tabela 5.3: `pagina`, `element_id`, `cliques`, `sessoes`, `sessoes_na_pagina`, `taxa_clique`, `intensidade` em `cliques`; `pagina`, `marco`, `sessoes_que_chegaram`, `pct_sessoes` em `rolagem`. O site lê esses nomes; com outro nome, o mapa não acende.
+  - Se a sua landing foi gerada antes do campo `element_id` existir, o mapa sai sem cliques. Rode de novo o gerador (`python gerador/gerar_eventos.py`) e o pipeline inteiro.
   - O job lê a Gold pelo Spark (R1) e só grava o arquivo local no fim. `site/mapa_calor.js` é um resultado gerado: não entra no git.
   - *Em outras palavras:* o site de exemplo já tem o botão **Mapa de calor** pronto no painel lateral. Ele só precisa de um arquivo com os números da sua Gold. As duas tabelas têm poucas dezenas de linhas, então o job pode trazê-las do Spark para o Python com `collect()` e escrever o arquivo com `json.dumps`. O [pipeline/README.md](../pipeline/README.md#exportar-um-resultado-pequeno-para-o-site) mostra como.
 
