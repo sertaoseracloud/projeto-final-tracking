@@ -132,11 +132,12 @@ body.painel-aberto .alternar-painel { right: 416px; }
 [hidden] { display: none !important; }
 /* ---------------- mapa de calor (overlay; não recebe cliques) ---------------- */
 #calor-raiz { position: absolute; left: 0; top: 0; width: 0; height: 0; overflow: hidden; pointer-events: none; }
-.calor-camada { position: absolute; z-index: 30; pointer-events: none; border-radius: 10px; outline: 2px solid rgba(0,0,0,.2); }
-.calor-camada.no-modal { z-index: 51; }
-.calor-etiqueta { position: absolute; top: -12px; right: -6px; background: #111827; color: #fff; font: 600 11px/1.4 system-ui, sans-serif; padding: 2px 7px; border-radius: 6px; white-space: nowrap; }
-.calor-faixa { position: absolute; z-index: 30; width: 72px; pointer-events: none; border-left: 2px solid rgba(0,0,0,.25); }
-.calor-marco { position: absolute; right: 6px; transform: translateY(-50%); background: #111827; color: #fff; font: 600 11px/1.4 system-ui, sans-serif; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
+.calor-canvas { position: absolute; z-index: 30; pointer-events: none; }
+.calor-canvas.no-modal { z-index: 51; }
+.calor-etiqueta { position: absolute; z-index: 31; pointer-events: none; background: #fff; color: #0f172a; border: 1px solid #1e3a8a; font: 700 10px/1.3 system-ui, sans-serif; padding: 0 4px; white-space: nowrap; }
+.calor-etiqueta.no-modal { z-index: 52; }
+.calor-faixa { position: absolute; z-index: 31; width: 72px; pointer-events: none; border-left: 1px solid rgba(255,255,255,.35); }
+.calor-marco { position: absolute; right: 6px; transform: translateY(-50%); background: #fff; color: #0f172a; border: 1px solid #1e3a8a; font: 700 10px/1.3 system-ui, sans-serif; padding: 0 4px; white-space: nowrap; }
 #mapa-calor.ligado { background: #b91c1c; color: #fff; }
 </style>
 </head>
@@ -879,11 +880,82 @@ body.painel-aberto .alternar-painel { right: 416px; }
   document.body.appendChild($calorRaiz);
 
   function paginaAtual() { var r = rotaAtual(); return r === "landing" ? "/" : "/" + r; }
-  function corCalor(i) {             // 0 = azul (frio) … 1 = vermelho (quente)
-    var t = Math.max(0, Math.min(1, +i || 0));
-    return "hsla(" + Math.round(240 - 240 * t) + ", 90%, 50%, .45)";
-  }
   function pct(v) { return v === null || v === undefined ? "—" : (v * 100).toFixed(1).replace(".", ",") + "%"; }
+
+  // escala clássica de mapa de calor: azul → ciano → verde → amarelo → vermelho (256 cores)
+  var PALETA_CALOR = (function () {
+    var c = document.createElement("canvas");
+    c.width = 256; c.height = 1;
+    var g = c.getContext("2d"), grad = g.createLinearGradient(0, 0, 256, 0);
+    [[0, "#0000ff"], [0.3, "#00c8ff"], [0.5, "#00ff40"], [0.72, "#ffff00"], [1, "#ff0000"]]
+      .forEach(function (p) { grad.addColorStop(p[0], p[1]); });
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 256, 1);
+    return g.getImageData(0, 0, 256, 1).data;
+  })();
+  var ESCALA_CALOR = 0.25;            // desenha a 1/4 e estica: mais leve, e o calor já fica difuso
+  var VEU = [18, 24, 110];            // azul escuro por cima da página toda
+
+  // a Gold é por elemento: cada elemento vira alguns pontos de calor espalhados pela área dele
+  function pontosDoElemento(r, intensidade) {
+    var colunas = Math.max(1, Math.min(6, Math.round(r.width / 60)));
+    var linhas = Math.max(1, Math.min(4, Math.round(r.height / 50)));
+    var raio = Math.max(60, Math.min(190, Math.min(r.width, r.height) * 0.9 + 50));
+    var peso = Math.max(0.12, +intensidade || 0) * 0.85 / Math.sqrt(colunas * linhas);
+    var pontos = [];
+    for (var i = 0; i < colunas; i++) {
+      for (var j = 0; j < linhas; j++) {
+        pontos.push({ x: r.left + window.scrollX + r.width * (i + 0.5) / colunas,
+                      y: r.top + window.scrollY + r.height * (j + 0.5) / linhas, raio: raio, peso: peso });
+      }
+    }
+    return pontos;
+  }
+
+  // 1º passo: cada ponto soma uma mancha difusa (só alfa). 2º passo: o alfa acumulado vira cor da paleta.
+  function pintarCalor(classe, esquerda, topo, largura, altura, pontos, comVeu) {
+    var w = Math.max(1, Math.ceil(largura * ESCALA_CALOR)), h = Math.max(1, Math.ceil(altura * ESCALA_CALOR));
+    var cv = document.createElement("canvas");
+    cv.className = classe;
+    cv.width = w; cv.height = h;
+    cv.style.left = esquerda + "px"; cv.style.top = topo + "px";
+    cv.style.width = largura + "px"; cv.style.height = altura + "px";
+    var g = cv.getContext("2d");
+    pontos.forEach(function (p) {
+      var x = (p.x - esquerda) * ESCALA_CALOR, y = (p.y - topo) * ESCALA_CALOR, raio = p.raio * ESCALA_CALOR;
+      var grad = g.createRadialGradient(x, y, 0, x, y, raio);
+      grad.addColorStop(0, "rgba(0,0,0," + Math.min(1, p.peso) + ")");
+      grad.addColorStop(1, "rgba(0,0,0,0)");
+      g.fillStyle = grad;
+      g.fillRect(x - raio, y - raio, raio * 2, raio * 2);
+    });
+    var img = g.getImageData(0, 0, w, h), d = img.data, maximo = 0;
+    for (var m = 3; m < d.length; m += 4) if (d[m] > maximo) maximo = d[m];
+    var ganho = maximo ? 255 / maximo : 1;                     // o ponto mais quente da tela vira vermelho
+    for (var k = 0; k < d.length; k += 4) {
+      var a = Math.min(255, Math.round(d[k + 3] * ganho)), o = a * 4, t = Math.min(1, a / 40);   // t: transição do véu para a paleta
+      if (comVeu) {
+        d[k] = VEU[0] + (PALETA_CALOR[o] - VEU[0]) * t;
+        d[k + 1] = VEU[1] + (PALETA_CALOR[o + 1] - VEU[1]) * t;
+        d[k + 2] = VEU[2] + (PALETA_CALOR[o + 2] - VEU[2]) * t;
+        d[k + 3] = Math.min(235, 150 + a);
+      } else {
+        d[k] = PALETA_CALOR[o]; d[k + 1] = PALETA_CALOR[o + 1]; d[k + 2] = PALETA_CALOR[o + 2];
+        d[k + 3] = a < 6 ? 0 : Math.min(220, a * 2 + 40);
+      }
+    }
+    g.putImageData(img, 0, 0);
+    $calorRaiz.appendChild(cv);
+  }
+
+  function etiquetaCalor(r, texto, noModal) {
+    var e = document.createElement("span");
+    e.className = "calor-etiqueta" + (noModal ? " no-modal" : "");
+    e.style.left = (r.left + window.scrollX) + "px";
+    e.style.top = (r.bottom + window.scrollY + 2) + "px";
+    e.textContent = texto;
+    $calorRaiz.appendChild(e);
+  }
 
   function desenharCalor() {
     $calorRaiz.innerHTML = "";
@@ -895,25 +967,22 @@ body.painel-aberto .alternar-painel { right: 416px; }
     var doc = document.documentElement;
     $calorRaiz.style.width = doc.scrollWidth + "px";
     $calorRaiz.style.height = doc.scrollHeight + "px";
-    var pagina = paginaAtual(), porElemento = {};
+    var pagina = paginaAtual(), porElemento = {}, pontos = [], pontosModal = [], caixaModal = null;
     (window.MAPA_CALOR.cliques || []).forEach(function (l) { if (l.pagina === pagina) porElemento[l.element_id] = l; });
     document.querySelectorAll("[data-heat]").forEach(function (el) {
       var l = porElemento[el.getAttribute("data-heat")];
       var r = el.getBoundingClientRect();
       if (!l || !r.width || !r.height) return;          // sem dado, escondido ou de outra tela
-      var c = document.createElement("div");
-      c.className = "calor-camada" + (el.closest("#modal") ? " no-modal" : "");
-      c.style.left = (r.left + window.scrollX) + "px";
-      c.style.top = (r.top + window.scrollY) + "px";
-      c.style.width = r.width + "px";
-      c.style.height = r.height + "px";
-      c.style.background = corCalor(l.intensidade);
-      var e = document.createElement("span");
-      e.className = "calor-etiqueta";
-      e.textContent = l.cliques + " cliques · " + pct(l.taxa_clique) + " das sessões";
-      c.appendChild(e);
-      $calorRaiz.appendChild(c);
+      var noModal = !!el.closest("#modal");
+      if (noModal) caixaModal = el.closest(".modal").getBoundingClientRect();
+      Array.prototype.push.apply(noModal ? pontosModal : pontos, pontosDoElemento(r, l.intensidade));
+      etiquetaCalor(r, pct(l.taxa_clique), noModal);
     });
+    pintarCalor("calor-canvas", 0, 0, doc.scrollWidth, doc.scrollHeight, pontos, true);
+    if (pontosModal.length && caixaModal) {               // o modal fica acima do véu: calor dele num canvas próprio
+      pintarCalor("calor-canvas no-modal", caixaModal.left + window.scrollX, caixaModal.top + window.scrollY,
+                  caixaModal.width, caixaModal.height, pontosModal, false);
+    }
     if (pagina === "/") desenharRolagem();
   }
 
@@ -931,7 +1000,7 @@ body.painel-aberto .alternar-painel { right: 416px; }
     faixa.style.top = "0px";
     faixa.style.height = altura + "px";
     var paradas = linhas.map(function (l) {
-      return "rgba(17,24,39," + (0.55 * (1 - (l.pct_sessoes || 0))).toFixed(3) + ") " + (y(l.marco) / altura * 100).toFixed(2) + "%";
+      return "rgba(5,8,40," + (0.75 * (1 - (l.pct_sessoes || 0))).toFixed(3) + ") " + (y(l.marco) / altura * 100).toFixed(2) + "%";
     });
     faixa.style.background = "linear-gradient(to bottom, " + paradas.join(", ") + ")";
     linhas.forEach(function (l) {

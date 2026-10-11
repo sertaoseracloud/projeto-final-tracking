@@ -31,8 +31,17 @@ def test_site_carrega_o_mapa_antes_do_script_principal_e_tem_o_botao():
 
 
 def test_camadas_do_overlay_nao_recebem_clique():
-    assert re.search(r"\.calor-camada\s*\{[^}]*pointer-events:\s*none", HTML)
+    assert re.search(r"\.calor-canvas\s*\{[^}]*pointer-events:\s*none", HTML)
+    assert re.search(r"\.calor-etiqueta\s*\{[^}]*pointer-events:\s*none", HTML)
     assert re.search(r"\.calor-faixa\s*\{[^}]*pointer-events:\s*none", HTML)
+
+
+def test_mapa_e_desenhado_em_canvas_com_manchas_coloridas():
+    assert 'document.createElement("canvas")' in HTML
+    assert "createRadialGradient" in HTML          # cada ponto de calor é uma mancha difusa
+    assert "getImageData" in HTML                  # o calor acumulado é pintado com a paleta
+    assert "PALETA_CALOR" in HTML
+    assert ".calor-camada" not in HTML             # os retângulos antigos saíram
 
 
 def test_overlay_nao_aumenta_a_pagina_nem_cria_contexto_abaixo_do_modal():
