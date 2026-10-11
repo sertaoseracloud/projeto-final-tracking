@@ -8,8 +8,9 @@ import pytest
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 
-from explorador import consultas, s3, workflows
+from explorador import consultas, recursos, s3, workflows
 from explorador.particoes import Objeto
+from explorador.tests.s3_falso import S3Falso
 
 APP = str(Path(__file__).resolve().parents[1] / "app.py")
 
@@ -27,6 +28,14 @@ def limpar_cache():
 def so_o_bucket_do_datalake(monkeypatch):
     """Sem isto a tela S3 perguntaria ao floci de verdade quais buckets existem."""
     monkeypatch.setattr(s3, "listar_buckets", lambda *_, **__: [s3.BUCKET])
+
+
+@pytest.fixture(autouse=True)
+def floci_falso(monkeypatch):
+    """Os scripts e workflows dos jobs vão para um S3 em memória, nunca para o floci de verdade."""
+    falso = S3Falso()
+    monkeypatch.setattr(recursos, "_cliente", lambda: falso)
+    return falso
 
 
 def _rodar():
@@ -210,9 +219,13 @@ def test_jobs_lista_executa_e_mostra_o_log(bucket_local, tmp_path, monkeypatch):
     at = _rodar()
     at.radio(key="tela").set_value(JOBS).run()
     assert not at.exception
+    assert not [b for b in at.button if b.key and b.key.startswith("job:")]   # nada no floci antes do sync
+    at.button(key="sincronizar-jobs").click().run()
+    assert any("Sincronizado" in t.value for t in at.toast)                # aviso rápido, que some sozinho
     assert [b.key for b in at.button if b.key and b.key.startswith("job:")] == ["job:bronze"]
     at.button(key="job:bronze").click().run()
     assert [t.label for t in at.tabs] == ["Execuções", "Script"]
+    assert any("bronze gravada" in c.value for c in at.code)           # o script mostrado é o do floci
     at.button(key="executar_job").click().run()
     for _ in range(100):
         at.run()
@@ -354,11 +367,12 @@ def pasta_workflows(tmp_path, monkeypatch):
     return jobs
 
 
-def _workflows(at):
-    return at.radio(key="tela").set_value(WORKFLOWS).run()
+def _workflows(at, sincronizar=True):
+    at = at.radio(key="tela").set_value(WORKFLOWS).run()
+    return at.button(key="sincronizar-workflows").click().run() if sincronizar else at
 
 
-def test_cria_workflow_pelo_console_e_salva_o_json(pasta_workflows):
+def test_cria_workflow_pelo_console_e_salva_o_json(pasta_workflows, floci_falso):
     at = _workflows(_rodar())
     assert not at.exception
     at.button(key="criar_workflow").click().run()
@@ -372,6 +386,8 @@ def test_cria_workflow_pelo_console_e_salva_o_json(pasta_workflows):
     assert salvo["etapas"] == [{"job": "bronze", "depende_de": []}, {"job": "silver", "depende_de": ["bronze"]},
                                {"job": "gold", "depende_de": ["silver"]}]
     assert at.session_state["wf_sel"] == "medalhao"                  # abre o workflow recém-criado
+    no_floci = json.loads(floci_falso.buckets[recursos.BUCKET]["workflows/medalhao.json"])
+    assert no_floci["etapas"] == salvo["etapas"]                      # salvo no floci e na pasta local
     assert [t.label for t in at.tabs] == ["Execução", "Histórico", "Definição"]
 
 
@@ -423,7 +439,7 @@ def test_tela_s3_mostra_todos_os_buckets_e_abre_outro(bucket_local, monkeypatch)
     assert not at.exception
     assert at.button(key="bucket:rascunho") and at.button(key=f"bucket:{s3.BUCKET}")
     textos = " ".join(str(m.value) for m in at.markdown)
-    assert "Data Catalog e Athena" in textos and "só nesta tela" in textos
+    assert "datalake: Data Catalog e Athena" in textos and textos.count("Data Catalog e Athena") >= 2
     at.button(key="bucket:rascunho").click().run()
     at.button(key="obj:brutos/").click().run()
     at.button(key="obj:brutos/a.parquet").click().run()
@@ -483,3 +499,17 @@ def test_tabela_ilegivel_de_um_bucket_vira_aviso_sem_derrubar_o_catalogo(dois_bu
     assert not at.exception
     assert any("rascunho_turma.quebrado" in str(m.value) for m in at.markdown)   # o aviso cita a tabela
     assert at.button(key="banco:silver")                                         # o resto continua
+
+
+def test_bucket_de_recursos_aparece_no_s3_mas_nao_vira_banco(bucket_local, monkeypatch):
+    por_bucket = {s3.BUCKET: s3.listar(),
+                  recursos.BUCKET: [Objeto("scripts/bronze.py", 10), Objeto("workflows/medalhao.json", 10),
+                                    Objeto("scripts/sobra.parquet", 10)]}
+    monkeypatch.setattr(s3, "listar_buckets", lambda *_, **__: [s3.BUCKET, recursos.BUCKET])
+    monkeypatch.setattr(s3, "listar", lambda prefixo="", cliente=None, bucket=None: por_bucket[bucket or s3.BUCKET])
+    at = _rodar()
+    assert at.button(key=f"bucket:{recursos.BUCKET}")
+    assert any("scripts e workflows" in str(m.value) for m in at.markdown)
+    at.radio(key="tela").set_value(CATALOGO).run()
+    assert not at.exception
+    assert not [b for b in at.button if b.key and b.key.startswith("banco:glue")]   # nem com um .parquet perdido lá

@@ -25,13 +25,12 @@ Para medir as armadilhas:
 docker compose run --rm app python professor/solucao/medir_armadilhas.py
 ```
 
-Para rodar os jobs da solução pela tela **Glue · Jobs ETL** do explorador (em vez do `pipeline/` do aluno), suba o explorador apontando para a pasta da solução:
+Para rodar os jobs da solução pelo explorador (telas **Glue · Jobs ETL** e **Glue · Workflows**), copie a solução para `pipeline/` e clique em **⟳ Sincronizar**. O passo a passo está no [README do professor](README.md#mostrar-a-solução-no-explorador):
 
 ```bash
-EXPLORADOR_JOBS=professor/solucao docker compose up -d --force-recreate explorador
+docker compose run --rm app python professor/usar_solucao.py              # antes da aula
+docker compose run --rm app python professor/usar_solucao.py --desfazer   # depois, antes de gerar o pacote
 ```
-
-No PowerShell: `$env:EXPLORADOR_JOBS="professor/solucao"; docker compose up -d --force-recreate explorador`. Para voltar ao padrão (`pipeline/`), rode de novo sem a variável.
 
 ## 2. Dados de entrada
 

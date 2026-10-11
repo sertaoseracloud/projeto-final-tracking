@@ -14,9 +14,9 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from comum import caminho, criar_sessao, exigir_camada, titulo
+from comum import arquivo_do_projeto, caminho, criar_sessao, exigir_camada, titulo
 
-DESTINO = Path(__file__).resolve().parents[2] / "site" / "mapa_calor.js"
+DESTINO = arquivo_do_projeto("site/mapa_calor.js")       # e não Path(__file__): o script pode vir do floci
 PREFIXO = "window.MAPA_CALOR = "
 
 

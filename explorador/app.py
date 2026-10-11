@@ -27,7 +27,7 @@ import streamlit as st
 
 from streamlit.runtime.scriptrunner_utils.exceptions import RerunException, StopException
 
-from explorador import athena, consultas, glue, particoes, preferencias, s3, tutorial, ui, workflows
+from explorador import athena, consultas, glue, particoes, preferencias, recursos, s3, tutorial, ui, workflows
 from explorador.tutorial import TELA_ATHENA, TELA_CATALOGO, TELA_JOBS, TELA_S3, TELA_WORKFLOWS
 
 RAIZ = Path(__file__).resolve().parents[1]
@@ -100,6 +100,14 @@ def _conexao_bucket(bucket: str):
     return con
 
 
+def _uso_do_bucket(bucket: str) -> str:
+    if bucket == s3.BUCKET:
+        return "datalake: Data Catalog e Athena"
+    if bucket == recursos.BUCKET:
+        return "scripts e workflows (Jobs ETL e Workflows)"
+    return "Data Catalog e Athena"
+
+
 def _ir_para(pasta: str | None, bucket: str | None = None) -> None:
     """pasta None = lista de buckets; "" = raiz do bucket; "silver/…/" = uma pasta."""
     if bucket is not None:
@@ -113,15 +121,16 @@ def _lista_de_buckets(buckets: list[str]) -> None:
     _contexto("s3-buckets")
     ui.trilha([("Buckets", None, None, {})], "s3")
     ui.titulo("Buckets", len(buckets), "Os buckets são contêineres de objetos armazenados no S3, aqui emulado pelo "
-              f"floci. Todos aparecem aqui, só para leitura; o <code>{s3.BUCKET}</code> é o do datalake, o que "
-              "alimenta o Data Catalog e o Athena.")
+              f"floci. Todos aparecem aqui, só para leitura: o <code>{s3.BUCKET}</code> é o do datalake, o "
+              f"<code>{recursos.BUCKET}</code> guarda os scripts e workflows dos jobs, e os demais também viram "
+              "bancos no Data Catalog.")
     linhas, vazio_datalake = [], s3.BUCKET not in buckets
     for nome in buckets:
         objetos = _listar(nome)
         vazio_datalake = vazio_datalake or (nome == s3.BUCKET and not objetos)
         linhas.append([ui.Link(nome, f"bucket:{nome}", _ir_para, ("", nome)), s3.REGIAO, str(len(objetos)),
                        particoes.tamanho_legivel(sum(o.tamanho for o in objetos)),
-                       "Data Catalog e Athena" if nome == s3.BUCKET else "só nesta tela"])
+                       _uso_do_bucket(nome)])
     if vazio_datalake:
         st.info(f"O bucket {s3.BUCKET} está vazio (ou ainda não existe). Gere os eventos com "
                 "`docker compose run --rm app python gerador/gerar_eventos.py` e clique em Recarregar.")
@@ -201,7 +210,7 @@ def _aba_propriedades(objetos, datasets, bucket: str) -> None:
             "Nome": bucket, "Região": s3.REGIAO, "Endpoint": s3.ENDPOINT, "Objetos": str(len(objetos)),
             "Tamanho total": particoes.tamanho_legivel(sum(o.tamanho for o in objetos)),
             "Datasets (pastas com dados)": str(len(datasets)),
-            "Usado por": "Data Catalog e Athena" if bucket == s3.BUCKET else "só pela tela S3",
+            "Usado por": _uso_do_bucket(bucket),
             "Acesso": "somente leitura",
         })
 
@@ -468,9 +477,15 @@ def _tela_catalogo(objetos, datasets, colunas) -> None:
 # -------------------------------------------------------------- Glue · Jobs ETL --------------------------------------------------------------
 
 def _pastas_jobs() -> tuple[Path, Path]:
+    """(pasta local dos jobs, a que o Sincronizar envia ao floci; pasta das execuções)."""
     jobs = Path(os.environ.get("EXPLORADOR_JOBS", "pipeline"))
     execucoes = Path(os.environ.get("EXPLORADOR_EXECUCOES", "/tmp/explorador-execucoes"))
     return (jobs if jobs.is_absolute() else RAIZ / jobs), execucoes
+
+
+def _comum() -> Path:
+    """A biblioteca dos jobs: sempre a do pipeline/ (a solução do professor só carrega esta)."""
+    return RAIZ / "pipeline" / "comum.py"
 
 
 def _quando(instante: float) -> str:
@@ -481,15 +496,58 @@ def _relativo(caminho: Path) -> str:
     return str(caminho.relative_to(RAIZ)) if caminho.is_relative_to(RAIZ) else str(caminho)
 
 
-def _executar_job(job: glue.Job, pasta: Path) -> None:
-    if not glue.em_execucao(pasta, job.nome):
-        st.session_state["execucao_sel"] = glue.iniciar(job, pasta, RAIZ)
+def _copia_dos_scripts(pasta_exec: Path, nome: str) -> Path:
+    """Baixa os scripts do floci para uma pasta só desta execução, como o Glue faz antes de rodar."""
+    return recursos.baixar_scripts(pasta_exec / "scripts" / f"{nome}-{time.time_ns()}")
 
 
-def _painel_execucoes(job: glue.Job, pasta: Path, rodando_antes: bool = False) -> None:
-    if rodando_antes and not glue.em_execucao(pasta, job.nome):
+def _sincronizar(pasta_jobs: Path) -> None:
+    try:
+        resumo = recursos.sincronizar(pasta_jobs, _comum())
+    except s3.S3Indisponivel as erro:
+        st.session_state["sync_aviso"] = ("⚠️", str(erro))
+        return
+    st.cache_data.clear()                           # a tela S3 passa a ver o bucket de recursos atualizado
+    if resumo.vazio:
+        st.session_state["sync_aviso"] = ("✅", "Já estava tudo sincronizado com o floci.")
+    else:
+        st.session_state["sync_aviso"] = ("✅", f"Sincronizado: {len(resumo.enviados)} enviado(s) e "
+                                               f"{len(resumo.removidos)} removido(s) do floci.")
+
+
+def _botao_sync(alvo, pasta_jobs: Path, chave: str) -> None:
+    """Só o botão; a explicação e o que está pendente ficam no overlay (passe o mouse ou foque com o Tab)."""
+    try:
+        plano = recursos.pendencias(pasta_jobs, _comum())
+        pendente = (f"Agora: {len(plano.enviados)} arquivo(s) para enviar e {len(plano.removidos)} para remover."
+                    if not plano.vazio else "Agora: tudo sincronizado.")
+    except s3.S3Indisponivel as erro:
+        plano, pendente = None, str(erro)
+    explicacao = (f"Como no Glue, os jobs e workflows rodam a partir do S3: aqui, do bucket {recursos.BUCKET} do floci. "
+                  f"Este botão envia para lá os scripts .py de {_relativo(pasta_jobs)}/ e os workflows de "
+                  f"{_relativo(pasta_jobs)}/workflows/: o que é novo ou mudou vai, e o que você apagou sai. "
+                  f"Clique depois de criar ou editar um arquivo.\n\n{pendente}")
+    alvo.button("⟳ Sincronizar", key=f"sincronizar-{chave}", on_click=_sincronizar, args=(pasta_jobs,),
+                type="primary" if plano is not None and not plano.vazio else "secondary",
+                disabled=plano is None, help=explicacao)
+    if aviso := st.session_state.pop("sync_aviso", None):
+        st.toast(aviso[1], icon=aviso[0])
+
+
+def _executar_job(nome: str, pasta: Path) -> None:
+    if glue.em_execucao(pasta, nome):
+        return
+    script = _copia_dos_scripts(pasta, nome) / f"{nome}.py"
+    if not script.exists():
+        st.session_state["job_erro"] = f"O script {nome}.py não está mais no floci. Clique em Sincronizar."
+        return
+    st.session_state["execucao_sel"] = glue.iniciar(glue.Job(nome, script), pasta, RAIZ)
+
+
+def _painel_execucoes(nome: str, pasta: Path, rodando_antes: bool = False) -> None:
+    if rodando_antes and not glue.em_execucao(pasta, nome):
         st.rerun()                                  # terminou: redesenha a página toda (reativa o botão Executar)
-    execucoes = glue.execucoes(pasta, job.nome)
+    execucoes = glue.execucoes(pasta, nome)
     with ui.painel("execucoes", "Execuções", len(execucoes)):
         ui.tabela("execucoes", [("Execução", 3), ("Status", 1.4), ("Início", 2), ("Duração", 1), ("Código de saída", 1),
                                 ("Origem", 1.6)],
@@ -508,42 +566,57 @@ def _painel_execucoes(job: glue.Job, pasta: Path, rodando_antes: bool = False) -
 
 def _tela_jobs() -> None:
     pasta_jobs, pasta_exec = _pastas_jobs()
-    jobs = glue.listar_jobs(pasta_jobs)
-    job = next((j for j in jobs if j.nome == st.session_state.get("job_sel")), None)
+    try:
+        jobs = recursos.listar_jobs()
+    except s3.S3Indisponivel as erro:
+        st.error(str(erro))
+        return
+    nome = st.session_state.get("job_sel") if st.session_state.get("job_sel") in jobs else None
 
-    if job is None:
+    if nome is None:
         _contexto("jobs-lista")
         ui.trilha([("Glue", None, None, {}), ("Jobs ETL", None, None, {})], "jobs")
-        ui.titulo("Jobs", len(jobs), f"Os scripts .py de <code>{_relativo(pasta_jobs)}/</code> (menos o comum.py). "
-                  "Executar aqui é o mesmo que <code>docker compose run --rm app python &lt;script&gt;</code>.")
+        titulo, botao = st.columns([4, 1], vertical_alignment="center")
+        with titulo:
+            ui.titulo("Jobs", len(jobs), f"Os scripts guardados no floci, em <code>s3://{recursos.BUCKET}/scripts/</code>, "
+                      "como no Glue. Executar aqui é como rodar <code>docker compose run --rm app python "
+                      "&lt;script&gt;</code>, mas com a cópia que está no floci.")
+        _botao_sync(botao, pasta_jobs, "jobs")
         linhas = []
         for j in jobs:
-            ultima = next(iter(glue.execucoes(pasta_exec, j.nome)), None)
-            linhas.append([ui.Link(j.nome, f"job:{j.nome}", _escolher, kwargs={"job_sel": j.nome}), "Spark",
-                           _relativo(j.script), ui.selo(ultima.status) if ultima else "—",
+            ultima = next(iter(glue.execucoes(pasta_exec, j)), None)
+            linhas.append([ui.Link(j, f"job:{j}", _escolher, kwargs={"job_sel": j}), "Spark",
+                           recursos.caminho(f"{recursos.SCRIPTS}{j}.py"), ui.selo(ultima.status) if ultima else "—",
                            _quando(ultima.inicio) if ultima else "—"])
         with ui.painel("jobs", "Jobs", len(jobs)):
-            ui.tabela("jobs", [("Nome do job", 2.8), ("Tipo", 0.7), ("Script", 3.2), ("Última execução", 1.4), ("Início", 1.6)],
+            ui.tabela("jobs", [("Nome do job", 2.6), ("Tipo", 0.6), ("Script", 3.6), ("Última execução", 1.4), ("Início", 1.6)],
                       linhas, localizar=len(linhas) > 8,
-                      vazio="Nenhum job ainda. Crie o primeiro, por exemplo pipeline/bronze.py, e clique em Recarregar.")
+                      vazio=f"Nenhum job no floci ainda. Crie os scripts em {_relativo(pasta_jobs)}/ "
+                            "(por exemplo bronze.py) e clique em Sincronizar.")
         return
 
     _contexto("jobs-detalhe")
     ui.trilha([("Glue", None, None, {}), ("Jobs ETL", "jobs:inicio", _escolher, {"job_sel": None}),
-               (job.nome, None, None, {})], "jobs")
-    rodando = glue.em_execucao(pasta_exec, job.nome)
+               (nome, None, None, {})], "jobs")
+    rodando = glue.em_execucao(pasta_exec, nome)
     titulo, botao = st.columns([4, 1], vertical_alignment="center")
     with titulo:
-        ui.titulo(job.nome, descricao="Tipo: Spark (PySpark 3.5.3, local) · roda no contêiner do explorador · um job por vez")
+        ui.titulo(nome, descricao="Tipo: Spark (PySpark 3.5.3, local) · o script vem do floci e roda no contêiner "
+                  "do explorador · um job por vez")
     botao.button("Executar", key="executar_job", type="primary", disabled=rodando,
-                 on_click=_executar_job, args=(job, pasta_exec))
+                 on_click=_executar_job, args=(nome, pasta_exec))
+    if mensagem := st.session_state.pop("job_erro", None):
+        st.error(mensagem)
     aba_exec, aba_script = st.tabs(["Execuções", "Script"])
     with aba_exec:
         # enquanto há execução em andamento, o painel se atualiza sozinho a cada 3 s
-        st.fragment(run_every=3 if rodando else None)(_painel_execucoes)(job, pasta_exec, rodando)
+        st.fragment(run_every=3 if rodando else None)(_painel_execucoes)(nome, pasta_exec, rodando)
     with aba_script:
-        with ui.painel("script", _relativo(job.script)):
-            st.code(job.script.read_text(encoding="utf-8"), language="python")
+        chave = f"{recursos.SCRIPTS}{nome}.py"
+        with ui.painel("script", recursos.caminho(chave),
+                       descricao="A cópia que está no floci, que é a que roda. Edite o arquivo local no seu editor "
+                                 "e clique em Sincronizar."):
+            st.code(recursos.ler(chave), language="python")
 
 
 # ------------------------------------------------------------- Glue · Workflows -------------------------------------------------------------
@@ -586,29 +659,37 @@ def _salvar_form(pasta_jobs: Path, disponiveis: set[str], editando: bool) -> Non
     wf = _workflow_do_form()
     try:
         workflows.validar(wf, disponiveis)
-        if not editando and (workflows.pasta_definicoes(pasta_jobs) / f"{wf.nome}.json").exists():
+        if not editando and wf.nome in {w.nome for w in recursos.listar_workflows()[0]}:
             raise workflows.WorkflowInvalido(f"Já existe um workflow chamado {wf.nome}. Escolha outro nome.")
+        no_floci = recursos.salvar_workflow(wf)
     except workflows.WorkflowInvalido as erro:
         st.session_state["wf_form_erro"] = str(erro)
         return
-    arquivo = workflows.salvar(pasta_jobs, wf)
+    except s3.S3Indisponivel as erro:
+        st.session_state["wf_form_erro"] = str(erro)
+        return
+    # a cópia local mantém o workflow no git e faz o próximo Sincronizar não apagá-lo do floci
+    local = workflows.salvar(pasta_jobs, wf)
     st.session_state.update(wf_editar=None, wf_sel=wf.nome, wf_exec_sel=None,
-                            wf_flash=f"Workflow {wf.nome} salvo em {_relativo(arquivo)}.")
+                            wf_flash=f"Workflow {wf.nome} salvo no floci ({no_floci}) e na pasta local ({_relativo(local)}).")
 
 
 def _excluir_workflow(pasta_jobs: Path, nome: str) -> None:
+    recursos.excluir_workflow(nome)
     workflows.excluir(pasta_jobs, nome)
-    st.session_state.update(wf_sel=None, wf_flash=f"Workflow {nome} excluído. O histórico de execuções continua guardado.")
+    st.session_state.update(wf_sel=None, wf_flash=f"Workflow {nome} excluído do floci e da pasta local. "
+                                                  "O histórico de execuções continua guardado.")
 
 
-def _executar_workflow(wf: workflows.Workflow, pasta_jobs: Path, pasta_exec: Path, disponiveis: set[str]) -> None:
+def _executar_workflow(wf: workflows.Workflow, pasta_exec: Path, disponiveis: set[str]) -> None:
     try:
         workflows.validar(wf, disponiveis)
     except workflows.WorkflowInvalido as erro:
         st.session_state["wf_flash_erro"] = f"Não dá para executar: {erro}"
         return
     if not workflows.em_execucao(pasta_exec, wf.nome):
-        st.session_state["wf_exec_sel"] = workflows.iniciar(wf, pasta_jobs, pasta_exec, RAIZ)
+        copia = _copia_dos_scripts(pasta_exec, f"workflow-{wf.nome}")   # os jobs rodam com a cópia do floci
+        st.session_state["wf_exec_sel"] = workflows.iniciar(wf, copia, pasta_exec, RAIZ)
 
 
 def _parar_workflow(pasta_exec: Path, nome: str) -> None:
@@ -681,7 +762,8 @@ def _form_workflow(pasta_jobs: Path, disponiveis: list[str]) -> None:
     ui.titulo(acao, descricao="Escolha os jobs e diga de quem cada um depende. Jobs sem dependência entre si "
               "podem rodar ao mesmo tempo.")
     if not disponiveis:
-        st.info(f"Ainda não há jobs em {_relativo(pasta_jobs)}/. Crie os scripts do pipeline primeiro.")
+        st.info(f"Ainda não há jobs no floci. Crie os scripts em {_relativo(pasta_jobs)}/ e clique em Sincronizar, "
+                "na lista de Jobs ETL ou de Workflows.")
     esquerda, direita = st.columns([1, 1], gap="large")
     with esquerda:
         with ui.painel("propriedades", "Propriedades"):
@@ -726,23 +808,29 @@ def _form_workflow(pasta_jobs: Path, disponiveis: list[str]) -> None:
 
 def _tela_workflows() -> None:
     pasta_jobs, pasta_exec = _pastas_jobs()
-    disponiveis = [j.nome for j in glue.listar_jobs(pasta_jobs)]
+    try:
+        disponiveis = recursos.listar_jobs()       # só os jobs que estão no floci entram num workflow
+        lista, avisos = recursos.listar_workflows()
+    except s3.S3Indisponivel as erro:
+        st.error(str(erro))
+        return
     if st.session_state.get("wf_editar"):
         _form_workflow(pasta_jobs, disponiveis)
         return
-    lista, avisos = workflows.listar(pasta_jobs)
     wf = next((w for w in lista if w.nome == st.session_state.get("wf_sel")), None)
 
     if wf is None:
         _contexto("workflows-lista")
         ui.trilha([("Glue", None, None, {}), ("Workflows", None, None, {})], "workflows")
-        titulo, botao = st.columns([4, 1], vertical_alignment="center")
+        titulo, botao = st.columns([3, 2], vertical_alignment="center")
         with titulo:
-            ui.titulo("Workflows", len(lista), "Grafos de jobs salvos em "
-                      f"<code>{_relativo(workflows.pasta_definicoes(pasta_jobs))}/</code>. Executar um workflow é como "
-                      "rodar os jobs um depois do outro no terminal, mas seguindo as dependências do grafo.")
-        botao.button("Criar workflow", key="criar_workflow", type="primary", on_click=_abrir_form,
-                     args=(None, disponiveis))
+            ui.titulo("Workflows", len(lista), "Grafos de jobs guardados no floci, em "
+                      f"<code>s3://{recursos.BUCKET}/workflows/</code>. Executar um workflow é como rodar os jobs um "
+                      "depois do outro no terminal, mas seguindo as dependências do grafo.")
+        with botao, st.container(horizontal=True, horizontal_alignment="right"):
+            _botao_sync(st, pasta_jobs, "workflows")
+            st.button("Criar workflow", key="criar_workflow", type="primary", on_click=_abrir_form,
+                      args=(None, disponiveis))
         _avisos_workflow()
         for aviso in avisos:
             st.warning(aviso)
@@ -777,7 +865,7 @@ def _tela_workflows() -> None:
             st.button("Parar", key="parar_workflow", on_click=_parar_workflow, args=(pasta_exec, wf.nome),
                       help="Não começa jobs novos; os que já rodam terminam.")
         st.button("Executar", key="executar_workflow", type="primary", disabled=rodando, on_click=_executar_workflow,
-                  args=(wf, pasta_jobs, pasta_exec, set(disponiveis)))
+                  args=(wf, pasta_exec, set(disponiveis)))
     _avisos_workflow()
     aba_execucao, aba_historico, aba_definicao = st.tabs(["Execução", "Histórico", "Definição"])
     with aba_execucao:
@@ -795,9 +883,10 @@ def _tela_workflows() -> None:
                        for e in execucoes], vazio="Nenhuma execução ainda. Clique em Executar.")
     with aba_definicao:
         arquivo = workflows.pasta_definicoes(pasta_jobs) / f"{wf.nome}.json"
-        with ui.painel("definicao", _relativo(arquivo)):
+        with ui.painel("definicao", recursos.caminho(f"{recursos.WORKFLOWS}{wf.nome}.json"),
+                       descricao=f"A definição que está no floci. A cópia local fica em <code>{_relativo(arquivo)}</code>."):
             st.code(json.dumps(wf.para_dict(), ensure_ascii=False, indent=2), language="json")
-            st.caption("Para rodar o mesmo workflow pelo terminal:")
+            st.caption("Para rodar a cópia local pelo terminal, sem o explorador:")
             st.code(f"docker compose run --rm app python -m explorador.workflows {_relativo(arquivo)}", language="bash")
 
 
@@ -915,11 +1004,10 @@ def _menu() -> str:
 def _pagina() -> None:
     st.set_page_config(page_title="Console do datalake", layout="wide", initial_sidebar_state="expanded")
     st.markdown(ui.CSS, unsafe_allow_html=True)
-    pasta_jobs = os.environ.get("EXPLORADOR_JOBS", "pipeline").rstrip("/")
     st.markdown(f'<div class="barra-console">'
                 f'<span class="marca"><span aria-hidden="true">☁ </span>Console do datalake</span>'
                 f'<span class="servicos">S3 · Glue · Athena</span>'
-                f'<span class="detalhe">s3://{s3.BUCKET} · {s3.ENDPOINT} · Athena só lê · Jobs ETL executam {pasta_jobs}/</span>'
+                f'<span class="detalhe">s3://{s3.BUCKET} · {s3.ENDPOINT} · Athena só lê · jobs rodam de s3://{recursos.BUCKET}/</span>'
                 f'<span class="regiao">{s3.REGIAO}</span></div>', unsafe_allow_html=True)
     tela = _menu()
     salvas = _salvas()
@@ -936,7 +1024,7 @@ def _pagina() -> None:
 
 def _objetos_de_todos_os_buckets() -> tuple[list[particoes.Objeto], list[str]]:
     """Objetos do datalake com a chave de sempre e os dos outros buckets como "@<bucket>/<chave>"."""
-    buckets = [b for b in _buckets() if b != s3.BUCKET]
+    buckets = [b for b in _buckets() if b not in (s3.BUCKET, recursos.BUCKET)]   # scripts não viram tabelas
     objetos = list(_listar())
     for bucket in buckets:
         objetos += [replace(o, chave=particoes.chave_virtual(bucket, o.chave)) for o in _listar(bucket)]

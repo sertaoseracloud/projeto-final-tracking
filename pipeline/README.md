@@ -14,9 +14,9 @@ docker compose run --rm app python pipeline/<seu_job>.py
 
 Troque `<seu_job>` pelo nome do seu arquivo. Se você nunca usou Docker, o [SETUP.md](../SETUP.md) explica o que cada parte desse comando faz.
 
-Outra forma: abra o explorador (http://localhost:8501), vá em **Glue · Jobs ETL**, escolha o job e clique em **Executar**. Ele roda o mesmo comando e mostra o status (**Sucesso** ou **Falhou**), a duração e o log, como o console do Glue. Veja [explorador/README.md](../explorador/README.md#glue--jobs-etl).
+Outra forma: abra o explorador (http://localhost:8501) e vá em **Glue · Jobs ETL**. Como no Glue, os jobs do console moram no S3 (no bucket `glue-assets` do floci): clique primeiro em **⟳ Sincronizar** para enviar os seus `.py` de `pipeline/` para lá, depois escolha o job e clique em **Executar**. Ele roda a cópia do floci e mostra o status (**Sucesso** ou **Falhou**), a duração e o log. Mudou o arquivo? Sincronize de novo. Veja [explorador/README.md](../explorador/README.md#glue--jobs-etl).
 
-Para rodar **vários jobs de uma vez**, na ordem certa, monte um workflow em **Glue · Workflows**: você escolhe os jobs e diz de quem cada um depende (a Silver depende da Bronze, as Golds dependem da Silver…). Ele fica salvo em `pipeline/workflows/<nome>.json` e também roda pelo terminal:
+Para rodar **vários jobs de uma vez**, na ordem certa, monte um workflow em **Glue · Workflows**: você escolhe os jobs e diz de quem cada um depende (a Silver depende da Bronze, as Golds dependem da Silver…). Ele fica salvo no floci (`s3://glue-assets/workflows/<nome>.json`) e numa cópia em `pipeline/workflows/<nome>.json`, e a cópia local também roda pelo terminal:
 
 ```bash
 docker compose run --rm app python -m explorador.workflows pipeline/workflows/<nome>.json
@@ -47,6 +47,7 @@ A parte repetitiva já vem pronta em [`comum.py`](comum.py), nesta mesma pasta. 
 | `exigir_camada(spark, glob_eventos("bronze"), "python pipeline/bronze.py")` | para o job com "… não existe. Rode antes: …" se a camada anterior não existe (R2) |
 | `apagar_camada(spark, "gold")` | apaga a pasta inteira, para recomeçar do zero |
 | `titulo("Bronze")` | imprime um título destacado na saída |
+| `arquivo_do_projeto("site/mapa_calor.js")` | um arquivo do repositório, fora do S3 (`/projeto/site/mapa_calor.js`). Funciona igual no terminal e no explorador |
 
 Um job Bronze fica assim:
 
@@ -188,19 +189,19 @@ O requisito R11 pede um arquivo `site/mapa_calor.js` com os números do mapa de 
 - **Trazer o resultado para o Python:** `collect()` traz as linhas de um DataFrame do Spark para uma lista do Python. Use só com tabelas pequenas, como as duas do mapa de calor, que têm poucas dezenas de linhas. **Nunca** faça isso com a Bronze ou a Silver: são dezenas de milhares de linhas e o job fica lento ou estoura a memória.
 
   > **Pense assim:** o Spark é um **armazém** com muitos funcionários trabalhando em paralelo; o Python do seu script é a **sua mesa**. O `collect()` traz tudo do armazém para a sua mesa. Um envelope com 30 linhas cabe; um caminhão com 60 mil, não.
-- **Onde gravar:** o contêiner enxerga o repositório em `/projeto`, então `site/` é `/projeto/site/`. A partir de um arquivo em `pipeline/`, o caminho é `Path(__file__).resolve().parents[1] / "site" / "mapa_calor.js"`.
+- **Onde gravar:** o contêiner enxerga o repositório em `/projeto`, então `site/` é `/projeto/site/`. Use `arquivo_do_projeto("site/mapa_calor.js")`, do `comum.py`: ele parte da pasta do projeto, que é sempre a pasta atual quando um job roda. Não use `Path(__file__)`: no explorador, o script roda de uma cópia baixada do floci, numa pasta temporária, e o `__file__` aponta para lá.
 
 ```python
 import json
 from datetime import datetime, timezone
-from pathlib import Path
+from comum import arquivo_do_projeto
 
 cliques = [linha.asDict() for linha in spark.read.parquet("s3a://datalake-tracking/gold/mapa_calor_cliques").collect()]
 rolagem = [linha.asDict() for linha in spark.read.parquet("s3a://datalake-tracking/gold/mapa_calor_rolagem").collect()]
 agora = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 dados = {"gerado_em": agora, "cliques": cliques, "rolagem": rolagem}
 
-destino = Path(__file__).resolve().parents[1] / "site" / "mapa_calor.js"
+destino = arquivo_do_projeto("site/mapa_calor.js")
 texto = json.dumps(dados, ensure_ascii=False, default=float)
 destino.write_text("window.MAPA_CALOR = " + texto + ";\n", encoding="utf-8")
 ```
