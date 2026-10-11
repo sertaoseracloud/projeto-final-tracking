@@ -141,6 +141,12 @@ def navegar(objetos: Iterable[Objeto], pasta: str) -> tuple[list[str], list[Obje
     return sorted(subpastas), sorted(arquivos, key=lambda o: o.chave)
 
 
+def migalhas(pasta: str) -> list[tuple[str, str]]:
+    """Breadcrumb do console: 'silver/event_name=x/' -> [('silver', 'silver/'), ('event_name=x', 'silver/event_name=x/')]."""
+    partes = [p for p in pasta.split("/") if p]
+    return [(p, "/".join(partes[:i + 1]) + "/") for i, p in enumerate(partes)]
+
+
 def tamanho_legivel(n: int) -> str:
     if n < 1024:
         return f"{n} B"

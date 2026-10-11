@@ -33,7 +33,7 @@ A tabela abaixo mostra as pastas principais do repositório.
 | [`site/`](site/index.html) | a landing page de exemplo. Abra no navegador, navegue e veja cada evento nascer no painel lateral. O botão **Mapa de calor** do painel mostra, por cima da página, a sua Gold de cliques e de rolagem (requisito R11) |
 | [`gerador/`](gerador/README.md) | o coletor simulado: popula o bucket com 14 dias de eventos, inclusive com defeitos |
 | [`pipeline/`](pipeline/README.md) | onde o datalake é construído |
-| [`explorador/`](explorador/README.md) | um site para ver os arquivos, as partições e fazer consultas SQL no bucket (http://localhost:8501) |
+| [`explorador/`](explorador/README.md) | um console de estudo no estilo do S3 e do Athena: ver os arquivos e as partições do bucket e fazer consultas SQL (http://localhost:8501) |
 | `docs/` | [enunciado](docs/ENUNCIADO.md) e [contrato do evento](docs/CONTRATO_EVENTO.md) |
 
 Em outras palavras: `site/` e `gerador/` produzem os dados; você escreve o código em `pipeline/`; `docs/` diz o que construir.
