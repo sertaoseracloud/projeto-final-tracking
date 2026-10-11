@@ -88,6 +88,7 @@ Estes arquivos já existem no repositório. Você não precisa alterá-los.
 | `site/index.html` | landing de exemplo que dispara os 20 eventos e exporta JSONL; serve para ver o evento nascer |
 | `gerador/` | simulador do coletor: popula `landing/` no S3 com semanas de eventos sintéticos |
 | `docker-compose.yml` + `Dockerfile` | três contêineres: `floci` (S3 emulado), `app` (Python 3.11, Java 17, PySpark 3.5.3 com o conector `s3a`, `boto3`, `pytest`) e `explorador` (um site em `http://localhost:8501` para olhar o bucket, feito com a mesma imagem do `app`). Nada é instalado na máquina além do Docker; nenhuma conta de nuvem é necessária |
+| `pipeline/comum.py` | peças prontas para os seus jobs: a `SparkSession` configurada para o floci, caminhos `s3a://`, conferir se uma camada existe (R2), ler e gravar as partições `event_name=…` sem misturar nem apagar as pastas vizinhas. Importe em vez de reescrever; o [pipeline/README.md](../pipeline/README.md#comumpy-as-peças-prontas) mostra como |
 | `infra/verificar_ambiente.py` | confere, de dentro do contêiner `app`, que o Spark lê e grava no floci por `s3a://` |
 | `SETUP.md` | ambiente do zero com Docker |
 | `docs/CONTRATO_EVENTO.md` | formato do evento e layout da landing no S3 |
@@ -145,7 +146,7 @@ Os requisitos são numerados de R1 a R11. Cada um vem com uma linha "Em outras p
   - *Em outras palavras:* todo acesso ao S3 é feito com `spark.read` e `df.write` em caminhos `s3a://datalake-tracking/...`. Nada de baixar arquivos para o seu computador.
 - **R2.** **Um job por camada**, executáveis separadamente:
   - um job Bronze, um job Silver, **cinco jobs Gold, cada um num arquivo próprio** (funil, engajamento, receita e aquisição, ML, mapa de calor) e um job que exporta o mapa de calor para o site (R11);
-  - cada job verifica que a camada de que depende existe e, se não existir, para com uma mensagem que diz o que rodar antes.
+  - cada job verifica que a camada de que depende existe e, se não existir, para com uma mensagem que diz o que rodar antes (a função `exigir_camada` do `pipeline/comum.py` já faz isso).
   - *Em outras palavras:* um **job** é um script que faz uma etapa inteira. São oito scripts. Exemplo: se alguém roda o job Silver antes do Bronze, o job Silver para e avisa "rode o job Bronze antes".
 - **R3.** Um script que roda os oito jobs em sequência. Ele **não** gera dados.
   - *Em outras palavras:* um único comando reconstrói o datalake inteiro, a partir da landing que já existe.

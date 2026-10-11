@@ -1,6 +1,6 @@
 # pipeline/ — o seu datalake
 
-Seu código vai aqui: um job por camada, como pede o [enunciado](../docs/ENUNCIADO.md) (R1 a R10).
+Seu código vai aqui: um job por camada, como pede o [enunciado](../docs/ENUNCIADO.md) (R1 a R11).
 
 Um **job** é um script Python que faz uma etapa do trabalho do começo ao fim: lê uma camada, transforma os dados e grava a camada seguinte. Por exemplo, o job Bronze lê a `landing/` e grava a `bronze/`.
 
@@ -21,16 +21,49 @@ O pipeline acessa o bucket **só pelo Spark**, com caminhos `s3a://datalake-trac
 - `s3a://` é o prefixo que diz ao Spark "este caminho está num S3". É o conector `s3a` (biblioteca `hadoop-aws`) que faz a conversa com o floci.
 - `boto3` é o SDK da AWS para Python. O gerador usa `boto3`, mas o seu pipeline não pode usar (requisito R1).
 
-A configuração da `SparkSession` que funciona com o floci está pronta em [`infra/verificar_ambiente.py`](../infra/verificar_ambiente.py): copie a função `criar_sessao()` para o seu código. A `SparkSession` é o objeto de entrada do Spark: todo `spark.read` e todo `df.write` passam por ela.
+## `comum.py`: as peças prontas
 
-Para saber se uma camada existe antes de ler, use o `FileSystem` do Hadoop pela JVM do Spark:
+A parte repetitiva já vem pronta em [`comum.py`](comum.py), nesta mesma pasta. **Não reescreva:** importe. Como os seus jobs rodam como `python pipeline/<job>.py`, o Python já encontra o `comum.py` ao lado deles.
+
+| Função | Para que serve |
+| --- | --- |
+| `criar_sessao("bronze")` | a `SparkSession` configurada para o floci (s3a) e para manter `month=09` com dois dígitos. A `SparkSession` é o objeto de entrada do Spark: todo `spark.read` e todo `df.write` passam por ela |
+| `caminho("silver/itens")` | `s3a://datalake-tracking/silver/itens` |
+| `glob_eventos("bronze")` | `bronze/event_name=*`: só as pastas de eventos da camada |
+| `ler_eventos(spark, "bronze")` | lê as pastas `event_name=…` da camada, com `event_name`, `year`, `month` e `day` como colunas. Para a landing: `ler_eventos(spark, "landing", "json", schema=SEU_SCHEMA)` |
+| `gravar_eventos(df, "silver", "overwrite")` | grava particionado por `event_name/year/month/day` na raiz da camada, sem apagar as pastas vizinhas |
+| `exigir_camada(spark, glob_eventos("bronze"), "python pipeline/bronze.py")` | para o job com "… não existe. Rode antes: …" se a camada anterior não existe (R2) |
+| `apagar_camada(spark, "gold")` | apaga a pasta inteira, para recomeçar do zero |
+| `titulo("Bronze")` | imprime um título destacado na saída |
+
+Um job Bronze fica assim:
+
+```python
+from comum import criar_sessao, exigir_camada, glob_eventos, gravar_eventos, ler_eventos, titulo
+
+SCHEMA = ...   # o schema explícito da landing (R4): escreva o seu
+
+spark = criar_sessao("bronze")
+exigir_camada(spark, glob_eventos("landing"), "python gerador/gerar_eventos.py")
+landing = ler_eventos(spark, "landing", "json", schema=SCHEMA)
+bronze = ...   # proveniência e partições year/month/day (R4): é aqui que está o seu trabalho
+gravar_eventos(bronze, "bronze", "append")
+titulo("Bronze")
+spark.stop()
+```
+
+O `comum.py` usa só o Spark (R1). As seções abaixo explicam o que ele faz por baixo, para você entender e conseguir depurar.
+
+### Como `exigir_camada` confere se uma camada existe
+
+Ele usa o `FileSystem` do Hadoop pela JVM do Spark:
 
 ```python
 caminho = spark._jvm.org.apache.hadoop.fs.Path("s3a://datalake-tracking/silver/event_name=*")
 existe = bool(caminho.getFileSystem(spark._jsc.hadoopConfiguration()).globStatus(caminho))
 ```
 
-Por que isso importa: o requisito R2 pede que cada job confira se a camada anterior existe. O trecho acima devolve `True` ou `False`; se for `False`, o job deve parar com uma mensagem dizendo qual job rodar antes. O `*` é um **glob**, um "curinga": `event_name=*` casa com qualquer pasta que comece com `event_name=`. Por isso o trecho usa `globStatus` (que entende curingas) em vez de `exists`.
+O `*` é um **glob**, um "curinga": `event_name=*` casa com qualquer pasta que comece com `event_name=`. Por isso o trecho usa `globStatus` (que entende curingas) em vez de `exists`.
 
 ## Partições por nome do evento e por dia
 
@@ -54,7 +87,7 @@ Ao ler pastas `k=v`, o Spark descobre `event_name`, `year`, `month` e `day` como
 .config("spark.sql.sources.partitionColumnTypeInference.enabled", "false")
 ```
 
-### Ler só os eventos
+### Ler só os eventos (o que `ler_eventos` faz)
 
 Se você ler a raiz `s3a://datalake-tracking/silver/` direto, o Spark encontra `event_name=…` ao lado de `itens/` e `eventos_rejeitados/` e para com o erro *Conflicting directory structures*. Leia só as pastas `event_name=` com um glob e diga ao Spark onde fica a raiz das partições (`basePath`), para ele devolver `event_name` como coluna:
 
@@ -65,7 +98,7 @@ eventos = spark.read.option("basePath", raiz).parquet(f"{raiz}/event_name=*")
 
 A landing é igual, com `.json(...)` no lugar de `.parquet(...)`. O `event_name` que vem do caminho é o mesmo que está dentro de cada evento.
 
-### Gravar sem apagar as vizinhas
+### Gravar sem apagar as vizinhas (o que `gravar_eventos` faz)
 
 Na gravação, use `.partitionBy("event_name", "year", "month", "day")` com as quatro colunas como texto. O `partitionBy` cria uma subpasta por combinação de valores dessas colunas.
 
