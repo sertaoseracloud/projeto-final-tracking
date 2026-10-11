@@ -127,7 +127,7 @@ docker compose up -d explorador
 
 **O que faz:** liga o contêiner `explorador` em segundo plano. Ele é um site feito com Streamlit, que lê o bucket do floci.
 
-**O que você deve ver:** abra **http://localhost:8501** no navegador. Deve aparecer a barra escura "Console do datalake" e, no menu lateral **Serviços**, as telas **S3 · Buckets** (arquivos e partições, como no console do S3) e **Athena · Editor de consultas** (SQL, como no Athena). Para saber o que cada tela faz, leia [explorador/README.md](explorador/README.md).
+**O que você deve ver:** abra **http://localhost:8501** no navegador. Deve aparecer a barra escura "Console do datalake" e, no menu lateral **Serviços**, as telas **S3 · Buckets** (arquivos e partições), **Glue · Data Catalog** (bancos e tabelas), **Glue · Jobs ETL** (rodar os seus jobs de `pipeline/`) e **Athena · Editor de consultas** (SQL). Para saber o que cada tela faz, leia [explorador/README.md](explorador/README.md).
 
 ## Como rodar qualquer coisa
 

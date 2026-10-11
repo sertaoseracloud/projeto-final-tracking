@@ -25,6 +25,14 @@ Para medir as armadilhas:
 docker compose run --rm app python professor/solucao/medir_armadilhas.py
 ```
 
+Para rodar os jobs da solução pela tela **Glue · Jobs ETL** do explorador (em vez do `pipeline/` do aluno), suba o explorador apontando para a pasta da solução:
+
+```bash
+EXPLORADOR_JOBS=professor/solucao docker compose up -d --force-recreate explorador
+```
+
+No PowerShell: `$env:EXPLORADOR_JOBS="professor/solucao"; docker compose up -d --force-recreate explorador`. Para voltar ao padrão (`pipeline/`), rode de novo sem a variável.
+
 ## 2. Dados de entrada
 
 Parâmetros: seed 42, 6000 visitantes, 14 dias (2026-09-01 a 2026-09-14), 3% de sujeira.
