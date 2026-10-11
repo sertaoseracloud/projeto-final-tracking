@@ -1,6 +1,8 @@
 # Explorador do datalake
 
-Um site que roda no seu computador para **olhar o bucket** sem escrever código: ver os arquivos que o gerador e o seu pipeline gravaram, ver as partições `year=/month=/day=` de cada pasta e fazer **consultas SQL** sobre os dados.
+Um site que roda no seu computador para **olhar o bucket** sem escrever código: ver os arquivos que o gerador e o seu pipeline gravaram, ver as partições (`event_name=`, `year=`, `month=`, `day=`) de cada pasta e fazer **consultas SQL** sobre os dados.
+
+> **Pense assim:** o explorador é uma **vitrine de vidro** na frente do bucket. Você vê tudo o que está lá dentro, pode apontar e fazer perguntas ("quantas compras houve no dia 3?"), mas não consegue mexer em nada: o vidro protege o seu datalake.
 
 ## Como abrir
 
@@ -21,6 +23,8 @@ Abra **http://localhost:8501** no navegador. Para desligar: `docker compose stop
 ## Views: os nomes que você usa no SQL
 
 Cada pasta com dados vira uma **view**, uma tabela virtual que lê os arquivos na hora. O nome é o caminho da pasta, antes das partições `k=v`, com `_` no lugar de `/`:
+
+> **Pense assim:** a view é um **atalho na área de trabalho**. Ela não guarda uma cópia dos dados; quando você abre (`SELECT … FROM silver`), ela vai até a pasta e lê os arquivos naquela hora. Por isso, depois de rodar um job, a consulta já mostra os dados novos (clique em **Recarregar** se for uma pasta nova).
 
 | Pasta no bucket | View |
 | --- | --- |
@@ -50,6 +54,17 @@ O explorador só **lê**. Ele tem duas proteções:
 
 1. Aceita consultas que começam com `SELECT`, `WITH`, `DESCRIBE`, `SHOW`, `SUMMARIZE`, `FROM`, `EXPLAIN` ou `PRAGMA table_info`, uma por vez. Comandos que mudam dados (`COPY`, `CREATE`, `DROP`, `INSERT`…) são recusados. `EXPLAIN ANALYZE` também é recusado, porque ele executa o comando de verdade; use só `EXPLAIN`.
 2. A conexão com o DuckDB é **trancada** no bucket: ela não lê arquivos do computador nem muda configurações.
+
+> **Pense assim:** é um prédio com **duas portarias**. A primeira (a validação) confere se o seu pedido é só de leitura; a segunda (a trava da conexão) garante que, mesmo que algo escape da primeira, ninguém sai do andar do bucket.
+
+```mermaid
+flowchart LR
+    sql["sua consulta SQL"] --> p1{"1ª portaria:<br/>é uma leitura?<br/>um comando só?"}
+    p1 -->|não| recusa["recusada, com<br/>mensagem em português"]
+    p1 -->|sim| p2{"2ª portaria:<br/>só lê o bucket?"}
+    p2 -->|não| bloqueio["bloqueada pela<br/>conexão trancada"]
+    p2 -->|sim| res["resultado na tabela<br/>(e CSV para baixar)"]
+```
 
 Assim, você não estraga o seu datalake por engano. Se algo inesperado acontecer, o site mostra uma mensagem amigável e, embaixo dela, uma linha curta de "Detalhe técnico" para ajudar a achar a causa.
 

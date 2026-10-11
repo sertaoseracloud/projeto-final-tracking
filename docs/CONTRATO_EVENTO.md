@@ -6,9 +6,29 @@ Um **contrato** é um acordo entre quem produz o dado e quem consome. Aqui, quem
 
 Um **evento de tracking** é o registro de uma ação do visitante na página. Exemplo: quando alguém clica no Plano Pro, a página grava um evento `select_item` com o horário, o visitante e o plano escolhido.
 
+> **Pense assim:** o contrato é o **formulário padrão dos Correios**. Todo envio precisa ter remetente, destinatário e CEP nos campos certos; assim, qualquer agência sabe processar. Cada evento é uma linha no **diário de bordo** da página ("às 14h22, o visitante anon-1 comprou o Plano Premium"), e o contrato diz como essa linha precisa ser escrita.
+
 > **Aviso:** o coletor pode reenviar um lote: o mesmo `event_id` pode aparecer mais de uma vez.
 
 Em outras palavras: o **coletor** junta os eventos e grava em arquivos, chamados de **lotes**. Às vezes ele grava o mesmo lote de novo, e o mesmo evento aparece duas vezes. Por isso a Silver precisa remover as cópias (deduplicação, requisito R5 do enunciado).
+
+> **Pense assim:** o lote é um **malote** de correspondência. O coletor não leva cada carta na hora: junta as cartas de um intervalo e despacha o malote. Às vezes, achando que um malote se perdeu, despacha uma cópia, e algumas cartas chegam em dobro.
+
+```mermaid
+sequenceDiagram
+    participant V as Visitante
+    participant P as Página (site)
+    participant C as Coletor
+    participant L as landing/ (S3)
+    V->>P: clica em "Quero este plano"
+    P->>P: track() monta o evento (JSON)
+    P->>C: envia o evento
+    C->>C: junta eventos num lote
+    C->>L: grava um arquivo .jsonl por event_name e dia
+    C-->>L: às vezes reenvia o lote (duplicatas)
+```
+
+O diagrama acompanha um clique até virar arquivo na landing. A última seta tracejada é o reenvio que a Silver precisa desfazer.
 
 ## Layout da landing no S3
 
@@ -50,6 +70,18 @@ O exemplo abaixo é uma compra (`purchase`) do Plano Premium paga com Pix. Repar
 }
 ```
 
+> **Pense assim:** um evento aninhado é uma **caixa com caixinhas dentro**. A caixa grande tem etiquetas simples (`event_id`, `event_name`, `event_ts`) e caixinhas que você abre para ver o conteúdo: `page` (onde), `traffic` (de onde veio), `device` (com o quê), `params` (os detalhes do que aconteceu) e `items` (a lista de produtos).
+
+```mermaid
+flowchart LR
+    ev["evento purchase"] --> id["event_id · event_name · event_ts<br/>user_pseudo_id · user_id"]
+    ev --> page["page<br/>location, referrer"]
+    ev --> traffic["traffic<br/>source, medium, campaign"]
+    ev --> device["device<br/>category, os, browser"]
+    ev --> params["params<br/>transaction_id, value, tax,<br/>shipping, currency, …"]
+    ev --> items["items[]<br/>uma entrada por produto"]
+```
+
 A tabela a seguir diz a regra de cada campo do evento. Leia com atenção: são essas regras que o seu pipeline vai usar para limpar e validar os dados.
 
 | Campo | Regra |
@@ -67,7 +99,7 @@ Algumas explicações:
 
 - **UUID** é um identificador aleatório longo, como `69e0446a-5000-...`, praticamente impossível de repetir por acaso.
 - **ISO-8601 UTC** é um formato padrão de data e hora, como `2026-10-03T14:22:05.123Z`. O `Z` no fim indica UTC, o horário de referência mundial (3 horas à frente de Brasília).
-- **`user_pseudo_id`** identifica o navegador, não a pessoa. Se a mesma pessoa usa o celular e o notebook, ela tem dois `user_pseudo_id`.
+- **`user_pseudo_id`** identifica o navegador, não a pessoa. Se a mesma pessoa usa o celular e o notebook, ela tem dois `user_pseudo_id`. Pense numa **pulseira de visitante** que a loja põe no seu braço na entrada: ela reconhece a pulseira, não você.
 - **`user_id`** identifica a pessoa, mas só existe depois que ela cria conta (`sign_up`) ou entra (`login`). Ligar os dois ids é o *identity stitching* (requisito R9 do enunciado).
 - **`session_hint`** é um palpite de sessão gerado pelo navegador. Como muda a cada recarga, o enunciado proíbe usá-lo; você calcula as sessões por conta própria (requisito R8).
 

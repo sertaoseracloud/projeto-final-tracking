@@ -4,6 +4,8 @@ Este diretório faz o papel do **mundo lá fora**: a landing page DadosPro e o c
 
 Em outras palavras: numa empresa real, os eventos chegariam de milhares de visitantes de verdade. Aqui, este gerador inventa visitantes e jornadas para que você tenha dados para trabalhar. O **coletor** é o sistema que recebe os eventos da página e os grava em arquivos no S3.
 
+> **Pense assim:** o gerador é um **simulador de clientes** num jogo de loja. Ele cria 6000 visitantes de mentira, cada um com um jeito de se comportar, e anota tudo o que eles fazem, como se fossem de verdade.
+
 Não usa Spark: é Python puro mais `boto3` (o SDK da AWS para Python, que grava arquivos no S3).
 
 ## Uso
@@ -27,6 +29,8 @@ O gerador aceita opções na linha de comando. Para o projeto, rode sem opções
 | `--saida-local PASTA` | — | grava numa pasta, com a mesma árvore de chaves, em vez do S3 |
 
 A **seed** (semente) é o número que controla o sorteio aleatório. Com a mesma seed, o gerador sorteia sempre os mesmos visitantes e eventos, então todos da turma recebem os mesmos dados.
+
+> **Pense assim:** a seed é o **número de série de um baralho já embaralhado**. Duas pessoas que pedem o baralho nº 42 recebem as cartas exatamente na mesma ordem. É assim que o gabarito do professor bate com os números da turma.
 
 Rodar de novo com a **mesma** seed sobrescreve os mesmos arquivos. Uma seed **diferente** acrescenta arquivos novos (`coletor-s<seed>-*.jsonl`), como um segundo coletor gravando no mesmo bucket.
 
@@ -56,6 +60,29 @@ A **jornada** é o caminho que o visitante faz na página, do primeiro acesso at
 
 O **canal de origem** é de onde o visitante veio, como Google, Instagram ou a newsletter. O **dispositivo** é o tipo de aparelho, como celular ou computador.
 
+```mermaid
+stateDiagram-v2
+    [*] --> Landing: page_view
+    Landing --> Rolagem: scroll 25/50/75/90
+    Rolagem --> Video: video_start (às vezes)
+    Rolagem --> Planos: view_item_list
+    Planos --> Plano: select_item
+    Plano --> Detalhe: view_item (às vezes)
+    Plano --> Carrinho: add_to_cart (botão do cartão)
+    Detalhe --> Carrinho: add_to_cart (botão do modal)
+    Carrinho --> Checkout: view_cart → begin_checkout
+    Checkout --> Pagamento: add_shipping_info (só Premium) → add_payment_info
+    Pagamento --> Obrigado: purchase
+    Obrigado --> Membros: sign_up
+    Rolagem --> Lead: generate_lead (e-book)
+    Rolagem --> Saida: click de saída / site_search
+    Lead --> [*]
+    Saida --> [*]
+    Membros --> [*]
+```
+
+O diagrama é a "máquina de estados" da jornada: cada caixa é um ponto da página e cada seta é um evento. Em toda seta há um sorteio, e por isso a maioria dos visitantes para no meio do caminho, como no mundo real.
+
 - **Parte dos leads** volta outro dia, em geral pela newsletter, com mais intenção de compra.
 - **Quem compra** pode criar conta (`sign_up`) e, em visitas seguintes, faz `login`.
 - **Reembolsos:** cerca de 8% das compras recebem `refund` de 1 a 7 dias depois — bem mais nas que vieram do Instagram, bem menos nas de newsletter e acesso direto (compras da última semana podem ficar sem reembolso, porque ele cairia fora da janela).
@@ -63,6 +90,8 @@ O **canal de origem** é de onde o visitante veio, como Google, Instagram ou a n
 - **`session_hint`:** muda em cerca de 25% das trocas de página, como uma recarga do navegador, e também quando o visitante recarrega a landing (cerca de 1 em 4 sessões). Por isso não serve para contar sessões.
 
 ## Defeitos injetados
+
+> **Pense assim:** é um **jogo dos sete erros** preparado de propósito. O gerador estraga alguns eventos de jeitos conhecidos, e a sua Silver precisa achar e separar cada um deles, dizendo o motivo.
 
 | Tipo | O que acontece |
 | --- | --- |

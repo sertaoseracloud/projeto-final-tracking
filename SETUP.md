@@ -4,6 +4,16 @@ Só é preciso o **Docker**. Python, Java, PySpark e o conector do Spark para S3
 
 Tempo total: **cerca de 10 minutos** na primeira vez, a maior parte baixando imagens.
 
+```mermaid
+flowchart LR
+    P1["1. Instalar<br/>o Docker"] --> P2["2. Construir a imagem<br/>e ligar o floci"]
+    P2 --> P3["3. Gerar os eventos<br/>(landing)"]
+    P3 --> P4["4. Conferir o Spark<br/>3 linhas [ok]"]
+    P4 --> P5["5. Abrir o explorador<br/>localhost:8501"]
+```
+
+Os cinco passos abaixo seguem esta ordem. Só avance quando o passo atual mostrar o resultado esperado.
+
 ## Antes de tudo: o que é o Docker
 
 Se você nunca usou Docker, leia esta seção. Ela explica as quatro palavras que aparecem no resto do guia.
@@ -13,10 +23,14 @@ Se você nunca usou Docker, leia esta seção. Ela explica as quatro palavras qu
 - **Contêiner** é uma caixa em funcionamento, criada a partir de uma imagem. Você pode criar, parar e apagar contêineres sem afetar a sua máquina.
 - **Docker Compose** é a ferramenta que liga vários contêineres de uma vez. O arquivo `docker-compose.yml` diz quais contêineres o projeto usa e como eles conversam. Todo comando `docker compose ...` lê esse arquivo, por isso você precisa estar na **raiz do repositório** (a pasta onde está o `docker-compose.yml`) ao digitá-lo.
 
+> **Pense assim:** a **imagem** é a receita de uma marmita, com todos os ingredientes já na medida certa. O **contêiner** é a marmita pronta, aquecida e sendo comida. Você pode esquentar quantas marmitas quiser a partir da mesma receita, e jogar uma fora não estraga a receita nem a sua cozinha (a sua máquina). O **Docker Compose** é o cardápio do dia: diz quais marmitas servir juntas.
+
 E mais dois termos do projeto:
 
 - **S3** é o serviço de armazenamento de arquivos da AWS. Os arquivos ficam dentro de um **bucket** (um "disco" com nome). Aqui o bucket se chama `datalake-tracking`.
 - **floci** é um programa que imita o S3 na sua máquina. Para o Spark, ele parece um S3 de verdade, mas tudo fica local e é gratuito.
+
+> **Pense assim:** o floci é um **simulador de voo** do S3. O piloto (o seu código) usa os mesmos comandos de um avião de verdade, mas ninguém sai do chão e nada custa dinheiro. Como num simulador, ao desligar tudo volta ao começo: o floci guarda os arquivos **na memória**, então, se o Docker reiniciar, o bucket fica vazio e é preciso rodar o gerador (Passo 3) de novo.
 
 ## O que roda em cada contêiner
 
@@ -29,6 +43,27 @@ O projeto usa três contêineres, chamados de **serviços** no `docker-compose.y
 | `explorador` | a mesma imagem do `app` | site Streamlit em `http://localhost:8501` para explorar o bucket |
 
 Em outras palavras: o `floci` guarda os arquivos e o `app` roda o seu código. O `explorador` é um site para olhar o bucket (Passo 5). O conector `s3a` é a peça que permite ao Spark ler e gravar no S3 com caminhos que começam com `s3a://`.
+
+```mermaid
+flowchart LR
+    subgraph PC["Sua máquina"]
+        editor["Seu editor<br/>(VS Code etc.)"]
+        nav["Navegador"]
+        pasta[("pasta do<br/>repositório")]
+    end
+    subgraph DOCKER["Docker"]
+        app["app<br/>Python + Spark"]
+        exp["explorador<br/>site :8501"]
+        floci[("floci<br/>S3 de mentira :4566")]
+    end
+    editor -->|edita| pasta
+    pasta <-->|montada em /projeto| app
+    app -->|s3a://| floci
+    exp -->|só lê| floci
+    nav -->|localhost:8501| exp
+```
+
+O desenho mostra quem fala com quem: você edita os arquivos na sua máquina, o `app` enxerga a mesma pasta e conversa com o floci, e o navegador abre o explorador.
 
 O repositório é montado em `/projeto` dentro do `app`: o que você edita na sua máquina vale na hora, sem reconstruir a imagem. Ou seja, você edita os arquivos no seu editor de sempre, e o contêiner enxerga a mesma pasta.
 
@@ -80,7 +115,7 @@ docker compose run --rm app python infra/verificar_ambiente.py
 
 **O que faz:** abre uma sessão do Spark dentro do `app`, lê os eventos da landing, grava um arquivo de teste no bucket, lê esse arquivo de volta e apaga o teste.
 
-**O que você deve ver:** precisa terminar com três linhas `[ok]`. No meio delas aparece uma tabela com a contagem de eventos por nome. A configuração `s3a` usada pelo Spark está no início do próprio script (`infra/verificar_ambiente.py`). Se aparecer `[erro]`, veja a tabela de problemas comuns abaixo.
+**O que você deve ver:** precisa terminar com três linhas `[ok]`. No meio delas aparece uma tabela com a contagem de eventos por nome. A configuração `s3a` usada pelo Spark está em `pipeline/comum.py`, a mesma que os seus jobs vão usar. Se aparecer `[erro]`, veja a tabela de problemas comuns abaixo.
 
 ## Passo 5 — Explore o bucket
 
@@ -117,7 +152,7 @@ Se algo der errado, procure a mensagem na primeira coluna.
 | a página `localhost:8501` não abre | o serviço não está rodando ou a porta 8501 está ocupada | `docker compose up -d explorador`; veja `docker compose logs explorador` |
 | `ClassNotFoundException: org.apache.hadoop.fs.s3a.S3AFileSystem` | imagem antiga, sem os jars | `docker compose build --no-cache app` |
 | `ModuleNotFoundError: No module named 'streamlit'` (ou `'duckdb'`) | imagem antiga, de antes do explorador | `docker compose build app` |
-| `[erro]` no `verificar_ambiente.py` lendo a landing | o gerador ainda não rodou | Passo 3 |
+| `[erro]` no `verificar_ambiente.py` lendo a landing | o gerador ainda não rodou, ou o Docker reiniciou e o floci perdeu os arquivos (ele guarda tudo na memória) | Passo 3 |
 
 Dica: para ver quais contêineres estão ligados, use `docker compose ps`.
 
