@@ -121,3 +121,27 @@ def test_previa_recusa_caminho_com_ponto_ponto(lago):
     con, _, raiz = lago
     with pytest.raises(ValueError, match="dentro do bucket"):
         consultas.previa(con, str(raiz), "silver/../../etc/x.parquet")
+
+
+def test_view_de_outro_bucket_le_do_bucket_certo_e_a_trava_cobre_os_dois(tmp_path):
+    datalake, outro = tmp_path / "datalake", tmp_path / "outro"
+    (datalake / "gold" / "funil").mkdir(parents=True)
+    (outro / "notas").mkdir(parents=True)
+    duckdb.sql(f"COPY (SELECT 1 AS etapa) TO '{datalake}/gold/funil/a.parquet' (FORMAT parquet)")
+    duckdb.sql(f"COPY (SELECT 9 AS nota) TO '{outro}/notas/a.parquet' (FORMAT parquet)")
+    (tmp_path / "fora").mkdir()
+    duckdb.sql(f"COPY (SELECT 0 AS segredo) TO '{tmp_path}/fora/x.parquet' (FORMAT parquet)")
+    chaves = ["gold/funil/a.parquet", particoes.chave_virtual("rascunho", "notas/a.parquet")]
+    raiz_de = lambda bucket=None: str(outro) if bucket == "rascunho" else str(datalake)
+    con = consultas.conectar(s3=False)
+    consultas.criar_views(con, raiz_de, particoes.datasets(chaves))
+    consultas.travar(con, [str(datalake), str(outro)])
+    assert consultas.executar(con, "SELECT nota FROM rascunho.notas").tabela["nota"].tolist() == [9]
+    assert consultas.executar(con, "SELECT etapa FROM gold.funil").tabela["etapa"].tolist() == [1]
+    with pytest.raises(duckdb.Error):                                  # fora dos buckets: bloqueado
+        consultas.executar(con, f"SELECT * FROM read_parquet('{tmp_path}/fora/x.parquet')")
+
+
+def test_origem_com_raiz_em_texto_usa_s3_para_os_outros_buckets():
+    dataset = next(d for d in particoes.datasets([particoes.chave_virtual("rascunho", "notas/a.parquet")]))
+    assert "'s3://rascunho/notas/**/*.parquet'" in consultas.origem("s3://datalake", dataset)

@@ -63,15 +63,21 @@ def _mostrar_erro(titulo: str, erro: Exception) -> None:
 
 
 @st.cache_resource(max_entries=2, on_release=_fechar, show_spinner="Conectando ao S3 e criando as tabelas…")
-def _conexao(datasets: tuple[particoes.Dataset, ...], raiz: str):
+def _conexao(datasets: tuple[particoes.Dataset, ...], raizes: tuple[str, ...]):
+    """Uma view por tabela de todos os buckets; a conexão fica trancada nesses buckets.
+
+    Uma tabela que o DuckDB não consegue ler (arquivo estragado num bucket qualquer) vira aviso, não derruba o resto."""
     con = consultas.conectar(endpoint=s3.ENDPOINT, chave=s3.CHAVE, segredo=s3.SEGREDO, regiao=s3.REGIAO)
-    views = consultas.criar_views(con, raiz, list(datasets))
-    colunas = {}
-    for nome in views:
-        descricao = con.sql(f"DESCRIBE {particoes.sql_nome(nome)}").df()
-        colunas[nome] = list(zip(descricao["column_name"], descricao["column_type"]))
-    consultas.travar(con, raiz)
-    return con, colunas
+    colunas, falhas = {}, {}
+    for dataset in datasets:
+        try:
+            consultas.criar_views(con, s3.raiz, [dataset])
+            descricao = con.sql(f"DESCRIBE {particoes.sql_nome(dataset.nome_view)}").df()
+            colunas[dataset.nome_view] = list(zip(descricao["column_name"], descricao["column_type"]))
+        except duckdb.Error as erro:
+            falhas[dataset.nome_view] = f"{consultas.explicar_erro(erro)} ({str(erro).splitlines()[0][:160]})"
+    consultas.travar(con, raizes)
+    return con, colunas, falhas
 
 
 def _escolher(**valores) -> None:
@@ -407,16 +413,18 @@ def _tela_catalogo(objetos, datasets, colunas) -> None:
 
     if not banco:
         _contexto("catalogo-bancos")
-        ui.titulo("Bancos de dados", len(bancos), "No Glue, um banco de dados agrupa tabelas. Aqui há um por camada do medalhão.")
+        ui.titulo("Bancos de dados", len(bancos), "No Glue, um banco de dados agrupa tabelas. Aqui há um por camada do "
+                  f"medalhão, no bucket <code>{s3.BUCKET}</code>, e um para cada outro bucket do floci, com o nome dele.")
         with ui.painel("bancos", "Bancos de dados", len(bancos)):
-            ui.tabela("bancos", [("Nome", 2), ("Tabelas", 1), ("Localização", 3)], [
+            ui.tabela("bancos", [("Nome", 2), ("Tabelas", 1), ("Localização", 3), ("Bucket", 2)], [
                 [ui.Link(nome, f"banco:{nome}", _escolher, kwargs={"cat_banco": nome, "cat_tabela": None}),
-                 str(len(tabelas)), f"s3://{s3.BUCKET}/{nome}/"] for nome, tabelas in bancos.items()])
+                 str(len(tabelas)), glue.local_do_banco(tabelas, s3.BUCKET), tabelas[0].bucket or s3.BUCKET]
+                for nome, tabelas in bancos.items()], localizar=len(bancos) > 8)
         return
 
     if not tabela:
         _contexto("catalogo-tabelas")
-        ui.titulo(banco, descricao=f"Banco de dados · s3://{s3.BUCKET}/{banco}/")
+        ui.titulo(banco, descricao=f"Banco de dados · {glue.local_do_banco(bancos[banco], s3.BUCKET)}")
         linhas = [[ui.Link(particoes.banco_e_tabela(d.nome_view)[1], f"tabela:{d.nome_view}", _escolher,
                            kwargs={"cat_tabela": d.nome_view}),
                    "Parquet" if d.formato == "parquet" else "JSON", glue.localizacao(d, s3.BUCKET),
@@ -926,6 +934,15 @@ def _pagina() -> None:
         _mostrar_tour()
 
 
+def _objetos_de_todos_os_buckets() -> tuple[list[particoes.Objeto], list[str]]:
+    """Objetos do datalake com a chave de sempre e os dos outros buckets como "@<bucket>/<chave>"."""
+    buckets = [b for b in _buckets() if b != s3.BUCKET]
+    objetos = list(_listar())
+    for bucket in buckets:
+        objetos += [replace(o, chave=particoes.chave_virtual(bucket, o.chave)) for o in _listar(bucket)]
+    return objetos, [s3.BUCKET] + buckets
+
+
 def _conteudo(tela: str) -> None:
     if tela == TELA_S3:                        # S3, jobs e workflows não dependem do bucket do datalake ter dados
         _tela_s3()
@@ -938,22 +955,29 @@ def _conteudo(tela: str) -> None:
         return
 
     try:
-        objetos = _listar()
+        objetos, buckets = _objetos_de_todos_os_buckets()
     except s3.S3Indisponivel as erro:
         st.error(str(erro))
         st.stop()
+    aviso_vazio = (f"O bucket {s3.BUCKET} está vazio. Gere os eventos com "
+                   "`docker compose run --rm app python gerador/gerar_eventos.py` e clique em Recarregar.")
     if not objetos:
-        st.info(f"O bucket {s3.BUCKET} está vazio. Gere os eventos com "
-                "`docker compose run --rm app python gerador/gerar_eventos.py` e clique em Recarregar.")
+        st.info(aviso_vazio)
         st.stop()
+    if all(o.chave.startswith(particoes.MARCA_BUCKET) for o in objetos):     # só há dados nos outros buckets
+        st.info(aviso_vazio + " Por enquanto, aparecem só as tabelas dos outros buckets.")
 
     datasets = particoes.datasets(o.chave for o in objetos)
-    raiz = s3.raiz()
     try:
-        con, colunas = _conexao(tuple(datasets), raiz)
+        con, colunas, falhas = _conexao(tuple(datasets), tuple(s3.raiz(b) for b in buckets))
     except duckdb.Error as erro:
         _mostrar_erro("Não consegui preparar as tabelas no DuckDB.", erro)
         st.stop()
+    if falhas:
+        with st.expander(f"⚠ {len(falhas)} tabela(s) que o DuckDB não conseguiu ler ficaram de fora"):
+            for nome, motivo in falhas.items():
+                st.markdown(f"- `{nome}`: {motivo}")
+        datasets = [d for d in datasets if d.nome_view not in falhas]
 
     if tela == TELA_CATALOGO:
         _tela_catalogo(objetos, datasets, colunas)

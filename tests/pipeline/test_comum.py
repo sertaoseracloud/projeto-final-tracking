@@ -1,6 +1,10 @@
 import comum
 
 
+def test_caminho_em_outro_bucket():
+    assert comum.caminho("notas", bucket="rascunho-turma") == "s3a://rascunho-turma/notas"
+
+
 def test_caminho_aponta_para_o_bucket_por_s3a():
     assert comum.caminho("silver/itens") == f"s3a://{comum.BUCKET}/silver/itens"
     assert comum.glob_eventos("silver") == "silver/event_name=*"

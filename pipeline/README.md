@@ -40,7 +40,7 @@ A parte repetitiva já vem pronta em [`comum.py`](comum.py), nesta mesma pasta. 
 | Função | Para que serve |
 | --- | --- |
 | `criar_sessao("bronze")` | a `SparkSession` configurada para o floci (s3a) e para manter `month=09` com dois dígitos. A `SparkSession` é o objeto de entrada do Spark: todo `spark.read` e todo `df.write` passam por ela |
-| `caminho("silver/itens")` | `s3a://datalake-tracking/silver/itens` |
+| `caminho("silver/itens")` | `s3a://datalake-tracking/silver/itens`. Para outro bucket do floci: `caminho("notas", bucket="rascunho-turma")` dá `s3a://rascunho-turma/notas` (a mesma `SparkSession` lê e grava em qualquer bucket) |
 | `glob_eventos("bronze")` | `bronze/event_name=*`: só as pastas de eventos da camada |
 | `ler_eventos(spark, "bronze")` | lê as pastas `event_name=…` da camada, com `event_name`, `year`, `month` e `day` como colunas. Para a landing: `ler_eventos(spark, "landing", "json", schema=SEU_SCHEMA)` |
 | `gravar_eventos(df, "silver", "overwrite")` | grava particionado por `event_name/year/month/day` na raiz da camada, sem apagar as pastas vizinhas |

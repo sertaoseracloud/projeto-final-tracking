@@ -47,9 +47,12 @@ def criar_sessao(nome: str) -> SparkSession:
     return spark
 
 
-def caminho(camada: str) -> str:
-    """'silver/itens' -> 's3a://datalake-tracking/silver/itens'."""
-    return f"s3a://{BUCKET}/{camada}"
+def caminho(camada: str, bucket: str | None = None) -> str:
+    """'silver/itens' -> 's3a://datalake-tracking/silver/itens'.
+
+    Para ler ou gravar em outro bucket do floci, passe o nome dele:
+    caminho("notas", bucket="rascunho-turma") -> 's3a://rascunho-turma/notas'."""
+    return f"s3a://{bucket or BUCKET}/{camada}"
 
 
 # Os eventos de cada camada ficam em <camada>/event_name=<nome>/year=…/month=…/day=…

@@ -78,3 +78,13 @@ def test_execucoes_mais_recentes_primeiro_e_so_do_job_pedido(tmp_path):
     _esperar(pasta, glue.iniciar(b, pasta, raiz=tmp_path))
     assert [e.id for e in glue.execucoes(pasta, "a")] == [segunda, primeira]
     assert glue.em_execucao(pasta, "a") is False
+
+
+def test_banco_de_outro_bucket_vem_depois_das_camadas_e_aponta_para_o_bucket_dele():
+    from explorador import particoes
+    outros = particoes.datasets([particoes.chave_virtual("rascunho-turma", "notas/a.parquet")])
+    bancos = glue.bancos(DATASETS + outros)
+    assert list(bancos) == ["landing", "bronze", "silver", "gold", "rascunho_turma"]
+    assert glue.local_do_banco(bancos["rascunho_turma"], "datalake-tracking") == "s3://rascunho-turma/"
+    assert glue.local_do_banco(bancos["silver"], "datalake-tracking") == "s3://datalake-tracking/silver/"
+    assert glue.localizacao(outros[0], "datalake-tracking") == "s3://rascunho-turma/notas/"

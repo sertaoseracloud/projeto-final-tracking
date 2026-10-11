@@ -35,7 +35,17 @@ def bancos(datasets: list[Dataset]) -> dict[str, list[Dataset]]:
 
 
 def localizacao(dataset: Dataset, bucket: str) -> str:
-    return f"s3://{bucket}/{dataset.prefixo}/"
+    """`bucket` é o do datalake; um dataset de outro bucket mostra o bucket dele."""
+    caminho = f"{dataset.caminho}/" if dataset.caminho else ""
+    return f"s3://{dataset.bucket or bucket}/{caminho}"
+
+
+def local_do_banco(tabelas: list[Dataset], bucket: str) -> str:
+    """Banco do datalake: s3://<bucket>/<camada>/; banco de outro bucket: s3://<esse bucket>/."""
+    primeira = tabelas[0]
+    if primeira.bucket:
+        return f"s3://{primeira.bucket}/"
+    return f"s3://{bucket}/{primeira.prefixo.split('/')[0]}/"
 
 
 def chaves_particao(dataset: Dataset, objetos: list[Objeto]) -> list[str]:
