@@ -4,11 +4,14 @@ Esta pasta **não vai para o aluno**. O `.gitattributes` marca `professor/`, `do
 
 ## Gerar o pacote do aluno
 
+Se você usou o `usar_solucao.py` (seção "Mostrar a solução no explorador"), tire as cópias antes:
+
 ```bash
+docker compose run --rm app python professor/usar_solucao.py --desfazer
 git archive --format=zip -o dist/projeto-final-aluno.zip HEAD
 ```
 
-A pasta `dist/` fica fora do git. Distribua o zip, nunca o repositório nem um fork dele. Antes de distribuir, confira:
+O `git archive` pega só o que está commitado no `HEAD`; a pasta `dist/` fica fora do git. Distribua o zip, nunca o repositório nem um fork dele. Antes de distribuir, confira:
 
 ```bash
 # 1. nada da solução dentro do zip (a saída tem que ficar vazia)
@@ -23,6 +26,32 @@ docker run --rm -v /tmp/pacote-aluno:/projeto -w /projeto datalake-tracking-app 
 ```
 
 O pacote leva o `pipeline/comum.py` pronto, o explorador inteiro (S3, Data Catalog, Jobs ETL, Workflows e Athena) e nenhum job: o aluno escreve todos.
+
+### Distribuir pela release do GitHub
+
+Cada versão do pacote vira uma release do repositório, com o zip anexado (`gh` é o GitHub CLI):
+
+```bash
+gh release create aluno-v1.0.0 dist/projeto-final-aluno.zip --title "Pacote do aluno v1.0.0" --notes "…"
+```
+
+A tag marca o commit de onde o zip saiu. Para uma versão nova, gere o zip de novo e crie outra tag (`aluno-v1.1.0`…). Num repositório privado, só quem tem acesso a ele baixa a release; para a turma, envie o zip.
+
+### Ver o pacote como o aluno vê
+
+Descompacte o zip numa pasta própria e siga o `SETUP.md` dela:
+
+```bash
+unzip -q dist/projeto-final-aluno.zip -d ../projeto-final-aluno
+cd ../projeto-final-aluno
+docker compose build app
+docker compose up -d floci        # espere o docker compose ps mostrar (healthy)
+docker compose run --rm app python gerador/gerar_eventos.py
+docker compose run --rm app python infra/verificar_ambiente.py
+docker compose up -d explorador
+```
+
+As duas cópias usam os mesmos nomes de contêiner (`floci-datalake-tracking`) e as mesmas portas (4566 e 8501). Desligue uma com `docker compose down`, na pasta dela, antes de subir a outra. O floci guarda tudo na memória: ao trocar, gere os eventos de novo.
 
 ## Rodar a solução de referência
 
@@ -59,7 +88,7 @@ docker compose up -d floci explorador
 
 O script copia os jobs de `professor/solucao/` para `pipeline/` e o `workflows/medalhao.json` para `pipeline/workflows/`. O `comum.py` não é copiado: a solução já usa o `pipeline/comum.py`. Um arquivo do aluno com o mesmo nome e conteúdo diferente nunca é sobrescrito; ele aparece como "pulado".
 
-No explorador, clique em **⟳ Sincronizar** (em Jobs ETL ou Workflows). Aí aparecem os jobs da solução em **Glue · Jobs ETL** e o workflow `medalhao` em **Glue · Workflows**.
+No explorador, clique em **⟳ Sincronizar** (em Jobs ETL ou Workflows). Aí aparecem os jobs da solução em **Glue · Jobs ETL** e o workflow `medalhao` em **Glue · Workflows**. Além dos 8 jobs do pipeline, a lista mostra `executar_pipeline`, `limpar_camadas` e `medir_armadilhas`, que também rodam pelo console, e `sessoes`, que é só um módulo de apoio importado pelas Golds: não o execute. O floci começa vazio, então gere os eventos antes (`gerador/gerar_eventos.py`, depois de o `docker compose ps` mostrar o floci `(healthy)`).
 
 Depois da aula, tire as cópias (e sincronize de novo para tirá-las também do floci):
 

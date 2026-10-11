@@ -96,6 +96,8 @@ docker compose up -d floci
 
 **O que você deve ver:** o `build` imprime muitas linhas de progresso e termina sem mensagem de erro. O `up -d floci` mostra o contêiner `floci-datalake-tracking` como iniciado (`Started` ou `Running`).
 
+O floci leva uns 20 segundos para ficar pronto. Antes do Passo 3, confira com `docker compose ps`: a coluna de status do `floci-datalake-tracking` precisa mostrar `(healthy)`. Enquanto aparecer `(health: starting)`, espere e rode de novo. Se o gerador rodar antes disso, ele falha.
+
 ## Passo 3 — Popular a landing do datalake
 
 "Popular a landing" significa colocar os eventos brutos no prefixo `landing/` do bucket, que é a porta de entrada do datalake.
@@ -160,6 +162,7 @@ Se algo der errado, procure a mensagem na primeira coluna.
 | `ClassNotFoundException: org.apache.hadoop.fs.s3a.S3AFileSystem` | imagem antiga, sem os jars | `docker compose build --no-cache app` |
 | `ModuleNotFoundError: No module named 'streamlit'` (ou `'duckdb'`) | imagem antiga, de antes do explorador | `docker compose build app` |
 | `[erro]` no `verificar_ambiente.py` lendo a landing | o gerador ainda não rodou, ou o Docker reiniciou e o floci perdeu os arquivos (ele guarda tudo na memória) | Passo 3 |
+| o gerador falha logo depois de `docker compose up -d floci` | o floci ainda não terminou de ligar | espere `docker compose ps` mostrar `(healthy)` e rode o gerador de novo |
 | um job ou workflow falha logo no começo com um erro longo do S3 (`listObjectsV2`, `AmazonS3Client`) | o bucket ainda não existe: o floci acabou de ligar (ou reiniciou) e o gerador ainda não rodou | Passo 3, depois rode de novo |
 | no explorador, a tela S3 avisa que o `datalake-tracking` está vazio ou ainda não existe | mesmo motivo: o floci começou vazio | Passo 3 e clique em **Recarregar** |
 | a tela **Jobs ETL** está vazia, um job novo não aparece ou roda a versão antiga do código | os jobs rodam da cópia no bucket `glue-assets` do floci, e ela ainda não foi atualizada (ou o floci reiniciou e perdeu a cópia) | clique em **⟳ Sincronizar**, nas telas Jobs ETL ou Workflows |
