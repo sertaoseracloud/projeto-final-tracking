@@ -23,6 +23,12 @@ def limpar_cache():
     st.cache_resource.clear()
 
 
+@pytest.fixture(autouse=True)
+def so_o_bucket_do_datalake(monkeypatch):
+    """Sem isto a tela S3 perguntaria ao floci de verdade quais buckets existem."""
+    monkeypatch.setattr(s3, "listar_buckets", lambda *_, **__: [s3.BUCKET])
+
+
 def _rodar():
     return AppTest.from_file(APP, default_timeout=60).run()
 
@@ -52,7 +58,7 @@ def bucket_local(tmp_path, monkeypatch):
     objetos = [Objeto(p.relative_to(tmp_path).as_posix(), p.stat().st_size)
                for p in tmp_path.rglob("*") if p.is_file()]
     monkeypatch.setattr(s3, "listar", lambda *_, **__: objetos)
-    monkeypatch.setattr(s3, "raiz", lambda: str(tmp_path))
+    monkeypatch.setattr(s3, "raiz", lambda *_: str(tmp_path))
     monkeypatch.setattr(consultas, "conectar", functools.partial(consultas.conectar, s3=False))
     return tmp_path
 
@@ -74,14 +80,14 @@ def test_abre_no_s3_com_a_lista_de_buckets_e_entra_no_bucket(bucket_local):
     assert not at.exception
     assert at.radio(key="tela").options == ["🪣  Buckets", "🗂  Data Catalog", "⚙  Jobs ETL", "🔀  Workflows",
                                              "🔎  Editor de consultas"]
-    assert at.button(key="abrir_bucket").label.endswith(s3.BUCKET)
-    at.button(key="abrir_bucket").click().run()
+    assert at.button(key=f"bucket:{s3.BUCKET}").label.endswith(s3.BUCKET)
+    at.button(key=f"bucket:{s3.BUCKET}").click().run()
     assert [t.label for t in at.tabs] == ["Objetos", "Partições", "Propriedades"]
 
 
 def test_navega_pelo_breadcrumb_e_mostra_a_previa_do_arquivo(bucket_local):
     at = _rodar()
-    at.button(key="abrir_bucket").click().run()
+    at.button(key=f"bucket:{s3.BUCKET}").click().run()
     caminho = ""
     for pasta in ("silver", "event_name=page_view", "year=2026", "month=09", "day=01"):
         caminho += pasta + "/"
@@ -94,12 +100,12 @@ def test_navega_pelo_breadcrumb_e_mostra_a_previa_do_arquivo(bucket_local):
     at.button(key="migalha:silver/event_name=page_view/").click().run()
     assert at.session_state["pasta"] == "silver/event_name=page_view/"
     at.button(key="migalha:buckets").click().run()
-    assert at.button(key="abrir_bucket")
+    assert at.button(key=f"bucket:{s3.BUCKET}")
 
 
 def test_aba_particoes_lista_os_dias_e_conta_linhas(bucket_local):
     at = _rodar()
-    at.button(key="abrir_bucket").click().run()
+    at.button(key=f"bucket:{s3.BUCKET}").click().run()
     assert at.selectbox(key="dataset").value == "silver.eventos"
     at.button(key="contar").click().run()
     assert not at.exception
@@ -227,7 +233,7 @@ def preferencias_isoladas(tmp_path, monkeypatch):
 def test_cada_tela_escolhe_o_seu_roteiro_do_tutorial(bucket_local):
     at = _rodar()
     assert at.session_state["contexto_tour"] == "s3-buckets"
-    at.button(key="abrir_bucket").click().run()
+    at.button(key=f"bucket:{s3.BUCKET}").click().run()
     assert at.session_state["contexto_tour"] == "s3-bucket"
     at.radio(key="tela").set_value(ATHENA).run()
     assert at.session_state["contexto_tour"] == "athena"
@@ -403,3 +409,27 @@ def test_executa_workflow_e_mostra_o_status_de_cada_etapa(pasta_workflows):
     at.radio(key="tela").set_value(JOBS).run()
     at.button(key="job:silver").click().run()
     assert any(">workflow medalhao<" in str(m.value) for m in at.markdown)
+
+
+def test_tela_s3_mostra_todos_os_buckets_e_abre_outro(bucket_local, monkeypatch):
+    outro = bucket_local / "outro-bucket"
+    (outro / "brutos").mkdir(parents=True)
+    duckdb.sql(f"COPY (SELECT 7 AS numero) TO '{outro}/brutos/a.parquet' (FORMAT parquet)")
+    por_bucket = {s3.BUCKET: s3.listar(), "rascunho": [Objeto("brutos/a.parquet", (outro / "brutos/a.parquet").stat().st_size)]}
+    monkeypatch.setattr(s3, "listar_buckets", lambda *_, **__: [s3.BUCKET, "rascunho"])
+    monkeypatch.setattr(s3, "listar", lambda prefixo="", cliente=None, bucket=None: por_bucket[bucket or s3.BUCKET])
+    monkeypatch.setattr(s3, "raiz", lambda bucket=None: str(outro) if bucket == "rascunho" else str(bucket_local))
+    at = _rodar()
+    assert not at.exception
+    assert at.button(key="bucket:rascunho") and at.button(key=f"bucket:{s3.BUCKET}")
+    textos = " ".join(str(m.value) for m in at.markdown)
+    assert "Data Catalog e Athena" in textos and "só nesta tela" in textos
+    at.button(key="bucket:rascunho").click().run()
+    at.button(key="obj:brutos/").click().run()
+    at.button(key="obj:brutos/a.parquet").click().run()
+    assert not at.exception
+    previa = next(d.value for d in at.dataframe if "numero" in d.value.columns)
+    assert previa["numero"].tolist() == [7]
+    at.button(key="migalha:buckets").click().run()
+    at.button(key=f"bucket:{s3.BUCKET}").click().run()                # volta para o datalake sem erro
+    assert not at.exception and at.session_state["bucket_sel"] == s3.BUCKET

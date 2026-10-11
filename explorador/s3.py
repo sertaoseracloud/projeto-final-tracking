@@ -1,4 +1,8 @@
-"""Lista o bucket do floci com boto3. O explorador só lê: nada aqui grava ou apaga."""
+"""Lista os buckets do floci com boto3. O explorador só lê: nada aqui grava ou apaga.
+
+O bucket do datalake (AWS_S3_BUCKET) é o que alimenta o Data Catalog e o Athena; a tela S3
+mostra todos os buckets que existirem no floci.
+"""
 
 from __future__ import annotations
 
@@ -21,8 +25,8 @@ class S3Indisponivel(RuntimeError):
     """O floci não respondeu; a mensagem vai direto para o usuário."""
 
 
-def raiz() -> str:
-    return f"s3://{BUCKET}"
+def raiz(bucket: str | None = None) -> str:
+    return f"s3://{bucket or BUCKET}"
 
 
 def _cliente():
@@ -34,11 +38,31 @@ def _cliente():
                         config=Config(connect_timeout=3, read_timeout=10, retries={"max_attempts": 1}))
 
 
-def listar(prefixo: str = "", cliente=None) -> list[Objeto]:
+def _sem_conexao(erro: Exception) -> bool:
+    return any(c.__name__ in ERROS_DE_CONEXAO for c in type(erro).__mro__)
+
+
+def _indisponivel() -> S3Indisponivel:
+    return S3Indisponivel(f"Não consegui falar com o S3 em {ENDPOINT}. Rode `docker compose up -d floci`.")
+
+
+def listar_buckets(cliente=None) -> list[str]:
+    """Nomes de todos os buckets do floci, com o do datalake primeiro."""
+    s3 = cliente if cliente is not None else _cliente()
+    try:
+        nomes = [b["Name"] for b in s3.list_buckets().get("Buckets", [])]
+    except Exception as erro:
+        if _sem_conexao(erro):
+            raise _indisponivel() from None
+        raise
+    return sorted(nomes, key=lambda nome: (nome != BUCKET, nome))
+
+
+def listar(prefixo: str = "", cliente=None, bucket: str | None = None) -> list[Objeto]:
     s3 = cliente if cliente is not None else _cliente()
     try:
         objetos = []
-        for pagina in s3.get_paginator("list_objects_v2").paginate(Bucket=BUCKET, Prefix=prefixo):
+        for pagina in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket or BUCKET, Prefix=prefixo):
             for item in pagina.get("Contents", []):
                 objetos.append(Objeto(item["Key"], item["Size"], item.get("LastModified")))
         return objetos
@@ -46,8 +70,6 @@ def listar(prefixo: str = "", cliente=None) -> list[Objeto]:
         codigo = getattr(erro, "response", {}).get("Error", {}).get("Code")
         if codigo in ("NoSuchBucket", "404"):
             return []
-        if any(c.__name__ in ERROS_DE_CONEXAO for c in type(erro).__mro__):
-            raise S3Indisponivel(
-                f"Não consegui falar com o S3 em {ENDPOINT}. Rode `docker compose up -d floci`."
-            ) from None
+        if _sem_conexao(erro):
+            raise _indisponivel() from None
         raise

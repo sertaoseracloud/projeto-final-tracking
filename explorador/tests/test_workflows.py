@@ -169,14 +169,3 @@ def test_iniciar_em_segundo_plano_e_acompanhar(pastas):
     assert ex.status == workflows.SUCESSO
     assert [e.id for e in workflows.execucoes(execucoes, "medalhao")] == [id_execucao]
     assert not workflows.em_execucao(execucoes, "medalhao")
-
-
-def test_workflow_da_solucao_e_valido_e_espelha_o_executar_pipeline():
-    from pathlib import Path
-
-    from professor.solucao.executar_pipeline import JOBS as SEQUENCIA
-    solucao = Path(__file__).resolve().parents[2] / "professor" / "solucao"
-    wf = workflows.carregar(solucao / "workflows" / "medalhao.json")
-    workflows.validar(wf, {j.nome for j in glue.listar_jobs(solucao)})
-    passos = [j.removesuffix(".py") for j in SEQUENCIA]
-    assert sorted(e.job for e in wf.etapas) == sorted(passos)       # os mesmos 8 jobs, agora em grafo

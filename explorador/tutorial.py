@@ -44,7 +44,8 @@ ROTEIROS: dict[str, list[Passo]] = {
               "Jobs ETL (rodar um job), Workflows (rodar vários jobs em ordem) e Editor de consultas (SQL). "
               "Cada tela tem o seu próprio tour."),
         Passo(_k("painel-buckets"), "Lista de buckets",
-              "Um bucket é um \"disco\" do S3. O projeto tem um só, o datalake-tracking. Clique no nome dele para ver "
+              "Um bucket é um \"disco\" do S3. Aqui aparecem todos os buckets do floci, só para leitura. O do projeto é "
+              "o datalake-tracking, o único que alimenta o Data Catalog e o Athena. Clique no nome dele para ver "
               "as pastas landing/, bronze/, silver/ e gold/."),
         Passo(_k("recarregar"), "Recarregar",
               "Depois de rodar um job, clique aqui para o console ler o bucket de novo e enxergar as pastas e colunas novas."),
@@ -111,7 +112,7 @@ ROTEIROS: dict[str, list[Passo]] = {
     "workflows-lista": [
         Passo(None, "Workflows",
               "Um workflow junta vários jobs num grafo: cada job diz de quais outros depende. Ao executar, o console "
-              "roda cada job assim que as dependências dele terminam com sucesso, como o executar_pipeline.py, "
+              "roda cada job assim que as dependências dele terminam com sucesso, como se você rodasse um depois do outro, "
               "mas jobs independentes podem rodar ao mesmo tempo."),
         Passo(_k("criar_workflow"), "Criar workflow",
               "Abre o formulário: você dá um nome, escolhe os jobs e diz de quem cada um depende. O workflow fica "

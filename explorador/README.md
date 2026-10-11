@@ -1,8 +1,8 @@
 # Explorador do datalake (console de estudo)
 
-Um site que roda no seu computador para **olhar o bucket** sem escrever código: ver os arquivos que o gerador e o seu pipeline gravaram, ver o catálogo de tabelas, **rodar os seus jobs** e fazer **consultas SQL** sobre os dados.
+Um site que roda no seu computador para **olhar os buckets** sem escrever código: ver os arquivos que o gerador e o seu pipeline gravaram, ver o catálogo de tabelas, **rodar os seus jobs** (um a um ou juntos num **workflow**) e fazer **consultas SQL** sobre os dados.
 
-> **Pense assim:** o explorador é uma **vitrine de vidro** na frente do bucket, com uma bancada de trabalho ao lado. Pela vitrine (S3, Data Catalog e Athena) você vê tudo e faz perguntas, mas não mexe em nada. Na bancada (Jobs ETL) você manda rodar os jobs que você mesmo escreveu.
+> **Pense assim:** o explorador é uma **vitrine de vidro** na frente do bucket, com uma bancada de trabalho ao lado. Pela vitrine (S3, Data Catalog e Athena) você vê tudo e faz perguntas, mas não mexe em nada. Na bancada (Jobs ETL e Workflows) você manda rodar os jobs que você mesmo escreveu.
 
 ## Como abrir
 
@@ -88,11 +88,12 @@ flowchart LR
 
 ### S3 · Buckets
 
-- **Lista de buckets:** a tabela mostra o bucket `datalake-tracking`, a região, quantos objetos ele tem e o tamanho total. Clique no nome para entrar.
+- **Lista de buckets:** a tabela mostra **todos os buckets** do floci, com a região, quantos objetos cada um tem, o tamanho total e quem usa o bucket. O `datalake-tracking` vem primeiro: é o do projeto, o único que alimenta o Data Catalog e o Athena. Os outros (por exemplo, um bucket que você criou para testar) só aparecem aqui. Clique no nome para entrar. Se o `datalake-tracking` estiver vazio ou ainda não existir, um aviso lembra de rodar o gerador.
 - **Caminho no topo (breadcrumb):** `Buckets › datalake-tracking › silver › event_name=purchase`. Clique em qualquer parte para voltar até ela.
 - **Aba Objetos:** as pastas (📁) e os arquivos (📄) da pasta atual, com tipo, última modificação e tamanho. Clique numa pasta para entrar; clique num `.parquet` ou `.jsonl` para ver as primeiras 100 linhas logo abaixo.
 - **Aba Partições:** escolha um dataset e veja uma linha por partição (`event_name`, `year`, `month`, `day`) com quantos arquivos e quantos bytes ela tem. Quando o dataset não tem uma dessas partições, a coluna mostra `—`. O botão "Contar linhas por partição" conta as linhas de cada uma.
-- **Aba Propriedades:** nome, região, endpoint, total de objetos e tamanho do bucket.
+- **Aba Propriedades:** nome, região, endpoint, total de objetos, tamanho, quantos datasets e quem usa o bucket.
+- Tudo aqui é **somente leitura**, em qualquer bucket: a prévia e a contagem de linhas usam uma conexão trancada no bucket aberto, que não lê nada fora dele.
 
 ### Glue · Data Catalog
 
@@ -100,12 +101,11 @@ O **Data Catalog** é a lista de "o que existe no lake": quais bancos, quais tab
 
 > **Pense assim:** é o **catálogo de uma biblioteca**. Os livros (os arquivos) estão nas estantes (o bucket); o catálogo diz em que estante está cada livro, de que assunto ele é e como ele é organizado, sem você precisar andar pelos corredores.
 
-- **Bancos de dados:** um por camada do medalhão: `landing`, `bronze`, `silver` e `gold`, cada um com a sua localização `s3://datalake-tracking/<banco>/`.
+- **Bancos de dados:** um por camada do medalhão: `landing`, `bronze`, `silver` e `gold`, cada um com a sua localização `s3://datalake-tracking/<banco>/`. O catálogo (e o Athena) olham só o bucket do datalake; outros buckets aparecem apenas na tela S3.
 - **Tabelas do banco:** nome, formato (Parquet ou JSON), localização, quantas partições e quantas colunas.
-- **Detalhe da tabela:**
+- **Detalhe da tabela:** no topo, o painel **Visão geral da tabela** (banco, localização, classificação, chaves de partição, quantos arquivos e o nome para usar no Athena); embaixo, duas abas:
   - **Esquema:** as colunas e os tipos; as chaves de partição aparecem marcadas. Um tipo `struct` (ou `struct[]`, uma lista de structs) aparece só com essa palavra, em azul: clique nele para abrir um **overlay com a tipagem interna** (os campos de dentro, em árvore), em vez de ver o tipo inteiro numa linha enorme;
-  - **Partições:** uma linha por partição, com arquivos e tamanho;
-  - **Propriedades:** banco, localização, classificação e o nome para usar no Athena.
+  - **Partições:** uma linha por partição, com arquivos e tamanho.
 - O botão **Consultar no Athena** abre uma aba nova no editor já com `SELECT * FROM <banco>.<tabela> LIMIT 10`.
 
 ### Glue · Jobs ETL
@@ -139,24 +139,24 @@ sequenceDiagram
 
 ### Glue · Workflows
 
-Um **workflow** junta vários jobs num **grafo**: cada job diz de quais outros depende. Ao executar, o console roda cada job assim que todas as dependências dele terminam com **Sucesso**. É o mesmo papel do `executar_pipeline.py`, só que, em vez de uma fila fixa, quem não depende um do outro pode rodar ao mesmo tempo.
+Um **workflow** junta vários jobs num **grafo**: cada job diz de quais outros depende. Ao executar, o console roda cada job assim que todas as dependências dele terminam com **Sucesso**. É como rodar os jobs um depois do outro no terminal, só que automático e, em vez de uma fila fixa, quem não depende um do outro pode rodar ao mesmo tempo.
 
 > **Pense assim:** é a **receita de um almoço**. O arroz e o feijão podem ir ao fogo juntos; a salada só depois de lavar as folhas; a mesa só se põe quando tudo está pronto. O workflow é essa receita escrita: o que espera o quê. Se uma etapa queima, você não serve o resto.
 
 ```mermaid
 flowchart LR
-    b["01_bronze_ingestao"] --> s["02_silver_eventos"]
-    s --> g3["03_gold_funil"]
-    s --> g4["04_gold_engajamento"]
-    s --> g5["05_gold_receita_aquisicao"]
-    s --> g6["06_gold_ml"]
-    s --> g7["07_gold_mapa_calor"]
-    g7 --> e["08_exportar_mapa_calor"]
+    b["bronze"] --> s["silver"]
+    s --> g3["gold_funil"]
+    s --> g4["gold_engajamento"]
+    s --> g5["gold_receita"]
+    s --> g6["gold_ml"]
+    s --> g7["gold_mapa_calor"]
+    g7 --> e["exportar_mapa_calor"]
 ```
 
-*O grafo da solução de referência (`professor/solucao/workflows/medalhao.json`): as cinco Golds só dependem da Silver, então podem rodar lado a lado.*
+*Um exemplo de grafo para o pipeline do projeto (os nomes dos jobs são os que você escolher): as Golds só dependem da Silver, então podem rodar lado a lado.*
 
-- **Criar workflow:** dê um **nome** (letras minúsculas, números, `_` ou `-`), escolha os **jobs** da pasta e, para cada um, de quais outros ele **depende**. O botão **Encadear em sequência** monta uma fila simples (cada job depende do anterior), igual ao `executar_pipeline.py`. A **prévia** desenha o grafo enquanto você preenche e avisa se algo estiver errado, por exemplo um **ciclo** (A espera B e B espera A).
+- **Criar workflow:** dê um **nome** (letras minúsculas, números, `_` ou `-`), escolha os **jobs** da pasta e, para cada um, de quais outros ele **depende**. O botão **Encadear em sequência** monta uma fila simples (cada job depende do anterior), na ordem em que você escolheu os jobs. A **prévia** desenha o grafo enquanto você preenche e avisa se algo estiver errado, por exemplo um **ciclo** (A espera B e B espera A).
 - **Jobs ao mesmo tempo:** quantos jobs independentes podem rodar juntos (de 1 a 4; o padrão é 2). Cada job abre um Spark, e mais de 2 ao mesmo tempo pode faltar memória.
 - **Onde fica salvo:** em `pipeline/workflows/<nome>.json`, junto com os seus scripts. Dá para versionar no git e abrir no editor.
 - **Executar:** começa uma execução nova. A aba **Execução** mostra o grafo com as cores do status de cada job (azul rodando, verde sucesso, vermelho falhou, tracejado não executado), a tabela de **Etapas** (dependências, status, início e duração) e o **log** da etapa escolhida. Tudo se atualiza sozinho a cada 2 segundos.
@@ -170,6 +170,8 @@ docker compose run --rm app python -m explorador.workflows pipeline/workflows/me
 ```
 
 Pelo terminal, o progresso aparece na tela (`>>>` quando um job começa, `<<<` quando termina) e, se algo falhar, as últimas linhas do log. Essa execução roda num contêiner à parte, então não entra no **Histórico** do console. Os dados gravados no bucket são os mesmos.
+
+O workflow é uma ajuda para rodar e testar o pipeline; o **R3** do enunciado continua pedindo o seu script de sequência.
 
 ### Athena · Editor de consultas
 
@@ -216,7 +218,7 @@ DESCRIBE silver.eventos;
 Três das cinco telas só **leem**. As consultas do Athena têm duas proteções:
 
 1. Aceita consultas que começam com `SELECT`, `WITH`, `DESCRIBE`, `SHOW`, `SUMMARIZE`, `FROM`, `EXPLAIN` ou `PRAGMA table_info`, uma por vez. Comandos que mudam dados (`COPY`, `CREATE`, `DROP`, `INSERT`…) são recusados. `EXPLAIN ANALYZE` também é recusado, porque ele executa o comando de verdade; use só `EXPLAIN`.
-2. A conexão com o DuckDB é **trancada** no bucket: ela não lê arquivos do computador nem muda configurações.
+2. A conexão com o DuckDB é **trancada** no bucket do datalake: ela não lê arquivos do computador, nem outros buckets, nem muda configurações. Na tela S3, cada bucket aberto ganha uma conexão própria, trancada nele.
 
 > **Pense assim:** é um prédio com **duas portarias**. A primeira (a validação) confere se o seu pedido é só de leitura; a segunda (a trava da conexão) garante que, mesmo que algo escape da primeira, ninguém sai do andar do bucket.
 
@@ -229,7 +231,7 @@ flowchart LR
     p2 -->|sim| res["resultado na tabela<br/>(e CSV para baixar)"]
 ```
 
-A tela **Jobs ETL** é a exceção: ela roda os scripts da pasta `pipeline/`, e quem grava é o código desses scripts, exatamente como no terminal. O console nunca roda um comando digitado: só os arquivos que aparecem na lista.
+As telas **Jobs ETL** e **Workflows** são a exceção: elas rodam os scripts da pasta `pipeline/`, e quem grava é o código desses scripts, exatamente como no terminal. O console nunca roda um comando digitado: só os arquivos que aparecem na lista de jobs (um workflow só aceita jobs dessa lista).
 
 Se algo inesperado acontecer, o site mostra uma mensagem amigável e, embaixo dela, uma linha curta de "Detalhe técnico" para ajudar a achar a causa.
 

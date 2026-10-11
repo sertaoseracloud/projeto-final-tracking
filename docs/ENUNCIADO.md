@@ -102,7 +102,7 @@ Estes arquivos já existem no repositório. Você não precisa alterá-los.
 | --- | --- |
 | `site/index.html` | landing de exemplo que dispara os 20 eventos e exporta JSONL; serve para ver o evento nascer |
 | `gerador/` | simulador do coletor: popula `landing/` no S3 com semanas de eventos sintéticos |
-| `docker-compose.yml` + `Dockerfile` | três contêineres: `floci` (S3 emulado), `app` (Python 3.11, Java 17, PySpark 3.5.3 com o conector `s3a`, `boto3`, `pytest`) e `explorador` (um site em `http://localhost:8501` para olhar o bucket, feito com a mesma imagem do `app`). Nada é instalado na máquina além do Docker; nenhuma conta de nuvem é necessária |
+| `docker-compose.yml` + `Dockerfile` | três contêineres: `floci` (S3 emulado), `app` (Python 3.11, Java 17, PySpark 3.5.3 com o conector `s3a`, `boto3`, `pytest`) e `explorador` (um console em `http://localhost:8501`, feito com a mesma imagem do `app`, para olhar os buckets, ver o catálogo de tabelas, rodar os seus jobs, sozinhos ou juntos num workflow, e fazer consultas SQL). Nada é instalado na máquina além do Docker; nenhuma conta de nuvem é necessária |
 | `pipeline/comum.py` | peças prontas para os seus jobs: a `SparkSession` configurada para o floci, caminhos `s3a://`, conferir se uma camada existe (R2), ler e gravar as partições `event_name=…` sem misturar nem apagar as pastas vizinhas. Importe em vez de reescrever; o [pipeline/README.md](../pipeline/README.md#comumpy-as-peças-prontas) mostra como |
 | `infra/verificar_ambiente.py` | confere, de dentro do contêiner `app`, que o Spark lê e grava no floci por `s3a://` |
 | `SETUP.md` | ambiente do zero com Docker |
@@ -430,6 +430,8 @@ Depois que o job de exportação (R11) rodar, abra `site/index.html` no navegado
 
 O código do pipeline vai em `pipeline/`, e o [`pipeline/README.md`](../pipeline/README.md) explica como acessar o S3 pelo Spark.
 
+Sem digitar comandos, o explorador (`docker compose up -d explorador`, em http://localhost:8501) roda um job seu na tela **Glue · Jobs ETL** e vários jobs na ordem certa na tela **Glue · Workflows**, onde você monta o grafo de dependências. É uma ajuda para testar enquanto constrói: o **R3** continua pedindo o seu script de sequência. Veja [`explorador/README.md`](../explorador/README.md).
+
 ## 7. Avaliação
 
 Rubrica de 100 pontos. A tabela mostra cada critério, quantos pontos vale e como ele é conferido.
@@ -519,9 +521,10 @@ Os termos estão agrupados por assunto. Os exemplos usam a landing da DadosPro.
 
 ### Ambiente
 
-- **Contêiner** — ambiente isolado, criado a partir de uma imagem Docker, que já traz os programas necessários. O projeto usa três: `floci` (o S3), `app` (onde o seu código roda) e `explorador` (o site para olhar o bucket).
+- **Contêiner** — ambiente isolado, criado a partir de uma imagem Docker, que já traz os programas necessários. O projeto usa três: `floci` (o S3), `app` (onde o seu código roda) e `explorador` (o console para olhar os buckets e rodar os seus jobs).
 - **S3 e bucket** — o S3 é o serviço de armazenamento de arquivos da AWS. Um bucket é um "disco" com nome dentro dele. Aqui o bucket é `datalake-tracking`.
 - **Prefixo** — o começo do caminho de um arquivo no S3. Funciona como uma pasta. Exemplo: `silver/`.
+- **Workflow** — um conjunto de jobs com a ordem entre eles: cada job diz de quais outros depende, e quem não depende um do outro pode rodar ao mesmo tempo. No explorador, fica salvo em `pipeline/workflows/<nome>.json`.
 - **floci** — programa que imita o S3 na sua máquina, em `http://floci:4566`. Para o Spark, ele parece um S3 de verdade.
 - **`s3a://`** — prefixo de caminho que faz o Spark ler e gravar no S3 pelo conector `s3a`. Exemplo: `s3a://datalake-tracking/bronze/event_name=scroll/`.
 - **SDK** — biblioteca para conversar com um serviço. O `boto3` é o SDK da AWS para Python; o gerador usa, mas o seu pipeline não pode usar (R1).

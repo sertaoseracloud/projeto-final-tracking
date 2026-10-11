@@ -40,9 +40,9 @@ O projeto usa três contêineres, chamados de **serviços** no `docker-compose.y
 | --- | --- | --- |
 | `floci` | `floci/floci:latest` | S3 emulado em `http://floci:4566` (e `localhost:4566` na sua máquina) |
 | `app` | construída pelo `Dockerfile` | Python 3.11, Java 17, PySpark 3.5.3, conector `s3a` (`hadoop-aws` 3.3.4), `boto3`, `pytest` |
-| `explorador` | a mesma imagem do `app` | site Streamlit em `http://localhost:8501` para explorar o bucket |
+| `explorador` | a mesma imagem do `app` | console Streamlit em `http://localhost:8501`: olhar os buckets, ver o catálogo, rodar os seus jobs e workflows e fazer consultas SQL |
 
-Em outras palavras: o `floci` guarda os arquivos e o `app` roda o seu código. O `explorador` é um site para olhar o bucket (Passo 5). O conector `s3a` é a peça que permite ao Spark ler e gravar no S3 com caminhos que começam com `s3a://`.
+Em outras palavras: o `floci` guarda os arquivos e o `app` roda o seu código. O `explorador` é um site para olhar os buckets e rodar os seus jobs sem digitar comandos (Passo 5). O conector `s3a` é a peça que permite ao Spark ler e gravar no S3 com caminhos que começam com `s3a://`.
 
 ```mermaid
 flowchart LR
@@ -59,7 +59,8 @@ flowchart LR
     editor -->|edita| pasta
     pasta <-->|montada em /projeto| app
     app -->|s3a://| floci
-    exp -->|só lê| floci
+    exp -->|lê, e roda os seus jobs| floci
+    pasta -->|montada em /projeto| exp
     nav -->|localhost:8501| exp
 ```
 
@@ -119,15 +120,15 @@ docker compose run --rm app python infra/verificar_ambiente.py
 
 ## Passo 5 — Explore o bucket
 
-Este passo liga um site que mostra o que está dentro do bucket, sem você escrever código: os arquivos, as partições (por nome do evento e por dia) e consultas SQL.
+Este passo liga um site que mostra o que está dentro dos buckets, sem você escrever código: os arquivos, as partições (por nome do evento e por dia), o catálogo de tabelas e consultas SQL. Ele também roda os seus jobs, um de cada vez ou juntos num workflow.
 
 ```bash
 docker compose up -d explorador
 ```
 
-**O que faz:** liga o contêiner `explorador` em segundo plano. Ele é um site feito com Streamlit, que lê o bucket do floci.
+**O que faz:** liga o contêiner `explorador` em segundo plano. Ele é um site feito com Streamlit, que lê os buckets do floci e roda os seus jobs com o mesmo Spark do `app`.
 
-**O que você deve ver:** abra **http://localhost:8501** no navegador. Deve aparecer a barra escura "Console do datalake" e, no menu lateral **Serviços**, as telas **S3 · Buckets** (arquivos e partições), **Glue · Data Catalog** (bancos e tabelas), **Glue · Jobs ETL** (rodar os seus jobs de `pipeline/`), **Glue · Workflows** (juntar vários jobs num grafo com dependências e rodar tudo de uma vez) e **Athena · Editor de consultas** (SQL). Na primeira visita a cada tela, um tour em modal destaca as partes da tela e explica para que servem. No canto inferior direito ficam três botões redondos: **⬆** volta ao topo, **🎓** revê o tutorial e **♿** abre o menu com a chave **Mostrar tutorial** e as opções de acessibilidade (tamanho do texto, alto contraste, links sublinhados, espaçamento e menos movimento). O console também funciona só com o teclado e com leitores de tela. Para saber o que cada tela faz, leia [explorador/README.md](explorador/README.md).
+**O que você deve ver:** abra **http://localhost:8501** no navegador. Deve aparecer a barra escura "Console do datalake" e, no menu lateral **Serviços**, as telas **S3 · Buckets** (arquivos e partições de todos os buckets do floci), **Glue · Data Catalog** (bancos e tabelas), **Glue · Jobs ETL** (rodar os seus jobs de `pipeline/`), **Glue · Workflows** (juntar vários jobs num grafo com dependências e rodar tudo de uma vez) e **Athena · Editor de consultas** (SQL). Na primeira visita a cada tela, um tour em modal destaca as partes da tela e explica para que servem. No canto inferior direito ficam três botões redondos: **⬆** volta ao topo, **🎓** revê o tutorial e **♿** abre o menu com a chave **Mostrar tutorial** e as opções de acessibilidade (tamanho do texto, alto contraste, links sublinhados, espaçamento e menos movimento). O console também funciona só com o teclado e com leitores de tela. Para saber o que cada tela faz, leia [explorador/README.md](explorador/README.md).
 
 ## Como rodar qualquer coisa
 
@@ -139,6 +140,12 @@ docker compose run --rm app python -m pytest
 ```
 
 A primeira linha roda um script (troque `<script.py>` pelo caminho dele, por exemplo `pipeline/bronze.py`). A segunda roda os testes automáticos com o `pytest`.
+
+Para rodar vários jobs na ordem certa, monte um workflow na tela **Glue · Workflows** do explorador (ele fica salvo em `pipeline/workflows/<nome>.json`) e rode pelo console ou pelo terminal:
+
+```bash
+docker compose run --rm app python -m explorador.workflows pipeline/workflows/<nome>.json
+```
 
 ## Problemas comuns
 
@@ -153,6 +160,8 @@ Se algo der errado, procure a mensagem na primeira coluna.
 | `ClassNotFoundException: org.apache.hadoop.fs.s3a.S3AFileSystem` | imagem antiga, sem os jars | `docker compose build --no-cache app` |
 | `ModuleNotFoundError: No module named 'streamlit'` (ou `'duckdb'`) | imagem antiga, de antes do explorador | `docker compose build app` |
 | `[erro]` no `verificar_ambiente.py` lendo a landing | o gerador ainda não rodou, ou o Docker reiniciou e o floci perdeu os arquivos (ele guarda tudo na memória) | Passo 3 |
+| um job ou workflow falha logo no começo com um erro longo do S3 (`listObjectsV2`, `AmazonS3Client`) | o bucket ainda não existe: o floci acabou de ligar (ou reiniciou) e o gerador ainda não rodou | Passo 3, depois rode de novo |
+| no explorador, a tela S3 avisa que o `datalake-tracking` está vazio ou ainda não existe | mesmo motivo: o floci começou vazio | Passo 3 e clique em **Recarregar** |
 
 Dica: para ver quais contêineres estão ligados, use `docker compose ps`.
 
