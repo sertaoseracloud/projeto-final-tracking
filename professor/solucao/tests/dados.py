@@ -9,7 +9,7 @@ EVENTOS_DDL = (
     "user_id_resolvido string, page_location string, source string, medium string, "
     "device_category string, percent_scrolled int, video_percent int, search_term string, "
     "search_results int, outbound boolean, link_domain string, file_name string, "
-    "transaction_id string, value double"
+    "transaction_id string, value double, element_id string"
 )
 ITENS_DDL = (
     "event_id string, event_name string, ts timestamp, session_id string, "

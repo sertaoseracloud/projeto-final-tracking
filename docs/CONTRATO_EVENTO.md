@@ -94,6 +94,34 @@ O campo `params` muda conforme o evento. A tabela abaixo lista quais chaves cada
 
 `video_*` quer dizer os três eventos de vídeo: `video_start`, `video_progress` e `video_complete`.
 
+Além das chaves da tabela, os eventos que nascem de um clique trazem `element_id` (veja a seção seguinte).
+
+### `element_id`: onde foi o clique
+
+`element_id` diz **em qual elemento da página** a pessoa clicou. O valor é o atributo `data-heat` daquele elemento no `site/index.html`. Exemplo: clicar em "Quero este plano" no cartão do Plano Pro grava `select_item` e `add_to_cart` com `"element_id": "plano-pro"`.
+
+- Ele aparece só nos eventos disparados por clique (tabela abaixo). `page_view`, `scroll`, `video_progress`, `video_complete`, `view_item_list`, `view_item` e `view_cart` não trazem `element_id`.
+- É **opcional**: um evento sem ele continua válido e **não** é motivo de rejeição.
+- É a matéria-prima do mapa de calor (requisito R11 do enunciado).
+
+| Evento | `element_id` |
+| --- | --- |
+| `click` de saída (`outbound=true`) | `social-instagram`, `social-youtube`, `social-whatsapp`, `social-linkedin` |
+| `click` interno (`outbound=false`) | `cta-` + o `link_id` com `-` no lugar de `_`: `cta-hero-ver-planos`, `cta-hero-assistir`, `cta-logo` |
+| `video_start` | `btn-play` |
+| `file_download` | `dl-ementa` |
+| `select_item` | o cartão do plano: `plano-basico`, `plano-pro`, `plano-premium` |
+| `add_to_cart` / `remove_from_cart` de plano | `modal-comprar` (botão do detalhe do plano) ou o cartão (`plano-…`), quando a compra vem do botão do próprio cartão |
+| `add_to_cart` / `remove_from_cart` do order bump | `bump` |
+| `generate_lead` | `form-lead` |
+| `site_search` | `faq-busca` |
+| `begin_checkout` | `btn-continuar` |
+| `add_shipping_info` | `frete-pac`, `frete-sedex` |
+| `add_payment_info` | `pagto-pix`, `pagto-cartao-avista`, `pagto-cartao-parcelado` |
+| `purchase` | `btn-comprar` |
+| `refund` | `btn-refund` |
+| `login` / `sign_up` | `btn-login` / `btn-signup` |
+
 ## A regra do `value`
 
 `value` é sempre a receita dos itens **sem frete**. Em `purchase` e `refund` ele já vem com o desconto do Pix; nas etapas anteriores (`view_cart` até `add_payment_info`) é o valor de tabela, porque o desconto só existe depois que o pagamento é escolhido.

@@ -47,8 +47,8 @@ Uma ordem sugerida de trabalho. Faça uma etapa de cada vez e só avance quando 
 3. **Olhe alguns eventos.** Abra `site/index.html` no navegador e veja os eventos nascendo no painel lateral. Depois, leia algumas linhas da landing com o Spark, com o [`CONTRATO_EVENTO.md`](CONTRATO_EVENTO.md) aberto ao lado para entender cada campo.
 4. **Construa a Bronze.** Leia a landing com schema explícito e grave em Parquet, com as colunas de proveniência (R1, R2, R4).
 5. **Construa a Silver.** Deduplique, extraia os `params`, valide, sessionize, faça o stitching e exploda os itens (R5 a R10). Confira as contagens a cada passo.
-6. **Construa a Gold, uma tabela por vez.** Comece pelas mais simples e confira cada número com uma consulta à mão antes de seguir (seção 5.3 e 5.4).
-7. **Escreva o script de sequência** que roda os seis jobs (R3) e teste-o do zero.
+6. **Construa a Gold, uma tabela por vez.** Comece pelas mais simples e confira cada número com uma consulta à mão antes de seguir (seção 5.3 e 5.4). Por último, exporte o mapa de calor e veja-o acender no site (seção 5.5).
+7. **Escreva o script de sequência** que roda os oito jobs (R3) e teste-o do zero.
 8. **Escreva o relatório.** Responda às quatro perguntas citando tabelas e números, e preencha a seção "Qualidade do dado".
 
 ## 2. O produto: DadosPro
@@ -137,17 +137,17 @@ s3://datalake-tracking/
 
 ## 5. Requisitos
 
-Os requisitos são numerados de R1 a R10. Cada um vem com uma linha "Em outras palavras" que explica a ideia. A regra que vale é sempre o texto do requisito.
+Os requisitos são numerados de R1 a R11. Cada um vem com uma linha "Em outras palavras" que explica a ideia. A regra que vale é sempre o texto do requisito.
 
 ### 5.1 Obrigatórios de arquitetura
 
 - **R1.** PySpark, lendo de `landing/` e gravando todas as camadas no mesmo bucket S3 (floci), em Parquet, **diretamente pelo Spark com `s3a://`**. O pipeline não usa `boto3` nem outro SDK de nuvem, não baixa arquivos para o disco local e roda no contêiner `app`.
   - *Em outras palavras:* todo acesso ao S3 é feito com `spark.read` e `df.write` em caminhos `s3a://datalake-tracking/...`. Nada de baixar arquivos para o seu computador.
 - **R2.** **Um job por camada**, executáveis separadamente:
-  - um job Bronze, um job Silver e **quatro jobs Gold, cada um num arquivo próprio** (funil, engajamento, receita e aquisição, ML);
+  - um job Bronze, um job Silver, **cinco jobs Gold, cada um num arquivo próprio** (funil, engajamento, receita e aquisição, ML, mapa de calor) e um job que exporta o mapa de calor para o site (R11);
   - cada job verifica que a camada de que depende existe e, se não existir, para com uma mensagem que diz o que rodar antes.
-  - *Em outras palavras:* um **job** é um script que faz uma etapa inteira. São seis scripts. Exemplo: se alguém roda o job Silver antes do Bronze, o job Silver para e avisa "rode o job Bronze antes".
-- **R3.** Um script que roda os seis jobs em sequência. Ele **não** gera dados.
+  - *Em outras palavras:* um **job** é um script que faz uma etapa inteira. São oito scripts. Exemplo: se alguém roda o job Silver antes do Bronze, o job Silver para e avisa "rode o job Bronze antes".
+- **R3.** Um script que roda os oito jobs em sequência. Ele **não** gera dados.
   - *Em outras palavras:* um único comando reconstrói o datalake inteiro, a partir da landing que já existe.
 - **R4.** Bronze append-only, com schema explícito (sem inferência), particionada por nome do evento e por data no formato `event_name=<nome>/year=AAAA/month=MM/day=DD` (o dia de coleta, tirado do caminho da landing) e com colunas de proveniência: arquivo de origem e instante da ingestão.
   - *Em outras palavras:* **append-only** quer dizer que a Bronze só recebe dados novos; nunca apaga nem altera o que já está lá. **Schema explícito** quer dizer que você escreve no código o nome e o tipo de cada campo, em vez de deixar o Spark adivinhar. **Particionada por nome do evento e por data** quer dizer que cada evento, em cada dia, fica numa subpasta própria, como `bronze/event_name=scroll/year=2026/month=09/day=03/`. **Proveniência** é a "etiqueta de origem" de cada linha: de qual arquivo da landing ela veio e quando foi lida.
@@ -159,7 +159,7 @@ A Silver é a camada do dado limpo: sem repetições, com colunas tipadas, com o
 - **R5.** Deduplicação por `event_id`.
   - *Em outras palavras:* o mesmo evento pode chegar duas vezes (reenvio de lote). Na Silver, cada `event_id` aparece uma vez só.
 - **R6.** Extração dos `params` para colunas tipadas.
-  - *Em outras palavras:* as chaves que estão dentro de `params` (como `value` ou `percent_scrolled`) viram colunas próprias, cada uma com o tipo certo (número, texto, booleano).
+  - *Em outras palavras:* as chaves que estão dentro de `params` (como `value` ou `percent_scrolled`) viram colunas próprias, cada uma com o tipo certo (número, texto, booleano). Inclui `element_id`, que diz em que elemento da página foi o clique (veja o [contrato](CONTRATO_EVENTO.md#element_id-onde-foi-o-clique)).
 - **R7.** Validação com **motivo de rejeição**. Os rejeitados são gravados numa tabela separada, um motivo por linha. As regras mínimas estão abaixo; você pode acrescentar outras, justificando no relatório.
 
   A tabela lista cada motivo de rejeição e a condição que o dispara.
@@ -181,13 +181,13 @@ A Silver é a camada do dado limpo: sem repetições, com colunas tipadas, com o
 - **R10.** Uma tabela de itens com `items[]` explodido, uma linha por item por evento.
   - *Em outras palavras:* **explodir** uma lista é transformar cada elemento dela numa linha. Exemplo: um `purchase` com o Plano Pro e a Mentoria em grupo vira duas linhas na tabela de itens.
 
-### 5.3 Gold: as 13 tabelas obrigatórias
+### 5.3 Gold: as 15 tabelas obrigatórias
 
-A Gold é a camada das respostas: tabelas pequenas, já agregadas, prontas para o relatório. São quatro jobs, e cada job grava algumas tabelas.
+A Gold é a camada das respostas: tabelas pequenas, já agregadas, prontas para o relatório. São cinco jobs, e cada job grava algumas tabelas.
 
 Nomes de colunas são livres; o **conteúdo** é obrigatório, porque é o que a correção compara.
 
-A tabela abaixo diz, para cada uma das 13 tabelas, o que ela precisa conter. As definições exatas de canal, plano, receita e outras estão na seção 5.4.
+A tabela abaixo diz, para cada uma das 15 tabelas, o que ela precisa conter. As definições exatas de canal, plano, receita e outras estão na seção 5.4.
 
 | Job | Tabela | Conteúdo mínimo |
 | --- | --- | --- |
@@ -204,6 +204,8 @@ A tabela abaixo diz, para cada uma das 13 tabelas, o que ela precisa conter. As 
 | ML | `propensao_sessao` | probabilidade de compra por sessão, com modelo de classificação |
 | | `metricas_modelo` | AUC e F1 no conjunto de teste, e a lista de features usadas |
 | | `segmentos_visitantes` | grupo de cada visitante (clusterização) e perfil médio de cada grupo |
+| Mapa de calor | `mapa_calor_cliques` | uma linha por `pagina` (5.4) e `element_id`, só com eventos que têm `element_id`: `cliques` (eventos), `sessoes` (sessões distintas que clicaram), `sessoes_na_pagina` (sessões com `page_view` na página), `taxa_clique` = `sessoes ÷ sessoes_na_pagina` (nulo se o divisor for 0) e `intensidade` = `cliques ÷` o maior `cliques` da mesma página (0 a 1). Taxas arredondadas a 4 casas. **Nomes de coluna exatos** (R11). |
+| | `mapa_calor_rolagem` | uma linha por marco (0, 25, 50, 75, 90) da landing (`pagina = "/"`): entre as sessões com `page_view` na landing, `sessoes_que_chegaram` (marco 0 = todas; os outros = as que têm `scroll` na landing com `percent_scrolled` ≥ marco) e `pct_sessoes` = `sessoes_que_chegaram ÷` as do marco 0, a 4 casas. **Nomes de coluna exatos** (R11). |
 
 Em outras palavras, a pergunta que cada tabela responde:
 
@@ -220,6 +222,8 @@ Em outras palavras, a pergunta que cada tabela responde:
 - `propensao_sessao` — para cada sessão, a chance de terminar em compra, segundo um modelo de machine learning.
 - `metricas_modelo` — quão bom é esse modelo, medido em dados que ele não viu no treino.
 - `segmentos_visitantes` — em que grupos os visitantes se dividem, e como é o visitante típico de cada grupo.
+- `mapa_calor_cliques` — em que lugares da página as pessoas mais clicam? É o que o site pinta de quente (vermelho) a frio (azul).
+- `mapa_calor_rolagem` — até onde as pessoas descem na landing? De cada 100 que abriram a página, quantas viram cada trecho?
 
 **Restrição do modelo de propensão:** as features só podem usar o comportamento na landing **antes do primeiro `add_to_cart` da sessão**: rolagem, vídeo, tabela de planos vista, plano selecionado, detalhe aberto, buscas, downloads, cliques, canal e dispositivo. Qualquer evento do checkout (`view_cart` em diante) já praticamente revela a compra.
 
@@ -267,6 +271,20 @@ Por que isso importa: "receita" ou "canal" podem ser calculados de vários jeito
     - *Em outras palavras:* a data de um evento é o dia no fuso UTC, não no horário de Brasília.
 11. **Métricas do modelo.** F1, precisão e recall referem-se à classe positiva (sessão com compra).
     - *Em outras palavras:* as métricas medem o quão bem o modelo acha as sessões que **compraram**.
+12. **Página.** É o caminho de `page_location`, sem o domínio, sem `#` e sem `?`. A raiz vira `/`.
+    - *Exemplo:* `https://loja.exemplo/checkout` → `/checkout`; `https://loja.exemplo/#planos` → `/`.
+
+### 5.5 Mapa de calor no site
+
+- **R11.** Um job lê as duas tabelas do mapa de calor (`mapa_calor_cliques` e `mapa_calor_rolagem`) e grava o arquivo `site/mapa_calor.js` com uma única linha neste formato:
+
+  ```js
+  window.MAPA_CALOR = {"gerado_em": "2026-10-10T21:00:00Z", "cliques": [ ...linhas de mapa_calor_cliques... ], "rolagem": [ ...linhas de mapa_calor_rolagem... ]};
+  ```
+
+  - Cada linha é um objeto JSON com os nomes de coluna **exatos** da tabela 5.3: `pagina`, `element_id`, `cliques`, `sessoes`, `sessoes_na_pagina`, `taxa_clique`, `intensidade` em `cliques`; `pagina`, `marco`, `sessoes_que_chegaram`, `pct_sessoes` em `rolagem`. O site lê esses nomes; com outro nome, o mapa não acende.
+  - O job lê a Gold pelo Spark (R1) e só grava o arquivo local no fim. `site/mapa_calor.js` é um resultado gerado: não entra no git.
+  - *Em outras palavras:* o site de exemplo já tem o botão **Mapa de calor** pronto no painel lateral. Ele só precisa de um arquivo com os números da sua Gold. As duas tabelas têm poucas dezenas de linhas, então o job pode trazê-las do Spark para o Python com `collect()` e escrever o arquivo com `json.dumps`. O [pipeline/README.md](../pipeline/README.md#exportar-um-resultado-pequeno-para-o-site) mostra como.
 
 ## 6. Como rodar
 
@@ -288,6 +306,8 @@ docker compose run --rm app python infra/verificar_ambiente.py
 docker compose run --rm app python pipeline/<seu_job>.py
 ```
 
+Depois que o job de exportação (R11) rodar, abra `site/index.html` no navegador e clique em **Mapa de calor**, no painel lateral.
+
 O código do pipeline vai em `pipeline/`, e o [`pipeline/README.md`](../pipeline/README.md) explica como acessar o S3 pelo Spark.
 
 ## 7. Avaliação
@@ -298,7 +318,7 @@ Rubrica de 100 pontos. A tabela mostra cada critério, quantos pontos vale e com
 | --- | --- | --- |
 | Arquitetura (R1–R4): jobs separados, verificação de camada, Bronze append-only com proveniência | 15 | leitura do código + rodar o script de sequência do zero |
 | Silver (R5–R10) | 25 | contagens de duplicatas, aprovados e rejeitados por motivo dentro da tolerância esperada; sessões calculadas sem `session_hint`; stitching presente |
-| Gold (seção 5.3) | 30 | as 13 tabelas existem e batem com os valores esperados dentro da tolerância; modelo sem vazamento de informação |
+| Gold (seção 5.3) | 30 | as 15 tabelas existem e batem com os valores esperados dentro da tolerância; modelo sem vazamento de informação; o mapa de calor acende no site (R11) |
 | Relatório: respostas às quatro perguntas, sustentadas por números da Gold | 20 | cada resposta cita tabela e número; recomendação coerente com os dados |
 | Qualidade do dado: duplicatas, rejeições e armadilhas identificadas | 10 | identifica ao menos três armadilhas escondidas no dado e explica como as tratou |
 
@@ -350,6 +370,7 @@ Os termos estão agrupados por assunto. Os exemplos usam a landing da DadosPro.
 
 ### Negócio
 
+- **Mapa de calor** — desenho por cima da página que mostra onde as pessoas clicam (cores do azul, pouco clique, ao vermelho, muito clique) e até onde rolam. No site de exemplo, é o botão **Mapa de calor** do painel.
 - **Funil** — sequência de etapas até a compra, como ver os planos → escolher → pôr no carrinho → pagar. Em cada etapa, parte das pessoas desiste.
 - **Conversão** — número de sessões de uma etapa dividido pelo número de sessões da etapa anterior (como na regra 5.4). Exemplo: 200 sessões com `select_item` e 100 com `add_to_cart` → conversão de 50%.
 - **Canal** — de onde o visitante veio, no formato `"<source> / <medium>"`. Exemplo: `google / cpc`.

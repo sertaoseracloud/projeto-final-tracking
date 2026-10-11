@@ -17,7 +17,7 @@ A tabela abaixo mostra as pastas principais do repositório.
 
 | Pasta | O que é |
 | --- | --- |
-| [`site/`](site/index.html) | a landing page de exemplo. Abra no navegador, navegue e veja cada evento nascer no painel lateral |
+| [`site/`](site/index.html) | a landing page de exemplo. Abra no navegador, navegue e veja cada evento nascer no painel lateral. O botão **Mapa de calor** do painel mostra, por cima da página, a sua Gold de cliques e de rolagem (requisito R11) |
 | [`gerador/`](gerador/README.md) | o coletor simulado: popula o bucket com 14 dias de eventos, inclusive com defeitos |
 | [`pipeline/`](pipeline/README.md) | onde o datalake é construído |
 | [`explorador/`](explorador/README.md) | um site para ver os arquivos, as partições e fazer consultas SQL no bucket (http://localhost:8501) |

@@ -10,3 +10,4 @@ spark-warehouse/
 *.zip
 .env
 .tmp/
+site/mapa_calor.js

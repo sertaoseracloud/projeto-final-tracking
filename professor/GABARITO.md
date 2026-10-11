@@ -190,7 +190,54 @@ Segmentação de visitantes: k escolhido 5, silhueta 0,5122. (O job ordena os vi
 
 Leitura: o segmento 0 são os visitantes de baixo engajamento, o 1 lê a página sem ver o vídeo, o 2 vê o vídeo sem converter, o 3 reúne os leads e o 4 os compradores.
 
-## 8. Tolerâncias para corrigir o trabalho do aluno
+## 8. Gold: mapa de calor
+
+O job 07 grava as duas tabelas e o job 08 exporta `site/mapa_calor.js` (24 elementos, 5 marcos). Com o arquivo gerado, o botão **Mapa de calor** do site acende.
+
+`mapa_calor_cliques` (página, elemento, cliques, sessões que clicaram, sessões com `page_view` na página, taxa de clique, intensidade):
+
+| Página | Elemento | Cliques | Sessões | Sessões na página | Taxa de clique | Intensidade |
+| --- | --- | --- | --- | --- | --- | --- |
+| / | btn-play | 2890 | 2890 | 8382 | 0,3448 | 1,0 |
+| / | cta-hero-ver-planos | 2543 | 2543 | 8382 | 0,3034 | 0,8799 |
+| / | modal-comprar | 1525 | 1268 | 8382 | 0,1513 | 0,5277 |
+| / | plano-pro | 803 | 803 | 8382 | 0,0958 | 0,2779 |
+| / | plano-basico | 595 | 595 | 8382 | 0,071 | 0,2059 |
+| / | form-lead | 522 | 522 | 8382 | 0,0623 | 0,1806 |
+| / | dl-ementa | 335 | 335 | 8382 | 0,04 | 0,1159 |
+| / | plano-premium | 321 | 321 | 8382 | 0,0383 | 0,1111 |
+| / | faq-busca | 303 | 303 | 8382 | 0,0361 | 0,1048 |
+| / | social-instagram | 102 | 102 | 8382 | 0,0122 | 0,0353 |
+| / | social-linkedin | 92 | 92 | 8382 | 0,011 | 0,0318 |
+| / | social-whatsapp | 87 | 87 | 8382 | 0,0104 | 0,0301 |
+| / | social-youtube | 85 | 85 | 8382 | 0,0101 | 0,0294 |
+| /checkout | btn-continuar | 912 | 912 | 1291 | 0,7064 | 1,0 |
+| /checkout | btn-comprar | 573 | 573 | 1291 | 0,4438 | 0,6283 |
+| /checkout | bump | 412 | 314 | 1291 | 0,2432 | 0,4518 |
+| /checkout | pagto-pix | 275 | 275 | 1291 | 0,213 | 0,3015 |
+| /checkout | pagto-cartao-parcelado | 269 | 269 | 1291 | 0,2084 | 0,295 |
+| /checkout | pagto-cartao-avista | 140 | 140 | 1291 | 0,1084 | 0,1535 |
+| /checkout | frete-pac | 105 | 105 | 1291 | 0,0813 | 0,1151 |
+| /checkout | frete-sedex | 73 | 73 | 1291 | 0,0565 | 0,08 |
+| /membros | btn-signup | 445 | 445 | 626 | 0,7109 | 1,0 |
+| /membros | btn-login | 181 | 181 | 626 | 0,2891 | 0,4067 |
+| /obrigado | btn-refund | 48 | 48 | 644 | 0,0745 | 1,0 |
+
+`mapa_calor_rolagem` (landing):
+
+| Marco | Sessões que chegaram | % das sessões |
+| --- | --- | --- |
+| 0 | 8382 | 1,0 |
+| 25 | 7362 | 0,8783 |
+| 50 | 5822 | 0,6946 |
+| 75 | 4219 | 0,5033 |
+| 90 | 2177 | 0,2597 |
+
+Leitura: na landing, o ponto mais quente é o play do vídeo, seguido de perto pelo CTA "Ver planos"; os cartões de plano recebem bem menos cliques, coerente com a perda do funil em `select_item`. A rolagem perde gente de forma contínua e cai mais forte entre 75% e 90% (de 50% para 26% das sessões): o FAQ e o rodapé são vistos por cerca de um quarto das visitas. As somas batem com outras Golds: `plano-*` soma 1719 (o `select_item` do funil), `form-lead` 522 (leads) e `btn-comprar` 573 (pedidos).
+
+`modal-comprar` está na landing, mas o modal fica fechado na abertura da página: no site, a camada dele só aparece com o detalhe do plano aberto.
+
+## 9. Tolerâncias para corrigir o trabalho do aluno
 
 | Critério | Tolerância |
 | --- | --- |
@@ -199,9 +246,10 @@ Leitura: o segmento 0 são os visitantes de baixo engajamento, o 1 lê a página
 | Funil e receita | ±2% |
 | AUC honesto | dentro de ±0,03 de 0,9243. Um AUC ≥ 0,98 indica vazamento |
 | Medianas (lead → compra, em dias) | ±0,5 dia (`percentile_approx` contra mediana exata) |
+| Mapa de calor | contagens (`cliques`, `sessoes`, `sessoes_na_pagina`, `sessoes_que_chegaram`) exatas; `taxa_clique`, `intensidade` e `pct_sessoes` com ±0,001. Nomes de coluna exatos (R11), senão o site não acende |
 | Silhueta e k | livres (dependem das features de perfil escolhidas). Exigir só que k ∈ {3, 4, 5} e que a escolha seja justificada |
 
-## 9. Como reconhecer cada armadilha no trabalho do aluno
+## 10. Como reconhecer cada armadilha no trabalho do aluno
 
 1. **Frete no funil.** Com `add_shipping_info` como etapa obrigatória, a conversão em sequência por plano (entre as sessões com `begin_checkout`) cai de 0,5858 para 0,0356 no Básico e de 0,6133 para 0,0172 no Pro. O Premium cai só de 0,5682 para 0,4886. O frete praticamente só existe no Premium (136 sessões com `add_shipping_info`, contra 15 no Básico e 20 no Pro). Os poucos eventos de frete em Básico e Pro vêm de visitantes que trocaram de plano depois do `add_to_cart` (o gerador troca o plano em 10% dos carrinhos), porque o plano da sessão é o primeiro `select_item`. **Sintoma do aluno que seguiu o 5.4 (contagem sem exigir a sequência) e mesmo assim pôs o frete como etapa obrigatória:** no Básico a linha de `add_shipping_info` tem 15 sessões, cerca de 0,049 de `begin_checkout` (15 ÷ 309), e a etapa seguinte, `add_payment_info`, mostra conversão de cerca de 15,3 (230 ÷ 15), acima de 100%. No Pro são 20 sessões, cerca de 0,049 (20 ÷ 406), e a etapa seguinte mostra cerca de 16,1 (322 ÷ 20).
 2. **Reembolso na data errada.** Atribuindo o `refund` à data do próprio evento, 7 de 189 células (data × plano × canal) ficam com receita líquida negativa, por exemplo -1144,0 em 2026-09-09 (PLANO-PREMIUM, google / organic) e -947,15 em 2026-09-04 (PLANO-PREMIUM, instagram / paid_social).
@@ -209,14 +257,14 @@ Leitura: o segmento 0 são os visitantes de baixo engajamento, o 1 lê a página
 4. **Duplicata de lote.** Sem deduplicar por `event_id`, a Bronze tem 64372 linhas para 63716 `event_id` distintos, e há 609 `purchase` contra 604 distintos. A receita bruta de `purchase` na Bronze fica em 359250,85, contra 356240,4 deduplicada por `event_id`: diferença de 3010,45.
 5. **`session_hint` do cliente.** Contando por `session_hint` há 11440 sessões distintas, contra 8793 com o gap de 30 minutos.
 
-## 10. Roteiro de correção
+## 11. Roteiro de correção
 
 | Critério | Pontos | O que olhar |
 | --- | --- | --- |
 | Arquitetura (R1–R4) | 15 | Um job por camada, verificação de camada antes de ler, Bronze append-only com proveniência (arquivo de origem). Rodar o script de sequência do zero e conferir que termina sem erro. |
 | Silver (R5–R10) | 25 | Linhas na Bronze 64372, duplicatas 656, aprovados 61813 e rejeitados por motivo (seção 3), dentro de ±1%. Sessões perto de 8793 (±2%) e calculadas sem `session_hint`. Stitching de visitante presente. |
-| Gold (seção 5.3 do enunciado) | 30 | As 13 tabelas existem. Funil, receita e lead batem com as seções 4 a 6 (±2%). Modelo sem vazamento: AUC honesto em 0,9243 ±0,03 e nunca ≥ 0,98. |
+| Gold (seção 5.3 do enunciado) | 30 | As 15 tabelas existem. Funil, receita e lead batem com as seções 4 a 6 (±2%). Modelo sem vazamento: AUC honesto em 0,9243 ±0,03 e nunca ≥ 0,98. Mapa de calor bate com a seção 8 e acende no site: rodar o job de exportação, abrir `site/index.html` e clicar em **Mapa de calor** (R11). |
 | Relatório | 20 | Cada resposta cita tabela e número da Gold. A recomendação é coerente com os dados (por exemplo, a maior perda do funil em `select_item`, o reembolso alto em instagram / paid_social, os termos de FAQ sem resultado). |
-| Qualidade do dado | 10 | Identifica ao menos três das cinco armadilhas da seção 9 com o sintoma em número, além de duplicatas e rejeições. |
+| Qualidade do dado | 10 | Identifica ao menos três das cinco armadilhas da seção 10 com o sintoma em número, além de duplicatas e rejeições. |
 
 O formato (individual ou em dupla) e o prazo ficam a critério do professor.

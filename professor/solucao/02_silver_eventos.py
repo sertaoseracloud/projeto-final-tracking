@@ -24,7 +24,7 @@ TEXTOS = (
     "transaction_id", "currency", "payment_type", "coupon", "shipping_tier", "item_list_id",
     "item_list_name", "search_term", "search_area", "link_url", "link_domain", "link_id",
     "link_text", "file_name", "file_extension", "video_title", "video_provider", "method",
-    "lead_source", "reason", "page_title",
+    "lead_source", "reason", "page_title", "element_id",
 )
 DATA = ["year", "month", "day"]   # partição: year=AAAA/month=MM/day=DD
 FORMATO_TS = "yyyy-MM-dd'T'HH:mm:ss.SSSX"

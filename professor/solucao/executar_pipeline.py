@@ -1,4 +1,4 @@
-"""Roda os seis jobs da solução de referência em sequência. Não gera dados.
+"""Roda os oito jobs da solução de referência em sequência. Não gera dados.
 
     docker compose run --rm app python professor/solucao/executar_pipeline.py
 """
@@ -18,6 +18,8 @@ JOBS = [
     "04_gold_engajamento.py",
     "05_gold_receita_aquisicao.py",
     "06_gold_ml.py",
+    "07_gold_mapa_calor.py",
+    "08_exportar_mapa_calor.py",
 ]
 
 
