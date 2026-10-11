@@ -53,3 +53,11 @@ def test_mapa_rolagem_comeca_em_1_e_nunca_cresce(spark, mapa):
     r = [(x.pagina, x.marco, x.sessoes_que_chegaram, x.pct_sessoes) for x in df.orderBy("marco").collect()]
     assert r == [("/", 0, 3, 1.0), ("/", 25, 2, 0.6667), ("/", 50, 2, 0.6667), ("/", 75, 1, 0.3333),
                  ("/", 90, 1, 0.3333)]
+
+
+def test_mapa_cliques_descarta_eventos_sem_pagina(spark, mapa):
+    linhas = jornada("s1", ["page_view", "click", "click"], page_location=LANDING)
+    linhas[1]["element_id"] = linhas[2]["element_id"] = "cta-hero-ver-planos"
+    linhas[2]["page_location"] = None
+    df = mapa.mapa_cliques(eventos(spark, *linhas))
+    assert [(r.pagina, r.element_id, r.cliques) for r in df.collect()] == [("/", "cta-hero-ver-planos", 1)]

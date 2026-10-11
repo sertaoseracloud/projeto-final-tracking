@@ -21,7 +21,8 @@ def pagina_do_evento(coluna: str = "page_location") -> Column:
 
 
 def _com_pagina(eventos: DataFrame) -> DataFrame:
-    return eventos.withColumn("pagina", pagina_do_evento())
+    """Eventos sem page_location não têm onde ser desenhados: ficam fora do mapa."""
+    return eventos.withColumn("pagina", pagina_do_evento()).filter(F.col("pagina").isNotNull())
 
 
 def _visitas(eventos: DataFrame) -> DataFrame:
