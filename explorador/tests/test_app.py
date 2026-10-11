@@ -46,7 +46,8 @@ def test_bucket_vazio_orienta_a_rodar_o_gerador(monkeypatch):
 def bucket_local(tmp_path, monkeypatch):
     pasta = tmp_path / "silver" / "event_name=page_view" / "year=2026" / "month=09" / "day=01"
     pasta.mkdir(parents=True)
-    duckdb.sql(f"COPY (SELECT 'e' || i AS event_id FROM range(4) t(i)) TO '{pasta}/part-0.parquet' (FORMAT parquet)")
+    duckdb.sql("COPY (SELECT 'e' || i AS event_id, {'page': 'home', 'user': {'id': i}} AS props "
+               f"FROM range(4) t(i)) TO '{pasta}/part-0.parquet' (FORMAT parquet)")
     objetos = [Objeto(p.relative_to(tmp_path).as_posix(), p.stat().st_size)
                for p in tmp_path.rglob("*") if p.is_file()]
     monkeypatch.setattr(s3, "listar", lambda *_, **__: objetos)
@@ -184,9 +185,8 @@ def test_catalogo_navega_banco_tabela_e_abre_no_athena(bucket_local):
     at.button(key="banco:silver").click().run()
     at.button(key="tabela:silver.eventos").click().run()
     assert [t.label for t in at.tabs] == ["Esquema", "Partições"]     # propriedades viraram o painel "Visão geral"
-    esquema = next(d.value for d in at.dataframe if "Coluna" in d.value.columns)
-    assert "event_id" in esquema["Coluna"].tolist()
-    assert esquema.set_index("Coluna").loc["event_name", "Chave de partição"] == "sim"
+    textos = [str(m.value) for m in at.markdown]
+    assert any(">event_id<" in t for t in textos) and any(">sim<" in t for t in textos)   # event_name é a chave
     at.button(key="consultar_athena").click().run()
     assert at.radio(key="tela").value == ATHENA
     assert at.text_area(key="sql:Consulta 2").value == "SELECT * FROM silver.eventos LIMIT 10"
@@ -306,3 +306,27 @@ def test_titulos_e_tabelas_marcados_para_leitor_de_tela(bucket_local):
     at = _rodar()
     textos = " ".join(str(m.value) for m in at.markdown)
     assert 'role="heading" aria-level="1"' in textos and 'role="heading" aria-level="2"' in textos
+
+
+def _struct_na_tela(at):
+    textos = [str(m.value) for m in at.markdown]
+    assert not any("STRUCT(" in t.upper() for t in textos)            # o tipo completo não aparece na tela
+    popovers = [p for p in at.get("popover") if p.proto.popover.label == "struct"]
+    assert popovers, "o tipo struct vira um botão que abre o overlay"
+    arvore = next(t for t in textos if t.startswith("- `page` varchar"))
+    assert "- `user` struct\n    - `id` bigint" in arvore              # um recuo por nível
+
+
+def test_esquema_mostra_struct_curto_e_a_tipagem_interna_no_overlay(bucket_local):
+    at = _rodar()
+    at.radio(key="tela").set_value(CATALOGO).run()
+    at.button(key="banco:silver").click().run()
+    at.button(key="tabela:silver.eventos").click().run()
+    assert not at.exception
+    _struct_na_tela(at)
+
+
+def test_arvore_do_athena_mostra_struct_curto_e_a_tipagem_interna_no_overlay(bucket_local):
+    at = _athena(_rodar())
+    assert not at.exception
+    _struct_na_tela(at)

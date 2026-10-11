@@ -13,6 +13,8 @@ from typing import Any, Callable
 
 import streamlit as st
 
+from explorador import tipos
+
 # Paleta: barra superior #232f3e, laranja #ff9900, azul de link #006ce0, textos #0f141a/#424650/#656871.
 CSS = """
 <style>
@@ -117,6 +119,18 @@ CSS = """
   [data-testid="stTab"] p { font-weight: 700; color: #424650; font-size: .9375rem; }
   [data-testid="stTab"][aria-selected="true"] p { color: #006ce0; }
 
+  /* tipo struct: palavra curta em azul que abre a tipagem interna num overlay */
+  [class*="st-key-struct-"] button { color: #006ce0 !important; padding: 0 !important; min-height: 0 !important;
+    font-weight: 400 !important; font-size: .875rem; }
+  [class*="st-key-struct-"] button:hover { color: #002b66 !important; text-decoration: underline; }
+  [data-testid="stPopoverBody"]:has(.tipagem-titulo) { max-width: 360px; }
+  .tipagem-titulo { font-weight: 700; font-size: .9375rem; color: #0f141a; }
+  .tipagem-resumo { color: #656871; font-weight: 400; }
+  [data-testid="stPopoverBody"]:has(.tipagem-titulo) li { margin: 0; font-size: .875rem; }
+  [class*="st-key-arvcol-"] { gap: 6px !important; }
+  [class*="st-key-arvcol-"] .tab-texto { color: #656871; }
+  [class*="st-key-arvcol-"] [data-testid="stMarkdownContainer"] p { margin: 0; }
+
   /* árvore de dados do Athena */
   [data-testid="stExpander"] details { border-radius: 8px; border-color: #e9ebed; }
   [data-testid="stExpander"] summary p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .875rem; }
@@ -178,6 +192,14 @@ class Link:
 
 
 @dataclass
+class Tipo:
+    """Célula com o tipo de uma coluna: struct aparece curto e abre a tipagem interna num overlay."""
+    coluna: str
+    tipo: str
+    chave: str
+
+
+@dataclass
 class Html:
     conteudo: str
 
@@ -189,6 +211,8 @@ def _slug(texto: str) -> str:
 def _texto(celula: Any) -> str:
     if isinstance(celula, Link):
         return celula.rotulo
+    if isinstance(celula, Tipo):
+        return tipos.curto(celula.tipo)
     if isinstance(celula, Html):
         return re.sub(r"<[^>]+>", "", celula.conteudo)
     return str(celula)
@@ -241,6 +265,30 @@ def pares(dados: dict[str, str]) -> None:
     st.markdown(f'<div class="kv">{itens}</div>', unsafe_allow_html=True)
 
 
+def tipo(alvo, coluna: str, tipo_completo: str, chave: str) -> None:
+    """Tipo de uma coluna. Um struct inteiro não cabe na tela: aparece só `struct` (ou `struct[]`, `map(…, struct)`)
+    e o clique abre um overlay com a tipagem interna em árvore."""
+    resumo = tipos.curto(tipo_completo)
+    if not tipos.tem_struct(tipo_completo):
+        alvo.markdown(f'<span class="tab-texto">{html.escape(resumo)}</span>', unsafe_allow_html=True)
+        return
+    with alvo.popover(resumo, type="tertiary", key=f"struct-{_slug(chave)}",
+                      help=f"Ver a tipagem interna de {coluna}"):
+        st.markdown(f'<div class="tipagem-titulo" role="heading" aria-level="3">Tipagem interna de '
+                    f'<code>{html.escape(coluna)}</code> <span class="tipagem-resumo">{html.escape(resumo)}</span></div>',
+                    unsafe_allow_html=True)
+        if resumo.startswith("struct[]"):
+            explica = (f"Uma lista de structs: cada linha guarda vários itens, e cada item tem os campos abaixo. "
+                       f"No SQL, abra a lista com unnest({coluna}).")
+        elif resumo.startswith("map("):
+            explica = "Um mapa de chave para valor; o valor é um struct com os campos abaixo."
+        else:
+            explica = (f"Um struct é como uma ficha dentro da linha: guarda vários campos, cada um com nome e tipo. "
+                       f"No SQL, leia um campo com ponto: {coluna}.campo.")
+        st.caption(explica)
+        st.markdown(tipos.arvore_markdown(tipo_completo))
+
+
 def tabela(chave: str, colunas: list[tuple[str, float]], linhas: list[list[Any]],
            localizar: bool = False, vazio: str = "Nenhum item.") -> int:
     """Tabela do console: cabeçalho, linhas com divisória, nomes clicáveis e (opcional) caixa "Localizar".
@@ -266,6 +314,8 @@ def tabela(chave: str, colunas: list[tuple[str, float]], linhas: list[list[Any]]
                     if isinstance(celula, Link):
                         coluna.button(celula.rotulo, key=celula.chave, type="tertiary", on_click=celula.on_click,
                                       args=celula.args, kwargs=celula.kwargs)
+                    elif isinstance(celula, Tipo):
+                        tipo(coluna, celula.coluna, celula.tipo, celula.chave)
                     elif isinstance(celula, Html):
                         coluna.markdown(celula.conteudo, unsafe_allow_html=True)
                     else:
