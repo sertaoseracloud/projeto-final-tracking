@@ -12,3 +12,4 @@ spark-warehouse/
 .tmp/
 site/mapa_calor.js
 site/mapa_calor.js.tmp
+.explorador/

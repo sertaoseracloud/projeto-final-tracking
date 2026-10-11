@@ -1,9 +1,10 @@
-"""Console do datalake: telas no estilo do S3 (buckets e objetos) e do Athena (editor de consultas).
+"""Console do datalake: telas no estilo do S3, do Glue (Data Catalog e Jobs ETL) e do Athena.
 
     docker compose up -d explorador      # e abra http://localhost:8501
 
-Somente leitura: nada aqui grava ou apaga no bucket. É uma ferramenta de estudo
-que imita o fluxo do console da AWS; não usa nenhuma marca nem serviço da AWS.
+S3, Data Catalog e Athena só leem. Jobs ETL roda os scripts de pipeline/ (o mesmo que o
+terminal faz). É uma ferramenta de estudo que imita o fluxo do console da AWS; não usa
+nenhuma marca nem serviço da AWS.
 """
 
 from __future__ import annotations
@@ -24,12 +25,12 @@ import streamlit as st
 
 from streamlit.runtime.scriptrunner_utils.exceptions import RerunException, StopException
 
-from explorador import athena, consultas, glue, particoes, s3
+from explorador import athena, consultas, glue, particoes, s3, tutorial, ui
+from explorador.tutorial import TELA_ATHENA, TELA_CATALOGO, TELA_JOBS, TELA_S3
 
-TELA_S3 = "S3 · Buckets"
-TELA_CATALOGO = "Glue · Data Catalog"
-TELA_JOBS = "Glue · Jobs ETL"
-TELA_ATHENA = "Athena · Editor de consultas"
+RAIZ = Path(__file__).resolve().parents[1]
+ICONES = {TELA_S3: "🪣  Buckets", TELA_CATALOGO: "🗂  Data Catalog", TELA_JOBS: "⚙  Jobs ETL",
+          TELA_ATHENA: "🔎  Editor de consultas"}
 
 EXEMPLOS = {
     "Eventos por nome (landing)": (
@@ -41,42 +42,6 @@ EXEMPLOS = {
     ),
     "Colunas de uma tabela": "DESCRIBE silver.eventos",
 }
-
-# Cores e formas inspiradas no console: barra escura, destaque laranja, links azuis, tabelas com cabeçalho cinza.
-CSS = """
-<style>
-  /* o cabeçalho do Streamlit fica transparente, logo abaixo da barra: some a barra de ferramentas,
-     mas ficam os botões de abrir/fechar o menu lateral (importantes em telas estreitas) */
-  [data-testid="stHeader"] { background: transparent !important; top: 44px !important; height: 2.5rem !important; }
-  [data-testid="stToolbarActions"], [data-testid="stMainMenu"], [data-testid="stAppDeployButton"],
-  [data-testid="stDecoration"], #MainMenu, footer {
-    display: none !important; }
-  .block-container { padding-top: 3.6rem !important; }
-  .barra-console { position: fixed; top: 0; left: 0; right: 0; z-index: 1000002; height: 44px;
-    background: #232f3e; color: #fff; display: flex; align-items: center; gap: 16px; padding: 0 20px;
-    font: 600 15px/1 "Amazon Ember", "Helvetica Neue", Arial, sans-serif; }
-  .barra-console .marca { color: #ff9900; font-weight: 800; letter-spacing: .02em; }
-  .barra-console .detalhe { margin-left: auto; color: #d1d5db; font-weight: 400; font-size: 13px; }
-  .barra-console span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  @media (max-width: 760px) { .barra-console span:not(.marca) { display: none; } }
-  [data-testid="stSidebar"] { background: #f2f3f3; border-right: 1px solid #d5dbdb;
-    top: 44px !important; height: calc(100vh - 44px) !important; }
-  [data-testid="stHeaderActionElements"] { display: none; }
-  [data-testid="stSidebarHeader"] { height: 2.2rem; padding: 0 8px; }
-  h1, h2, h3 { color: #16191f; font-weight: 700 !important; }
-  .stButton button[kind="primary"] { background: #ec7211; border-color: #ec7211; color: #fff; border-radius: 2px; }
-  .stButton button[kind="primary"]:hover { background: #eb5f07; border-color: #eb5f07; }
-  .stButton button[kind="secondary"] { border-radius: 2px; border-color: #545b64; color: #545b64; }
-  .stButton button[kind="tertiary"] { color: #0073bb; padding: 0 2px; min-height: 0; }
-  .stButton button[kind="tertiary"]:hover { color: #0a4a74; text-decoration: underline; }
-  .cabecalho-tabela { background: #fafafa; border-top: 1px solid #eaeded; border-bottom: 1px solid #eaeded;
-    font-weight: 700; color: #545b64; font-size: 14px; padding: 6px 0; }
-  .linha-tabela { border-bottom: 1px solid #eaeded; }
-  .stTextArea textarea { font-family: Menlo, Consolas, "Courier New", monospace; font-size: 14px;
-    background: #fbfbfb; }
-  .painel { border: 1px solid #d5dbdb; border-radius: 2px; padding: 12px 16px; background: #fff; }
-</style>
-"""
 
 
 @st.cache_data(ttl=30, show_spinner="Listando o bucket…")
@@ -106,6 +71,11 @@ def _conexao(datasets: tuple[particoes.Dataset, ...], raiz: str):
     return con, colunas
 
 
+def _escolher(**valores) -> None:
+    for chave, valor in valores.items():
+        st.session_state[chave] = valor
+
+
 # ------------------------------------------------------------------ S3 ------------------------------------------------------------------
 
 def _ir_para(pasta: str | None) -> None:
@@ -115,127 +85,98 @@ def _ir_para(pasta: str | None) -> None:
     st.session_state.pop("arquivo", None)
 
 
-def _cabecalho(colunas, titulos) -> None:
-    for coluna, titulo in zip(colunas, titulos):
-        coluna.markdown(f'<div class="cabecalho-tabela">{titulo}</div>', unsafe_allow_html=True)
-
-
 def _lista_de_buckets(objetos) -> None:
-    st.caption("Buckets")
-    st.subheader(f"Buckets (1)")
-    st.caption("Os buckets são contêineres de objetos armazenados no S3. Aqui há um só, emulado pelo floci.")
-    pesos = [3, 2, 1, 1]
-    _cabecalho(st.columns(pesos), ["Nome", "Região", "Objetos", "Tamanho"])
-    nome, regiao, qtd, tamanho = st.columns(pesos)
-    nome.button(f"🪣 {s3.BUCKET}", key="abrir_bucket", type="tertiary", on_click=_ir_para, args=("",))
-    regiao.write(s3.REGIAO)
-    qtd.write(str(len(objetos)))
-    tamanho.write(particoes.tamanho_legivel(sum(o.tamanho for o in objetos)))
-
-
-def _breadcrumb(pasta: str) -> None:
-    trilha = [("Buckets", "migalha:buckets", None), (s3.BUCKET, "migalha:", "")]
-    trilha += [(rotulo, f"migalha:{caminho}", caminho) for rotulo, caminho in particoes.migalhas(pasta)]
-    linha = st.container(horizontal=True, vertical_alignment="center", gap="small")
-    for i, (rotulo, chave, destino) in enumerate(trilha):
-        linha.button(rotulo, key=chave, type="tertiary", on_click=_ir_para, args=(destino,))
-        if i < len(trilha) - 1:
-            linha.markdown("›", width="content")
+    _contexto("s3-buckets")
+    ui.trilha([("Buckets", None, None, {})], "s3")
+    ui.titulo("Buckets", 1, "Os buckets são contêineres de objetos armazenados no S3. Aqui há um só, emulado pelo floci.")
+    with ui.painel("buckets", "Buckets", 1):
+        ui.tabela("buckets", [("Nome", 3), ("Região", 2), ("Objetos", 1), ("Tamanho", 1)], [[
+            ui.Link(s3.BUCKET, "abrir_bucket", _ir_para, ("",)),
+            s3.REGIAO, str(len(objetos)), particoes.tamanho_legivel(sum(o.tamanho for o in objetos))]])
 
 
 def _tipo(chave: str) -> str:
-    return particoes.formato_do_arquivo(chave) or (chave.rsplit(".", 1)[-1] if "." in chave.rsplit("/", 1)[-1] else "—")
+    nome = chave.rsplit("/", 1)[-1]
+    return particoes.formato_do_arquivo(chave) or (nome.rsplit(".", 1)[-1] if "." in nome else "—")
 
 
 def _aba_objetos(objetos, con, raiz, pasta: str) -> None:
     subpastas, arquivos = particoes.navegar(objetos, pasta)
-    st.subheader(f"Objetos ({len(subpastas) + len(arquivos)})")
-    if not subpastas and not arquivos:
-        st.info("Nenhum objeto nesta pasta.")
-        return
-    pesos = [4, 1, 2, 1]
-    _cabecalho(st.columns(pesos), ["Nome", "Tipo", "Última modificação", "Tamanho"])
-    for sub in subpastas:
-        nome, tipo, data, tamanho = st.columns(pesos)
-        nome.button(f"📁 {sub}/", key=f"obj:{pasta}{sub}/", type="tertiary", on_click=_ir_para, args=(f"{pasta}{sub}/",))
-        tipo.write("Pasta")
-        data.write("—")
-        tamanho.write("—")
-    for o in arquivos:
-        nome, tipo, data, tamanho = st.columns(pesos)
-        nome.button(f"📄 {o.chave[len(pasta):]}", key=f"obj:{o.chave}", type="tertiary",
-                    on_click=st.session_state.__setitem__, args=("arquivo", o.chave))
-        tipo.write(_tipo(o.chave))
-        data.write(o.modificado.strftime("%d/%m/%Y %H:%M:%S") if o.modificado else "—")
-        tamanho.write(particoes.tamanho_legivel(o.tamanho))
+    linhas = [[ui.Link(f"📁 {sub}/", f"obj:{pasta}{sub}/", _ir_para, (f"{pasta}{sub}/",)), "Pasta", "—", "—"]
+              for sub in subpastas]
+    linhas += [[ui.Link(f"📄 {o.chave[len(pasta):]}", f"obj:{o.chave}", _escolher, kwargs={"arquivo": o.chave}),
+                _tipo(o.chave), o.modificado.strftime("%d/%m/%Y %H:%M:%S") if o.modificado else "—",
+                particoes.tamanho_legivel(o.tamanho)] for o in arquivos]
+    with ui.painel("objetos", "Objetos", len(linhas),
+                   "Objetos são as entidades fundamentais guardadas no S3. Clique numa pasta para entrar ou num arquivo para ver a prévia."):
+        ui.tabela("objetos", [("Nome", 5), ("Tipo", 1), ("Última modificação", 2), ("Tamanho", 1)], linhas,
+                  localizar=len(linhas) > 8, vazio="Nenhum objeto nesta pasta.")
 
     arquivo = st.session_state.get("arquivo")
     if arquivo and arquivo.startswith(pasta):
-        st.divider()
-        st.subheader(f"📄 {arquivo.rsplit('/', 1)[-1]}")
-        st.caption(f"s3://{s3.BUCKET}/{arquivo}")
-        if particoes.formato_do_arquivo(arquivo) is None:
-            st.info("Prévia só para arquivos .parquet e .jsonl.")
-            return
-        try:
-            st.dataframe(consultas.previa(con.cursor(), raiz, arquivo), hide_index=True)
-            st.caption(f"Primeiras {consultas.LINHAS_PREVIA} linhas, no máximo.")
-        except ValueError as erro:
-            st.warning(str(erro))
-        except duckdb.Error as erro:
-            _mostrar_erro("Não consegui ler o arquivo.", erro)
+        with ui.painel("previa", f"Prévia: {arquivo.rsplit('/', 1)[-1]}", descricao=f"s3://{s3.BUCKET}/{arquivo}"):
+            if particoes.formato_do_arquivo(arquivo) is None:
+                st.info("Prévia só para arquivos .parquet e .jsonl.")
+                return
+            try:
+                st.dataframe(consultas.previa(con.cursor(), raiz, arquivo), hide_index=True)
+                st.caption(f"Primeiras {consultas.LINHAS_PREVIA} linhas, no máximo.")
+            except ValueError as erro:
+                st.warning(str(erro))
+            except duckdb.Error as erro:
+                _mostrar_erro("Não consegui ler o arquivo.", erro)
 
 
 def _aba_particoes(objetos, datasets, con) -> None:
-    if not datasets:
-        st.info("Ainda não há datasets (pastas com .parquet ou .jsonl) no bucket.")
-        return
-    repetidos = {d.prefixo for d in datasets if sum(o.prefixo == d.prefixo for o in datasets) > 1}
-    rotulos = {d.nome_view: d.prefixo + (f" ({d.formato})" if d.prefixo in repetidos else "") for d in datasets}
-    nome = st.selectbox("Dataset", list(rotulos), format_func=rotulos.get, key="dataset")
-    dataset = next(d for d in datasets if d.nome_view == nome)
-    linhas = particoes.tabela_particoes(objetos, dataset.prefixo, dataset.formato)
-    if not linhas:
-        st.info("Nenhum arquivo de dados neste dataset.")
-        return
-    tabela = pd.DataFrame([asdict(l) for l in linhas])
-    tabela["tamanho"] = tabela["bytes"].map(particoes.tamanho_legivel)
-    st.dataframe(tabela, hide_index=True)
-    st.caption(f"{len(linhas)} partição(ões) · {int(tabela['arquivos'].sum())} arquivo(s) · "
-               f"{particoes.tamanho_legivel(int(tabela['bytes'].sum()))}")
-    if st.button("Contar linhas por partição", key="contar"):
-        campos = [c for c in particoes.CAMPOS if any(getattr(l, c) != particoes.SEM_PARTICAO for l in linhas)]
-        sql = (f'SELECT {", ".join(campos)}, count(*) AS linhas FROM {particoes.sql_nome(nome)} GROUP BY ALL ORDER BY ALL'
-               if campos else f'SELECT count(*) AS linhas FROM {particoes.sql_nome(nome)}')
-        try:
-            with st.spinner("Contando linhas… (lê todos os arquivos do dataset)"):
-                contagem = consultas.executar(con.cursor(), sql, consultas.LIMITE_MAXIMO).tabela
-            st.dataframe(contagem, hide_index=True)
-        except duckdb.Error as erro:
-            _mostrar_erro("Não consegui contar.", erro)
+    with ui.painel("particoes", "Partições", descricao="Uma linha por partição: quantos arquivos e quantos bytes ela tem."):
+        if not datasets:
+            st.info("Ainda não há datasets (pastas com .parquet ou .jsonl) no bucket.")
+            return
+        repetidos = {d.prefixo for d in datasets if sum(o.prefixo == d.prefixo for o in datasets) > 1}
+        rotulos = {d.nome_view: d.prefixo + (f" ({d.formato})" if d.prefixo in repetidos else "") for d in datasets}
+        nome = st.selectbox("Dataset", list(rotulos), format_func=rotulos.get, key="dataset")
+        dataset = next(d for d in datasets if d.nome_view == nome)
+        linhas = particoes.tabela_particoes(objetos, dataset.prefixo, dataset.formato)
+        if not linhas:
+            st.info("Nenhum arquivo de dados neste dataset.")
+            return
+        tabela = pd.DataFrame([asdict(l) for l in linhas])
+        tabela["tamanho"] = tabela["bytes"].map(particoes.tamanho_legivel)
+        st.dataframe(tabela, hide_index=True)
+        st.caption(f"{len(linhas)} partição(ões) · {int(tabela['arquivos'].sum())} arquivo(s) · "
+                   f"{particoes.tamanho_legivel(int(tabela['bytes'].sum()))}")
+        if st.button("Contar linhas por partição", key="contar"):
+            campos = [c for c in particoes.CAMPOS if any(getattr(l, c) != particoes.SEM_PARTICAO for l in linhas)]
+            sql = (f'SELECT {", ".join(campos)}, count(*) AS linhas FROM {particoes.sql_nome(nome)} GROUP BY ALL ORDER BY ALL'
+                   if campos else f'SELECT count(*) AS linhas FROM {particoes.sql_nome(nome)}')
+            try:
+                with st.spinner("Contando linhas… (lê todos os arquivos do dataset)"):
+                    contagem = consultas.executar(con.cursor(), sql, consultas.LIMITE_MAXIMO).tabela
+                st.dataframe(contagem, hide_index=True)
+            except duckdb.Error as erro:
+                _mostrar_erro("Não consegui contar.", erro)
 
 
 def _aba_propriedades(objetos, datasets) -> None:
-    st.subheader("Visão geral do bucket")
-    dados = {
-        "Nome": s3.BUCKET,
-        "Região": s3.REGIAO,
-        "Endpoint": s3.ENDPOINT,
-        "Objetos": str(len(objetos)),
-        "Tamanho total": particoes.tamanho_legivel(sum(o.tamanho for o in objetos)),
-        "Tabelas no editor de consultas": str(len(datasets)),
-        "Acesso": "somente leitura",
-    }
-    st.dataframe(pd.DataFrame({"Propriedade": list(dados), "Valor": list(dados.values())}), hide_index=True)
+    with ui.painel("bucket-visao", "Visão geral do bucket"):
+        ui.pares({
+            "Nome": s3.BUCKET, "Região": s3.REGIAO, "Endpoint": s3.ENDPOINT, "Objetos": str(len(objetos)),
+            "Tamanho total": particoes.tamanho_legivel(sum(o.tamanho for o in objetos)),
+            "Tabelas no catálogo": str(len(datasets)), "Acesso": "somente leitura",
+        })
 
 
 def _tela_s3(objetos, datasets, con, raiz) -> None:
     if not st.session_state.get("bucket_aberto"):
         _lista_de_buckets(objetos)
         return
+    _contexto("s3-bucket")
     pasta = st.session_state.get("pasta", "")
-    _breadcrumb(pasta)
-    st.header(s3.BUCKET)
+    trilha = [("Buckets", "migalha:buckets", _ir_para, {"pasta": None}),
+              (s3.BUCKET, "migalha:", _ir_para, {"pasta": ""})]
+    trilha += [(rotulo, f"migalha:{caminho}", _ir_para, {"pasta": caminho}) for rotulo, caminho in particoes.migalhas(pasta)]
+    ui.trilha(trilha, "s3")
+    ui.titulo(s3.BUCKET)
     aba_objetos, aba_particoes, aba_propriedades = st.tabs(["Objetos", "Partições", "Propriedades"])
     with aba_objetos:
         _aba_objetos(objetos, con, raiz, pasta)
@@ -284,22 +225,29 @@ def _trocar_aba() -> None:
     st.session_state["indice_aba"] = nomes.index(st.session_state["aba_ativa"])
 
 
+def _abrir_no_athena(sql: str) -> None:
+    """Abre uma aba nova no editor com esta SQL e troca para a tela do Athena."""
+    _nova_aba()
+    _por_no_editor(sql, substituir=True)
+    st.session_state["tela"] = TELA_ATHENA
+
+
 def _arvore(datasets, colunas) -> None:
-    st.markdown("**Fonte de dados**")
-    st.caption("Data Catalog de estudo · floci (S3 local)")
-    bancos = glue.bancos(datasets)
-    banco = st.selectbox("Banco de dados", list(bancos), key="athena_banco")
-    nomes = [d.nome_view for d in bancos.get(banco, []) if d.nome_view in colunas]
-    st.markdown(f"**Tabelas ({len(nomes)})**")
-    for nome in nomes:
-        cols = colunas[nome]
-        with st.expander(f"▦ {particoes.banco_e_tabela(nome)[1]}"):
-            st.button("Inserir no editor", key=f"inserir:{nome}", type="tertiary", on_click=_por_no_editor, args=(nome,))
-            st.markdown("\n".join(f"- `{c}` <span style='color:#687078'>{t.lower()}</span>" for c, t in cols),
-                        unsafe_allow_html=True)
-    st.markdown("**Consultas de exemplo**")
-    for titulo, sql in EXEMPLOS.items():
-        st.button(titulo, key=f"exemplo:{titulo}", type="tertiary", on_click=_por_no_editor, args=(sql, True))
+    with ui.painel("athena-dados", "Dados"):
+        st.caption("Fonte de dados: Data Catalog de estudo · floci (S3 local)")
+        bancos = glue.bancos(datasets)
+        banco = st.selectbox("Banco de dados", list(bancos), key="athena_banco")
+        nomes = [d.nome_view for d in bancos.get(banco, []) if d.nome_view in colunas]
+        st.markdown(f'<div class="painel-titulo" style="font-size:15px">Tabelas <span class="contador">({len(nomes)})</span></div>',
+                    unsafe_allow_html=True)
+        for nome in nomes:
+            with st.expander(f"▦ {particoes.banco_e_tabela(nome)[1]}"):
+                st.button("Inserir no editor", key=f"inserir:{nome}", type="tertiary", on_click=_por_no_editor, args=(nome,))
+                st.markdown("\n".join(f"- `{c}` <span style='color:#656871'>{t.lower()}</span>" for c, t in colunas[nome]),
+                            unsafe_allow_html=True)
+    with ui.painel("athena-exemplos", "Consultas de exemplo"):
+        for titulo, sql in EXEMPLOS.items():
+            st.button(titulo, key=f"exemplo:{titulo}", type="tertiary", on_click=_por_no_editor, args=(sql, True))
 
 
 def _executar(con, aba: athena.Aba, objetos, datasets, limite: int) -> None:
@@ -326,7 +274,7 @@ def _executar(con, aba: athena.Aba, objetos, datasets, limite: int) -> None:
 
 def _resultados(aba: athena.Aba) -> None:
     if aba.execucao is None:
-        st.caption("Execute uma consulta para ver os resultados aqui.")
+        st.markdown('<div class="tab-vazio">Execute uma consulta para ver os resultados aqui.</div>', unsafe_allow_html=True)
         return
     if aba.execucao.status == "Concluída":
         st.success(athena.resumo(aba.execucao))
@@ -346,7 +294,8 @@ def _resultados(aba: athena.Aba) -> None:
 def _recentes() -> None:
     historico = st.session_state.get("historico", [])
     if not historico:
-        st.caption("Nenhuma consulta executada nesta sessão do navegador.")
+        st.markdown('<div class="tab-vazio">Nenhuma consulta executada nesta sessão do navegador.</div>',
+                    unsafe_allow_html=True)
         return
     st.dataframe(pd.DataFrame([{
         "Hora": e.quando, "Status": e.status, "Tempo (s)": round(e.segundos, 2), "Linhas": e.linhas,
@@ -360,8 +309,10 @@ def _recentes() -> None:
 
 
 def _tela_athena(objetos, datasets, con, colunas) -> None:
-    st.header("Editor de consultas")
-    esquerda, direita = st.columns([1, 3])
+    _contexto("athena")
+    ui.trilha([("Athena", None, None, {}), ("Editor de consultas", None, None, {})], "athena")
+    ui.titulo("Editor de consultas")
+    esquerda, direita = st.columns([1, 3], gap="medium")
     with esquerda:
         _arvore(datasets, colunas)
     with direita:
@@ -369,210 +320,257 @@ def _tela_athena(objetos, datasets, con, colunas) -> None:
         nomes = [a.nome for a in abas]
         aba = _aba_ativa()
         st.session_state["aba_ativa"] = aba.nome
-        seletor, mais, fechar = st.columns([8, 1, 1])
-        seletor.radio("Consultas abertas", nomes, key="aba_ativa", horizontal=True,
-                      label_visibility="collapsed", on_change=_trocar_aba)
-        mais.button("＋", key="nova_aba", help="Nova consulta", on_click=_nova_aba)
-        fechar.button("✕", key="fechar_aba", help="Fechar esta consulta", on_click=_fechar_aba,
-                      disabled=len(abas) == 1)
-        if _chave_sql(aba) not in st.session_state:
-            st.session_state[_chave_sql(aba)] = aba.sql
-        st.text_area("Consulta", key=_chave_sql(aba), height=200, label_visibility="collapsed",
-                     placeholder="SELECT * FROM silver.eventos LIMIT 10")
-        executar, limite_col, _ = st.columns([1, 2, 3])
-        limite = limite_col.number_input("Limite de linhas", min_value=1, max_value=consultas.LIMITE_MAXIMO,
-                                         value=aba.limite, step=100, key=f"limite:{aba.nome}")
-        if executar.button("Executar", key="executar", type="primary"):
-            _executar(con, aba, objetos, datasets, limite)
-        aba_resultados, aba_recentes = st.tabs(["Resultados", "Consultas recentes"])
-        with aba_resultados:
-            _resultados(aba)
-        with aba_recentes:
-            _recentes()
+        with ui.painel("athena-editor"):
+            seletor, mais, fechar = st.columns([10, 1, 1], vertical_alignment="center")
+            seletor.radio("Consultas abertas", nomes, key="aba_ativa", horizontal=True,
+                          label_visibility="collapsed", on_change=_trocar_aba)
+            mais.button("＋", key="nova_aba", help="Nova consulta", on_click=_nova_aba)
+            fechar.button("✕", key="fechar_aba", help="Fechar esta consulta", on_click=_fechar_aba,
+                          disabled=len(abas) == 1)
+            if _chave_sql(aba) not in st.session_state:
+                st.session_state[_chave_sql(aba)] = aba.sql
+            st.text_area("Consulta", key=_chave_sql(aba), height=220, label_visibility="collapsed",
+                         placeholder="SELECT * FROM silver.eventos LIMIT 10")
+            executar, limite_col, _ = st.columns([1, 2, 3], vertical_alignment="bottom")
+            limite = limite_col.number_input("Limite de linhas", min_value=1, max_value=consultas.LIMITE_MAXIMO,
+                                             value=aba.limite, step=100, key=f"limite:{aba.nome}")
+            if executar.button("Executar", key="executar", type="primary"):
+                _executar(con, aba, objetos, datasets, limite)
+        with ui.painel("athena-resultados"):
+            aba_resultados, aba_recentes = st.tabs(["Resultados", "Consultas recentes"])
+            with aba_resultados:
+                _resultados(aba)
+            with aba_recentes:
+                _recentes()
 
 
 # ------------------------------------------------------------ Glue · Data Catalog ------------------------------------------------------------
-
-def _escolher(**valores) -> None:
-    for chave, valor in valores.items():
-        st.session_state[chave] = valor
-
-
-def _consultar_no_athena(nome: str) -> None:
-    """Botão "Consultar no Athena": abre uma aba nova no editor com um SELECT da tabela."""
-    _nova_aba()
-    _por_no_editor(f"SELECT * FROM {nome} LIMIT 10", substituir=True)
-    st.session_state["tela"] = TELA_ATHENA
-
 
 def _tela_catalogo(objetos, datasets, colunas) -> None:
     bancos = glue.bancos(datasets)
     banco = st.session_state.get("cat_banco")
     tabela = st.session_state.get("cat_tabela")
-    trilha = st.container(horizontal=True, vertical_alignment="center", gap="small")
-    trilha.button("Data Catalog", key="cat:inicio", type="tertiary", on_click=_escolher,
-                  kwargs={"cat_banco": None, "cat_tabela": None})
+    if banco not in bancos:
+        banco, tabela = None, None
+    trilha = [("Glue", None, None, {}), ("Data Catalog", "cat:inicio", _escolher, {"cat_banco": None, "cat_tabela": None})]
     if banco:
-        trilha.markdown("›", width="content")
-        trilha.button(banco, key="cat:banco", type="tertiary", on_click=_escolher, kwargs={"cat_tabela": None})
+        trilha.append((banco, "cat:banco", _escolher, {"cat_tabela": None}))
     if tabela:
-        trilha.markdown("›", width="content")
-        trilha.markdown(particoes.banco_e_tabela(tabela)[1], width="content")
+        trilha.append((particoes.banco_e_tabela(tabela)[1], None, None, {}))
+    ui.trilha(trilha if banco else trilha[:1] + [("Data Catalog", None, None, {})], "catalogo")
 
-    if not banco or banco not in bancos:
-        st.header(f"Bancos de dados ({len(bancos)})")
-        st.caption("No Glue, um banco de dados agrupa tabelas. Aqui há um por camada do medalhão.")
-        pesos = [2, 1, 3]
-        _cabecalho(st.columns(pesos), ["Nome", "Tabelas", "Localização"])
-        for nome, tabelas in bancos.items():
-            c_nome, c_qtd, c_local = st.columns(pesos)
-            c_nome.button(f"🗄 {nome}", key=f"banco:{nome}", type="tertiary", on_click=_escolher,
-                          kwargs={"cat_banco": nome, "cat_tabela": None})
-            c_qtd.write(str(len(tabelas)))
-            c_local.write(f"s3://{s3.BUCKET}/{nome}/")
+    if not banco:
+        _contexto("catalogo-bancos")
+        ui.titulo("Bancos de dados", len(bancos), "No Glue, um banco de dados agrupa tabelas. Aqui há um por camada do medalhão.")
+        with ui.painel("bancos", "Bancos de dados", len(bancos)):
+            ui.tabela("bancos", [("Nome", 2), ("Tabelas", 1), ("Localização", 3)], [
+                [ui.Link(nome, f"banco:{nome}", _escolher, kwargs={"cat_banco": nome, "cat_tabela": None}),
+                 str(len(tabelas)), f"s3://{s3.BUCKET}/{nome}/"] for nome, tabelas in bancos.items()])
         return
 
     if not tabela:
-        st.header(f"Tabelas em {banco} ({len(bancos[banco])})")
-        pesos = [3, 1, 4, 1, 1]
-        _cabecalho(st.columns(pesos), ["Nome", "Formato", "Localização", "Partições", "Colunas"])
-        for d in bancos[banco]:
-            c_nome, c_fmt, c_local, c_part, c_cols = st.columns(pesos)
-            c_nome.button(particoes.banco_e_tabela(d.nome_view)[1], key=f"tabela:{d.nome_view}", type="tertiary",
-                          on_click=_escolher, kwargs={"cat_tabela": d.nome_view})
-            c_fmt.write("Parquet" if d.formato == "parquet" else "JSON")
-            c_local.write(glue.localizacao(d, s3.BUCKET))
-            c_part.write(str(len(particoes.tabela_particoes(objetos, d.prefixo, d.formato))))
-            c_cols.write(str(len(colunas.get(d.nome_view, []))))
+        _contexto("catalogo-tabelas")
+        ui.titulo(banco, descricao=f"Banco de dados · s3://{s3.BUCKET}/{banco}/")
+        linhas = [[ui.Link(particoes.banco_e_tabela(d.nome_view)[1], f"tabela:{d.nome_view}", _escolher,
+                           kwargs={"cat_tabela": d.nome_view}),
+                   "Parquet" if d.formato == "parquet" else "JSON", glue.localizacao(d, s3.BUCKET),
+                   str(len(particoes.tabela_particoes(objetos, d.prefixo, d.formato))),
+                   str(len(colunas.get(d.nome_view, [])))] for d in bancos[banco]]
+        with ui.painel("tabelas", "Tabelas", len(linhas)):
+            ui.tabela("tabelas", [("Nome", 3), ("Formato", 1), ("Localização", 4), ("Partições", 1), ("Colunas", 1)],
+                      linhas, localizar=len(linhas) > 8)
         return
 
+    _contexto("catalogo-tabela")
     dataset = next(d for d in datasets if d.nome_view == tabela)
     chaves = glue.chaves_particao(dataset, objetos)
+    linhas_part = particoes.tabela_particoes(objetos, dataset.prefixo, dataset.formato)
     titulo, botao = st.columns([4, 1], vertical_alignment="center")
-    titulo.header(tabela)
+    with titulo:
+        ui.titulo(tabela)
     botao.button("Consultar no Athena", key="consultar_athena", type="primary",
-                 on_click=_consultar_no_athena, args=(tabela,))
-    aba_esquema, aba_particoes, aba_props = st.tabs(["Esquema", "Partições", "Propriedades"])
+                 on_click=_abrir_no_athena, args=(f"SELECT * FROM {tabela} LIMIT 10",))
+    with ui.painel("tabela-visao", "Visão geral da tabela"):
+        ui.pares({"Banco de dados": banco, "Localização": glue.localizacao(dataset, s3.BUCKET),
+                  "Classificação": "parquet" if dataset.formato == "parquet" else "json",
+                  "Chaves de partição": ", ".join(chaves) or "—", "Arquivos": str(sum(l.arquivos for l in linhas_part)),
+                  "Nome no Athena": tabela})
+    aba_esquema, aba_particoes = st.tabs(["Esquema", "Partições"])
     with aba_esquema:
         st.dataframe(pd.DataFrame([{"Coluna": c, "Tipo": t.lower(), "Chave de partição": "sim" if c in chaves else ""}
                                    for c, t in colunas.get(tabela, [])]), hide_index=True)
     with aba_particoes:
-        linhas = particoes.tabela_particoes(objetos, dataset.prefixo, dataset.formato)
         if chaves:
             st.caption(f"Chaves de partição: {', '.join(chaves)}")
             st.dataframe(pd.DataFrame([{**{c: getattr(l, c) for c in chaves}, "arquivos": l.arquivos,
-                                        "tamanho": particoes.tamanho_legivel(l.bytes)} for l in linhas]), hide_index=True)
+                                        "tamanho": particoes.tamanho_legivel(l.bytes)} for l in linhas_part]),
+                         hide_index=True)
         else:
             st.info("Tabela sem partições: todos os arquivos ficam direto na pasta.")
-    with aba_props:
-        dados = {"Banco de dados": banco, "Tabela": particoes.banco_e_tabela(tabela)[1],
-                 "Localização": glue.localizacao(dataset, s3.BUCKET),
-                 "Classificação": "parquet" if dataset.formato == "parquet" else "json",
-                 "Chaves de partição": ", ".join(chaves) or "—",
-                 "Arquivos": str(sum(l.arquivos for l in particoes.tabela_particoes(objetos, dataset.prefixo, dataset.formato))),
-                 "Nome no Athena": tabela}
-        st.dataframe(pd.DataFrame({"Propriedade": list(dados), "Valor": list(dados.values())}), hide_index=True)
 
 
 # -------------------------------------------------------------- Glue · Jobs ETL --------------------------------------------------------------
 
-def _pastas_jobs() -> tuple[Path, Path, Path]:
-    raiz = Path(__file__).resolve().parents[1]
+def _pastas_jobs() -> tuple[Path, Path]:
     jobs = Path(os.environ.get("EXPLORADOR_JOBS", "pipeline"))
     execucoes = Path(os.environ.get("EXPLORADOR_EXECUCOES", "/tmp/explorador-execucoes"))
-    return raiz, (jobs if jobs.is_absolute() else raiz / jobs), execucoes
+    return (jobs if jobs.is_absolute() else RAIZ / jobs), execucoes
 
 
 def _quando(instante: float) -> str:
-    return datetime.fromtimestamp(instante).strftime("%d/%m %H:%M:%S")
+    return datetime.fromtimestamp(instante).strftime("%d/%m/%Y %H:%M:%S")
 
 
-def _executar_job(job: glue.Job, pasta: Path, raiz: Path) -> None:
+def _relativo(caminho: Path) -> str:
+    return str(caminho.relative_to(RAIZ)) if caminho.is_relative_to(RAIZ) else str(caminho)
+
+
+def _executar_job(job: glue.Job, pasta: Path) -> None:
     if not glue.em_execucao(pasta, job.nome):
-        st.session_state["execucao_sel"] = glue.iniciar(job, pasta, raiz)
+        st.session_state["execucao_sel"] = glue.iniciar(job, pasta, RAIZ)
 
 
 def _painel_execucoes(job: glue.Job, pasta: Path, rodando_antes: bool = False) -> None:
     if rodando_antes and not glue.em_execucao(pasta, job.nome):
         st.rerun()                                  # terminou: redesenha a página toda (reativa o botão Executar)
     execucoes = glue.execucoes(pasta, job.nome)
+    with ui.painel("execucoes", "Execuções", len(execucoes)):
+        ui.tabela("execucoes", [("Execução", 3), ("Status", 1.4), ("Início", 2), ("Duração", 1), ("Código de saída", 1)],
+                  [[e.id, ui.selo(e.status), _quando(e.inicio), f"{e.duracao:.1f} s".replace(".", ","),
+                    "—" if e.codigo is None else str(e.codigo)] for e in execucoes],
+                  vazio="Nenhuma execução ainda. Clique em Executar.")
     if not execucoes:
-        st.caption("Nenhuma execução ainda. Clique em Executar.")
         return
-    st.dataframe(pd.DataFrame([{"Execução": e.id, "Status": e.status, "Início": _quando(e.inicio),
-                                "Duração (s)": round(e.duracao, 1), "Código de saída": "—" if e.codigo is None else e.codigo}
-                               for e in execucoes]), hide_index=True)
     ids = [e.id for e in execucoes]
     if st.session_state.get("execucao_sel") not in ids:
         st.session_state["execucao_sel"] = ids[0]
-    escolhida = st.selectbox("Log da execução", ids, key="execucao_sel")
-    st.code(glue.log(pasta, escolhida, ultimas=300) or "(sem saída ainda)", language="text")
+    with ui.painel("log", "Log"):
+        escolhida = st.selectbox("Execução", ids, key="execucao_sel")
+        st.code(glue.log(pasta, escolhida, ultimas=300) or "(sem saída ainda)", language="text")
 
 
 def _tela_jobs() -> None:
-    raiz, pasta_jobs, pasta_exec = _pastas_jobs()
+    pasta_jobs, pasta_exec = _pastas_jobs()
     jobs = glue.listar_jobs(pasta_jobs)
-    nome = st.session_state.get("job_sel")
-    job = next((j for j in jobs if j.nome == nome), None)
-    trilha = st.container(horizontal=True, vertical_alignment="center", gap="small")
-    trilha.button("Jobs ETL", key="jobs:inicio", type="tertiary", on_click=_escolher, kwargs={"job_sel": None})
-    if job:
-        trilha.markdown("›", width="content")
-        trilha.markdown(job.nome, width="content")
+    job = next((j for j in jobs if j.nome == st.session_state.get("job_sel")), None)
 
     if job is None:
-        st.header(f"Jobs ({len(jobs)})")
-        st.caption(f"Os scripts .py de `{pasta_jobs.relative_to(raiz) if pasta_jobs.is_relative_to(raiz) else pasta_jobs}/` "
-                   "(menos o comum.py). Executar aqui é o mesmo que `docker compose run --rm app python <script>`.")
-        if not jobs:
-            st.info("Nenhum job ainda. Crie o seu primeiro, por exemplo `pipeline/bronze.py`, e clique em Recarregar.")
-            return
-        pesos = [2, 3, 1, 2]
-        _cabecalho(st.columns(pesos), ["Nome", "Script", "Última execução", "Início"])
+        _contexto("jobs-lista")
+        ui.trilha([("Glue", None, None, {}), ("Jobs ETL", None, None, {})], "jobs")
+        ui.titulo("Jobs", len(jobs), f"Os scripts .py de <code>{_relativo(pasta_jobs)}/</code> (menos o comum.py). "
+                  "Executar aqui é o mesmo que <code>docker compose run --rm app python &lt;script&gt;</code>.")
+        linhas = []
         for j in jobs:
             ultima = next(iter(glue.execucoes(pasta_exec, j.nome)), None)
-            c_nome, c_script, c_status, c_inicio = st.columns(pesos)
-            c_nome.button(f"⚙ {j.nome}", key=f"job:{j.nome}", type="tertiary", on_click=_escolher,
-                          kwargs={"job_sel": j.nome})
-            c_script.write(str(j.script.relative_to(raiz)) if j.script.is_relative_to(raiz) else str(j.script))
-            c_status.write(ultima.status if ultima else "—")
-            c_inicio.write(_quando(ultima.inicio) if ultima else "—")
+            linhas.append([ui.Link(j.nome, f"job:{j.nome}", _escolher, kwargs={"job_sel": j.nome}), "Spark",
+                           _relativo(j.script), ui.selo(ultima.status) if ultima else "—",
+                           _quando(ultima.inicio) if ultima else "—"])
+        with ui.painel("jobs", "Jobs", len(jobs)):
+            ui.tabela("jobs", [("Nome do job", 2.8), ("Tipo", 0.7), ("Script", 3.2), ("Última execução", 1.4), ("Início", 1.6)],
+                      linhas, localizar=len(linhas) > 8,
+                      vazio="Nenhum job ainda. Crie o primeiro, por exemplo pipeline/bronze.py, e clique em Recarregar.")
         return
 
+    _contexto("jobs-detalhe")
+    ui.trilha([("Glue", None, None, {}), ("Jobs ETL", "jobs:inicio", _escolher, {"job_sel": None}),
+               (job.nome, None, None, {})], "jobs")
     rodando = glue.em_execucao(pasta_exec, job.nome)
     titulo, botao = st.columns([4, 1], vertical_alignment="center")
-    titulo.header(job.nome)
+    with titulo:
+        ui.titulo(job.nome, descricao="Tipo: Spark (PySpark 3.5.3, local) · roda no contêiner do explorador · um job por vez")
     botao.button("Executar", key="executar_job", type="primary", disabled=rodando,
-                 on_click=_executar_job, args=(job, pasta_exec, raiz))
-    st.caption("Tipo: Spark (PySpark 3.5.3, local) · roda no contêiner do explorador · um job por vez")
+                 on_click=_executar_job, args=(job, pasta_exec))
     aba_exec, aba_script = st.tabs(["Execuções", "Script"])
     with aba_exec:
         # enquanto há execução em andamento, o painel se atualiza sozinho a cada 3 s
         st.fragment(run_every=3 if rodando else None)(_painel_execucoes)(job, pasta_exec, rodando)
     with aba_script:
-        st.code(job.script.read_text(encoding="utf-8"), language="python")
+        with ui.painel("script", _relativo(job.script)):
+            st.code(job.script.read_text(encoding="utf-8"), language="python")
+
+
+# --------------------------------------------------------------- Tutorial ---------------------------------------------------------------
+
+def _arquivo_preferencias() -> Path:
+    return Path(os.environ.get("EXPLORADOR_PREFERENCIAS", RAIZ / ".explorador" / "preferencias.json"))
+
+
+def _salvar_preferencia() -> None:
+    ligado = bool(st.session_state.get("pref_tutorial", True))
+    if tutorial.carregar(_arquivo_preferencias())["tutorial"] != ligado:     # só grava quando muda
+        tutorial.salvar(_arquivo_preferencias(), {"tutorial": ligado})
+
+
+def _desligar_tutorial() -> None:
+    st.session_state["pref_tutorial"] = False
+    _salvar_preferencia()
+
+
+def _abrir_tour() -> None:
+    # um número novo a cada clique, único também entre sessões: o navegador guarda o último que já abriu
+    # (tour-forca) e um contador que recomeça em 1 depois de recarregar a página seria confundido com ele
+    st.session_state["tour_forcar"] = time.time_ns()
+
+
+def _contexto(nome: str) -> None:
+    """Cada tela diz qual roteiro do tutorial vale para ela."""
+    st.session_state["contexto_tour"] = nome
+
+
+def _mostrar_tour() -> None:
+    contexto = st.session_state.get("contexto_tour")
+    if not contexto:
+        return
+    ligado = bool(st.session_state.get("pref_tutorial"))
+    forcar = st.session_state.get("tour_forcar", 0)
+    if ligado or forcar:
+        ui.tour(contexto, tutorial.roteiro(contexto), auto=ligado, forcar=forcar)
 
 
 # ---------------------------------------------------------------- página ----------------------------------------------------------------
 
-def _pagina() -> None:
-    st.set_page_config(page_title="Console do datalake", layout="wide", initial_sidebar_state="expanded")
-    st.markdown(CSS, unsafe_allow_html=True)
-    st.markdown(f'<div class="barra-console"><span class="marca">☁ Console do datalake</span>'
-                f'<span>S3, Glue e Athena de estudo</span><span class="detalhe">{s3.BUCKET} · {s3.ENDPOINT} · '
-                f'Athena só lê · Jobs ETL executam {os.environ.get("EXPLORADOR_JOBS", "pipeline").rstrip("/")}/'
-                f'</span></div>', unsafe_allow_html=True)
+def _menu() -> str:
+    salvo = tutorial.carregar(_arquivo_preferencias())["tutorial"]
+    opcoes = [TELA_S3, TELA_CATALOGO, TELA_JOBS, TELA_ATHENA]
+    if st.session_state.get("tela") not in opcoes:
+        st.session_state["tela"] = TELA_S3
     with st.sidebar:
-        st.markdown("**Serviços**")
-        tela = st.radio("Serviço", [TELA_S3, TELA_CATALOGO, TELA_JOBS, TELA_ATHENA], key="tela",
-                        label_visibility="collapsed")
+        st.markdown('<div class="menu-titulo">Console do datalake</div>', unsafe_allow_html=True)
+        tela = st.radio("Serviço", opcoes, key="tela", format_func=ICONES.get, label_visibility="collapsed")
         st.divider()
         if st.button("Recarregar", key="recarregar", help="Lê o bucket de novo e recria as tabelas"):
             st.cache_data.clear()
             st.cache_resource.clear()
             st.rerun()
+        st.button("🎓 Abrir tutorial desta tela", key="tour-abrir", on_click=_abrir_tour,
+                  help="Mostra, num modal, para que serve cada parte da tela atual.")
+        # o valor inicial vem do arquivo; depois, o próprio widget guarda o estado da sessão
+        inicial = {} if "pref_tutorial" in st.session_state else {"value": salvo}
+        st.toggle("Mostrar tutorial", key="pref_tutorial", on_change=_salvar_preferencia, **inicial,
+                  help="Ligado, o tutorial abre sozinho na primeira visita a cada tela. Desligado, só pelo botão acima.")
+        # botão invisível: o "Não mostrar mais o tutorial" do modal clica nele para gravar a preferência
+        st.button("desligar tutorial", key="tour-desligar", on_click=_desligar_tutorial)
         st.caption("Ferramenta de estudo inspirada nos consoles do S3, do Glue e do Athena. Roda no seu computador.")
+    return tela
 
+
+def _pagina() -> None:
+    st.set_page_config(page_title="Console do datalake", layout="wide", initial_sidebar_state="expanded")
+    st.markdown(ui.CSS, unsafe_allow_html=True)
+    pasta_jobs = os.environ.get("EXPLORADOR_JOBS", "pipeline").rstrip("/")
+    st.markdown(f'<div class="barra-console"><span class="marca">☁ Console do datalake</span>'
+                f'<span class="servicos">S3 · Glue · Athena</span>'
+                f'<span class="detalhe">s3://{s3.BUCKET} · {s3.ENDPOINT} · Athena só lê · Jobs ETL executam {pasta_jobs}/</span>'
+                f'<span class="regiao">{s3.REGIAO}</span></div>', unsafe_allow_html=True)
+    tela = _menu()
+    st.session_state.pop("contexto_tour", None)
+    try:
+        _conteudo(tela)
+    finally:
+        _mostrar_tour()
+
+
+def _conteudo(tela: str) -> None:
     if tela == TELA_JOBS:                      # os jobs não dependem do bucket já ter dados
         _tela_jobs()
         return
