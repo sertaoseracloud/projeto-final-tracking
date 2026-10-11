@@ -5,17 +5,20 @@ Esta pasta **não vai para o aluno**. O `.gitattributes` marca `professor/`, `do
 ## Gerar o pacote do aluno
 
 ```bash
-git archive --format=zip -o projeto-final-aluno.zip HEAD
+git archive --format=zip -o dist/projeto-final-aluno.zip HEAD
 ```
 
-Distribua o zip, nunca o repositório nem um fork dele. Antes de distribuir, confira:
+A pasta `dist/` fica fora do git. Distribua o zip, nunca o repositório nem um fork dele. Antes de distribuir, confira:
 
 ```bash
 # 1. nada da solução dentro do zip (a saída tem que ficar vazia)
-unzip -l projeto-final-aluno.zip | grep -E "professor/|docs/specs/|docs/superpowers/"
+unzip -l dist/projeto-final-aluno.zip | grep -E "professor/|docs/specs/|docs/superpowers/"
 
-# 2. o pacote roda sozinho: descompacte numa pasta nova e rode os testes dela
-unzip -q projeto-final-aluno.zip -d /tmp/pacote-aluno
+# 2. em pipeline/ só vão o README.md e o comum.py (sobrou cópia do usar_solucao.py? rode o --desfazer)
+unzip -Z1 dist/projeto-final-aluno.zip | grep "^pipeline/"
+
+# 3. o pacote roda sozinho: descompacte numa pasta nova e rode os testes dela
+unzip -q dist/projeto-final-aluno.zip -d /tmp/pacote-aluno
 docker run --rm -v /tmp/pacote-aluno:/projeto -w /projeto datalake-tracking-app python -m pytest -q
 ```
 
@@ -47,13 +50,24 @@ docker compose run --rm app python -m pytest professor/solucao/tests
 
 ## Mostrar a solução no explorador
 
-O explorador lê os jobs da pasta indicada em `EXPLORADOR_JOBS` (o padrão é `pipeline`). Para a aula, aponte para a solução:
+O explorador trabalha só com `pipeline/`: o botão **⟳ Sincronizar** envia essa pasta para o bucket `glue-assets` do floci, e os jobs rodam de lá. Ele nunca roda nada direto de `professor/solucao/`. Para mostrar a solução, copie-a antes para as pastas do aluno:
 
 ```bash
-EXPLORADOR_JOBS=professor/solucao docker compose up -d --force-recreate explorador
+docker compose run --rm app python professor/usar_solucao.py
+docker compose up -d floci explorador
 ```
 
-Em **Glue · Jobs ETL** aparecem os jobs da solução, e em **Glue · Workflows** o workflow `medalhao`. No PowerShell, defina a variável antes: `$env:EXPLORADOR_JOBS = "professor/solucao"`. Para voltar à pasta do aluno, recrie o contêiner sem a variável.
+O script copia os jobs de `professor/solucao/` para `pipeline/` e o `workflows/medalhao.json` para `pipeline/workflows/`. O `comum.py` não é copiado: a solução já usa o `pipeline/comum.py`. Um arquivo do aluno com o mesmo nome e conteúdo diferente nunca é sobrescrito; ele aparece como "pulado".
+
+No explorador, clique em **⟳ Sincronizar** (em Jobs ETL ou Workflows). Aí aparecem os jobs da solução em **Glue · Jobs ETL** e o workflow `medalhao` em **Glue · Workflows**.
+
+Depois da aula, tire as cópias (e sincronize de novo para tirá-las também do floci):
+
+```bash
+docker compose run --rm app python professor/usar_solucao.py --desfazer
+```
+
+**Atenção:** as cópias em `pipeline/` não podem ser commitadas, senão a solução vai junto no pacote do aluno. Rode o `--desfazer` antes de gerar o zip; a conferência da seção "Gerar o pacote do aluno" também acusa se sobrar algum job em `pipeline/`.
 
 ## O que há aqui
 
@@ -66,6 +80,7 @@ Em **Glue · Jobs ETL** aparecem os jobs da solução, e em **Glue · Workflows*
 | `solucao/executar_pipeline.py`, `solucao/limpar_camadas.py` | rodar os 8 jobs em sequência (o R3); zerar Bronze, Silver e Gold sem tocar na landing |
 | `solucao/workflows/medalhao.json` | os mesmos 8 jobs como workflow do explorador, com as dependências reais entre eles |
 | `solucao/medir_armadilhas.py` | como cada armadilha aparece nos números |
+| `usar_solucao.py` | copia a solução para `pipeline/` (e `--desfazer` tira as cópias), para mostrá-la no explorador |
 | `solucao/tests/` | testes das transformações, com Spark local e sem S3, e do workflow `medalhao` |
 
 A Bronze é append-only: rodar o `executar_pipeline.py` (ou o workflow) duas vezes sem limpar dobra a Bronze. Silver e Gold não mudam, porque a Silver deduplica por `event_id`. Para os números do gabarito, rode sempre a partir do `limpar_camadas.py`.

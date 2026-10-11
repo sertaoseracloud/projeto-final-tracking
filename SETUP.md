@@ -128,7 +128,7 @@ docker compose up -d explorador
 
 **O que faz:** liga o contêiner `explorador` em segundo plano. Ele é um site feito com Streamlit, que lê os buckets do floci e roda os seus jobs com o mesmo Spark do `app`.
 
-**O que você deve ver:** abra **http://localhost:8501** no navegador. Deve aparecer a barra escura "Console do datalake" e, no menu lateral **Serviços**, as telas **S3 · Buckets** (arquivos e partições de todos os buckets do floci), **Glue · Data Catalog** (bancos e tabelas), **Glue · Jobs ETL** (rodar os seus jobs de `pipeline/`), **Glue · Workflows** (juntar vários jobs num grafo com dependências e rodar tudo de uma vez) e **Athena · Editor de consultas** (SQL). Na primeira visita a cada tela, um tour em modal destaca as partes da tela e explica para que servem. No canto inferior direito ficam três botões redondos: **⬆** volta ao topo, **🎓** revê o tutorial e **♿** abre o menu com a chave **Mostrar tutorial** e as opções de acessibilidade (tamanho do texto, alto contraste, links sublinhados, espaçamento e menos movimento). O console também funciona só com o teclado e com leitores de tela. Para saber o que cada tela faz, leia [explorador/README.md](explorador/README.md).
+**O que você deve ver:** abra **http://localhost:8501** no navegador. Deve aparecer a barra escura "Console do datalake" e, no menu lateral **Serviços**, as telas **S3 · Buckets** (arquivos e partições de todos os buckets do floci), **Glue · Data Catalog** (bancos e tabelas), **Glue · Jobs ETL** (rodar os seus jobs: o botão **⟳ Sincronizar** envia os scripts de `pipeline/` para o bucket `glue-assets` do floci, como no Glue, e eles rodam de lá), **Glue · Workflows** (juntar vários jobs num grafo com dependências e rodar tudo de uma vez) e **Athena · Editor de consultas** (SQL). Na primeira visita a cada tela, um tour em modal destaca as partes da tela e explica para que servem. No canto inferior direito ficam três botões redondos: **⬆** volta ao topo, **🎓** revê o tutorial e **♿** abre o menu com a chave **Mostrar tutorial** e as opções de acessibilidade (tamanho do texto, alto contraste, links sublinhados, espaçamento e menos movimento). O console também funciona só com o teclado e com leitores de tela. Para saber o que cada tela faz, leia [explorador/README.md](explorador/README.md).
 
 ## Como rodar qualquer coisa
 
@@ -162,6 +162,7 @@ Se algo der errado, procure a mensagem na primeira coluna.
 | `[erro]` no `verificar_ambiente.py` lendo a landing | o gerador ainda não rodou, ou o Docker reiniciou e o floci perdeu os arquivos (ele guarda tudo na memória) | Passo 3 |
 | um job ou workflow falha logo no começo com um erro longo do S3 (`listObjectsV2`, `AmazonS3Client`) | o bucket ainda não existe: o floci acabou de ligar (ou reiniciou) e o gerador ainda não rodou | Passo 3, depois rode de novo |
 | no explorador, a tela S3 avisa que o `datalake-tracking` está vazio ou ainda não existe | mesmo motivo: o floci começou vazio | Passo 3 e clique em **Recarregar** |
+| a tela **Jobs ETL** está vazia, um job novo não aparece ou roda a versão antiga do código | os jobs rodam da cópia no bucket `glue-assets` do floci, e ela ainda não foi atualizada (ou o floci reiniciou e perdeu a cópia) | clique em **⟳ Sincronizar**, nas telas Jobs ETL ou Workflows |
 
 Dica: para ver quais contêineres estão ligados, use `docker compose ps`.
 

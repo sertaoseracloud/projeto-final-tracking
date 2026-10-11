@@ -91,8 +91,12 @@ ROTEIROS: dict[str, list[Passo]] = {
               "Abre uma consulta nova no editor, já com SELECT * FROM banco.tabela LIMIT 10."),
     ],
     "jobs-lista": [
+        Passo(_k("sincronizar-jobs"), "Sincronizar",
+              "Os jobs e workflows rodam a partir do floci, do bucket glue-assets, como no Glue, onde os scripts ficam no S3. "
+              "Depois de criar ou editar arquivos em pipeline/, clique em Sincronizar: ele envia o que é novo ou mudou "
+              "e tira do floci o que você apagou. Passe o mouse no botão para ver o que está esperando."),
         Passo(_k("painel-jobs"), "Seus jobs",
-              "Cada arquivo .py da pasta pipeline/ (menos o comum.py) é um job. A tabela mostra o status e o início da "
+              "Cada script .py que está no floci (menos o comum.py) é um job. A tabela mostra o status e o início da "
               "última execução. Clique no nome para abrir o job. Com mais de 8 jobs, aparece a caixa Localizar "
               "para filtrar a lista pelo nome."),
         Passo(_k("trilha-jobs"), "Caminho",
@@ -100,7 +104,7 @@ ROTEIROS: dict[str, list[Passo]] = {
     ],
     "jobs-detalhe": [
         Passo(_k("executar_job"), "Executar",
-              "Roda o job no Spark do contêiner, o mesmo que docker compose run --rm app python pipeline/<job>.py. "
+              "Baixa o script do floci e roda no Spark do contêiner, como docker compose run --rm app python pipeline/<job>.py. "
               "Enquanto ele roda, o botão fica desligado: um job por vez."),
         Passo(_k("painel-execucoes"), "Execuções",
               "Cada execução com status (Em execução, Sucesso ou Falhou), início, duração e código de saída. "
@@ -108,16 +112,21 @@ ROTEIROS: dict[str, list[Passo]] = {
         Passo(_k("painel-log"), "Log",
               "Tudo o que o job imprimiu. Se a execução falhar, o motivo quase sempre está nas últimas linhas."),
         Passo(ABAS, "Script",
-              "A aba Script mostra o código do job (só leitura). Para mudar o job, edite o arquivo no seu editor."),
+              "A aba Script mostra o código que está no floci (só leitura). Para mudar o job, edite o arquivo em "
+              "pipeline/ no seu editor e clique em Sincronizar."),
     ],
     "workflows-lista": [
+        Passo(_k("sincronizar-workflows"), "Sincronizar",
+              "Os jobs e workflows rodam a partir do floci, do bucket glue-assets, como no Glue, onde os scripts ficam no S3. "
+              "Depois de criar ou editar arquivos em pipeline/, clique em Sincronizar: ele envia o que é novo ou mudou "
+              "e tira do floci o que você apagou. Passe o mouse no botão para ver o que está esperando."),
         Passo(None, "Workflows",
               "Um workflow junta vários jobs num grafo: cada job diz de quais outros depende. Ao executar, o console "
               "roda cada job assim que as dependências dele terminam com sucesso, como se você rodasse um depois do outro, "
               "mas jobs independentes podem rodar ao mesmo tempo."),
         Passo(_k("criar_workflow"), "Criar workflow",
-              "Abre o formulário: você dá um nome, escolhe os jobs e diz de quem cada um depende. O workflow fica "
-              "salvo num arquivo .json dentro da pasta de jobs, em workflows/."),
+              "Abre o formulário: você dá um nome, escolhe os jobs e diz de quem cada um depende. O workflow vai para "
+              "o floci e ganha uma cópia em pipeline/workflows/, para não se perder quando o floci reiniciar."),
         Passo(_k("painel-workflows"), "Seus workflows",
               "Cada linha é um workflow, com quantos jobs tem e o status da última execução. Clique no nome para abrir."),
     ],

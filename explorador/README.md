@@ -75,7 +75,7 @@ O explorador imita o jeito de trabalhar do console da AWS, para você treinar o 
 flowchart LR
     menu["Menu lateral<br/>Serviços"] --> s3["S3 · Buckets<br/>arquivos e partições"]
     menu --> cat["Glue · Data Catalog<br/>bancos e tabelas"]
-    menu --> jobs["Glue · Jobs ETL<br/>executar pipeline/"]
+    menu --> jobs["Glue · Jobs ETL<br/>rodar os scripts<br/>do glue-assets"]
     menu --> wf["Glue · Workflows<br/>vários jobs em grafo"]
     menu --> ath["Athena · Editor<br/>de consultas"]
     wf -->|roda em ordem| jobs
@@ -88,7 +88,7 @@ flowchart LR
 
 ### S3 · Buckets
 
-- **Lista de buckets:** a tabela mostra **todos os buckets** do floci, com a região, quantos objetos cada um tem, o tamanho total e quem usa o bucket. O `datalake-tracking` vem primeiro: é o do projeto. Os outros (por exemplo, um bucket que você criou para testar) também entram no Data Catalog e no Athena, cada um como um banco com o nome dele. Clique no nome para entrar. Se o `datalake-tracking` estiver vazio ou ainda não existir, um aviso lembra de rodar o gerador.
+- **Lista de buckets:** a tabela mostra **todos os buckets** do floci, com a região, quantos objetos cada um tem, o tamanho total e quem usa o bucket. O `datalake-tracking` vem primeiro: é o do projeto. O `glue-assets` guarda os scripts e workflows dos jobs (veja Jobs ETL) e fica fora do Data Catalog. Os outros (por exemplo, um bucket que você criou para testar) também entram no Data Catalog e no Athena, cada um como um banco com o nome dele. Clique no nome para entrar. Se o `datalake-tracking` estiver vazio ou ainda não existir, um aviso lembra de rodar o gerador.
 - **Caminho no topo (breadcrumb):** `Buckets › datalake-tracking › silver › event_name=purchase`. Clique em qualquer parte para voltar até ela.
 - **Aba Objetos:** as pastas (📁) e os arquivos (📄) da pasta atual, com tipo, última modificação e tamanho. Clique numa pasta para entrar; clique num `.parquet` ou `.jsonl` para ver as primeiras 100 linhas logo abaixo.
 - **Aba Partições:** escolha um dataset e veja uma linha por partição (`event_name`, `year`, `month`, `day`) com quantos arquivos e quantos bytes ela tem. Quando o dataset não tem uma dessas partições, a coluna mostra `—`. O botão "Contar linhas por partição" conta as linhas de cada uma.
@@ -111,15 +111,37 @@ O **Data Catalog** é a lista de "o que existe no lake": quais bancos, quais tab
 
 ### Glue · Jobs ETL
 
-Aqui ficam os **seus jobs**: os arquivos `.py` da pasta `pipeline/` (menos o `comum.py`, que é peça de apoio).
+Aqui ficam os **seus jobs**. Como no Glue de verdade, onde o script de um job fica guardado no S3, os jobs do console moram **dentro do floci**, num bucket só para eles: o `glue-assets`, separado do datalake.
 
-> **Pense assim:** é o **painel do forno**. Cada job é uma receita; você aperta **Executar**, acompanha pela janelinha (o log) e, no fim, o painel diz se deu certo (**Sucesso**) ou não (**Falhou**) e quanto tempo levou.
+```
+s3://glue-assets/scripts/<job>.py          os seus jobs (e o comum.py, que eles importam)
+s3://glue-assets/workflows/<nome>.json     os seus workflows
+```
 
-- **Lista de jobs:** nome, script, status da última execução e a hora em que ela começou.
+Você continua escrevendo os arquivos em `pipeline/`, no seu editor. Para eles chegarem ao floci, clique em **⟳ Sincronizar**, no topo das telas Jobs ETL e Workflows. Passe o mouse no botão (ou chegue nele com o Tab) para ver a explicação e quantos arquivos estão esperando; o botão fica laranja quando há algo para enviar. Ele funciona como um espelho:
+
+- o que é **novo ou mudou** em `pipeline/*.py` e `pipeline/workflows/*.json` é enviado;
+- o que você **apagou** da pasta sai do floci;
+- o `comum.py` também vai, para os jobs conseguirem fazer `from comum import …`.
+
+> **Pense assim:** a pasta `pipeline/` é o seu **caderno de receitas**; o bucket `glue-assets` é a **cozinha do restaurante**. O cozinheiro (o console) só cozinha o que está na cozinha. Mudou a receita no caderno? Leve a página nova para a cozinha (Sincronizar) antes de mandar cozinhar.
+
+```mermaid
+flowchart LR
+    pasta["pipeline/<br/>*.py e workflows/*.json<br/>(o seu editor)"] -->|⟳ Sincronizar| assets[("s3://glue-assets/<br/>scripts/ e workflows/")]
+    assets -->|baixa uma cópia e roda| spark["Spark<br/>(contêiner do explorador)"]
+    spark -->|lê e grava| lake[("s3://datalake-tracking/")]
+```
+
+> **Pense assim (o forno):** cada job é uma receita; você aperta **Executar**, acompanha pela janelinha (o log) e, no fim, o painel diz se deu certo (**Sucesso**) ou não (**Falhou**) e quanto tempo levou.
+
+- **Lista de jobs:** os scripts que estão no floci, com o caminho `s3://glue-assets/scripts/<job>.py`, o status da última execução e a hora em que ela começou. Job criado em `pipeline/` só aparece aqui depois do Sincronizar.
 - **Detalhe do job:**
-  - **Executar:** roda `python pipeline/<job>.py` no contêiner do explorador, que já tem o Spark. É o mesmo que rodar `docker compose run --rm app python pipeline/<job>.py` no terminal. Enquanto o job roda, o botão fica desligado: um job por vez.
+  - **Executar:** baixa os scripts do floci para uma pasta temporária e roda o job dali, no contêiner do explorador, que já tem o Spark. É o mesmo que `docker compose run --rm app python pipeline/<job>.py`, mas com a cópia que está no floci. Enquanto o job roda, o botão fica desligado: um job por vez.
   - **Execuções:** status (**Em execução**, **Sucesso** ou **Falhou**), início, duração e código de saída de cada execução, com o **log** logo abaixo. Enquanto um job roda, o painel se atualiza sozinho a cada 3 segundos.
-  - **Script:** o código do job, só para leitura (você edita no seu editor, como sempre).
+  - **Script:** o código que está no floci, só para leitura. Para mudar, edite o arquivo em `pipeline/` e sincronize.
+- Como o script roda de uma pasta temporária, um job que grava um arquivo do projeto (como o `site/mapa_calor.js`) deve usar `arquivo_do_projeto("site/mapa_calor.js")`, do `comum.py`, e não `Path(__file__)`. Veja o [pipeline/README.md](../pipeline/README.md#exportar-um-resultado-pequeno-para-o-site).
+- O floci guarda tudo na memória: se ele reiniciar, o `glue-assets` some junto com o datalake. É só clicar em Sincronizar de novo.
 - O histórico de execuções fica dentro do contêiner do explorador: se ele reiniciar, o histórico zera (os dados gravados no bucket continuam lá).
 - Esta tela e a de Workflows são as únicas que **gravam** no bucket, e só através do código dos seus jobs. As outras três só leem.
 - A coluna **Origem** diz quem começou a execução: `console` (o botão Executar desta tela) ou `workflow <nome>`.
@@ -131,7 +153,7 @@ sequenceDiagram
     participant S as Spark (contêiner)
     participant B as Bucket
     V->>C: clica em Executar no job bronze
-    C->>S: python pipeline/bronze.py
+    C->>S: baixa scripts/bronze.py do glue-assets e roda
     S->>B: lê a landing, grava a bronze
     S-->>C: log + código de saída
     C-->>V: Sucesso (ou Falhou) + duração
@@ -157,14 +179,14 @@ flowchart LR
 
 *Um exemplo de grafo para o pipeline do projeto (os nomes dos jobs são os que você escolher): as Golds só dependem da Silver, então podem rodar lado a lado.*
 
-- **Criar workflow:** dê um **nome** (letras minúsculas, números, `_` ou `-`), escolha os **jobs** da pasta e, para cada um, de quais outros ele **depende**. O botão **Encadear em sequência** monta uma fila simples (cada job depende do anterior), na ordem em que você escolheu os jobs. A **prévia** desenha o grafo enquanto você preenche e avisa se algo estiver errado, por exemplo um **ciclo** (A espera B e B espera A).
+- **Criar workflow:** dê um **nome** (letras minúsculas, números, `_` ou `-`), escolha os **jobs** que estão no floci e, para cada um, de quais outros ele **depende**. O botão **Encadear em sequência** monta uma fila simples (cada job depende do anterior), na ordem em que você escolheu os jobs. A **prévia** desenha o grafo enquanto você preenche e avisa se algo estiver errado, por exemplo um **ciclo** (A espera B e B espera A).
 - **Jobs ao mesmo tempo:** quantos jobs independentes podem rodar juntos (de 1 a 4; o padrão é 2). Cada job abre um Spark, e mais de 2 ao mesmo tempo pode faltar memória.
-- **Onde fica salvo:** em `pipeline/workflows/<nome>.json`, junto com os seus scripts. Dá para versionar no git e abrir no editor.
-- **Executar:** começa uma execução nova. A aba **Execução** mostra o grafo com as cores do status de cada job (azul rodando, verde sucesso, vermelho falhou, tracejado não executado), a tabela de **Etapas** (dependências, status, início e duração) e o **log** da etapa escolhida. Tudo se atualiza sozinho a cada 2 segundos.
+- **Onde fica salvo:** no floci, em `s3://glue-assets/workflows/<nome>.json`, e numa cópia local em `pipeline/workflows/<nome>.json`, junto com os seus scripts. A cópia local entra no git e garante que o próximo Sincronizar não apague o workflow (o floci perde tudo quando reinicia). Um workflow escrito à mão em `pipeline/workflows/` chega ao floci pelo Sincronizar.
+- **Executar:** baixa os scripts do floci e começa uma execução nova. A aba **Execução** mostra o grafo com as cores do status de cada job (azul rodando, verde sucesso, vermelho falhou, tracejado não executado), a tabela de **Etapas** (dependências, status, início e duração) e o **log** da etapa escolhida. Tudo se atualiza sozinho a cada 2 segundos.
 - **Se um job falha:** nenhum job novo começa. Os que já estavam rodando terminam, e quem dependia do que falhou fica como **Não executado**. O log da etapa que falhou já aparece escolhido.
 - **Parar:** não começa jobs novos; os que já rodam terminam. A execução termina como **Parado**.
 - **Histórico:** todas as execuções do workflow, com status, duração e quantos jobs terminaram com sucesso. Cada etapa também aparece no histórico do job, na tela Jobs ETL, com a origem `workflow <nome>`.
-- **Definição:** o arquivo `.json` e o comando para rodar o mesmo workflow pelo terminal:
+- **Definição:** o `.json` que está no floci e o comando para rodar a cópia local pelo terminal, sem o explorador:
 
 ```bash
 docker compose run --rm app python -m explorador.workflows pipeline/workflows/medalhao.json
@@ -236,7 +258,7 @@ flowchart LR
     p2 -->|sim| res["resultado na tabela<br/>(e CSV para baixar)"]
 ```
 
-As telas **Jobs ETL** e **Workflows** são a exceção: elas rodam os scripts da pasta `pipeline/`, e quem grava é o código desses scripts, exatamente como no terminal. O console nunca roda um comando digitado: só os arquivos que aparecem na lista de jobs (um workflow só aceita jobs dessa lista).
+As telas **Jobs ETL** e **Workflows** são a exceção: elas rodam os scripts que você sincronizou de `pipeline/` para o `glue-assets`, e quem grava é o código desses scripts, exatamente como no terminal. O Sincronizar só mexe no `glue-assets`, nunca no datalake. O console nunca roda um comando digitado: só os arquivos que aparecem na lista de jobs (um workflow só aceita jobs dessa lista).
 
 Se algo inesperado acontecer, o site mostra uma mensagem amigável e, embaixo dela, uma linha curta de "Detalhe técnico" para ajudar a achar a causa.
 

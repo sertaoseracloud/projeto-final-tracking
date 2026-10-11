@@ -430,7 +430,7 @@ Depois que o job de exportação (R11) rodar, abra `site/index.html` no navegado
 
 O código do pipeline vai em `pipeline/`, e o [`pipeline/README.md`](../pipeline/README.md) explica como acessar o S3 pelo Spark.
 
-Sem digitar comandos, o explorador (`docker compose up -d explorador`, em http://localhost:8501) roda um job seu na tela **Glue · Jobs ETL** e vários jobs na ordem certa na tela **Glue · Workflows**, onde você monta o grafo de dependências. É uma ajuda para testar enquanto constrói: o **R3** continua pedindo o seu script de sequência. Veja [`explorador/README.md`](../explorador/README.md).
+Sem digitar comandos, o explorador (`docker compose up -d explorador`, em http://localhost:8501) roda um job seu na tela **Glue · Jobs ETL** (depois de clicar em **⟳ Sincronizar**, que envia os seus scripts para o bucket `glue-assets` do floci) e vários jobs na ordem certa na tela **Glue · Workflows**, onde você monta o grafo de dependências. É uma ajuda para testar enquanto constrói: o **R3** continua pedindo o seu script de sequência. Veja [`explorador/README.md`](../explorador/README.md).
 
 ## 7. Avaliação
 

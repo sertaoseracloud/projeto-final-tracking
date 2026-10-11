@@ -15,6 +15,7 @@ sem boto3.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from pyspark.sql import DataFrame, SparkSession
 
@@ -45,6 +46,15 @@ def criar_sessao(nome: str) -> SparkSession:
     )
     spark.sparkContext.setLogLevel("ERROR")
     return spark
+
+
+def arquivo_do_projeto(relativo: str) -> Path:
+    """Um arquivo do repositório, fora do S3: arquivo_do_projeto("site/mapa_calor.js") -> /projeto/site/mapa_calor.js.
+
+    Os jobs rodam sempre com a pasta do projeto como diretório atual: no terminal (docker compose run)
+    e no explorador, mesmo quando o script vem do floci e roda de uma pasta temporária. Por isso
+    não use Path(__file__) para achar o projeto."""
+    return Path.cwd() / relativo
 
 
 def caminho(camada: str, bucket: str | None = None) -> str:
