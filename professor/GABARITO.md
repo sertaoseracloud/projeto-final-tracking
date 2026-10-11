@@ -8,7 +8,7 @@ A landing precisa estar com os dados padrão. Para regenerá-la do zero, apague 
 
 ```bash
 docker compose up -d floci
-docker compose run --rm app python -c "import sys; sys.path.insert(0,'professor/solucao'); from comum import criar_sessao, apagar_camada; s=criar_sessao('x'); print(apagar_camada(s,'landing'))"
+docker compose run --rm app python -c "import sys; sys.path.insert(0,'pipeline'); from comum import criar_sessao, apagar_camada; s=criar_sessao('x'); print(apagar_camada(s,'landing'))"
 docker compose run --rm app python gerador/gerar_eventos.py
 ```
 
@@ -261,7 +261,7 @@ Leitura: na landing, o ponto mais quente é o play do vídeo, seguido de perto p
 
 | Critério | Pontos | O que olhar |
 | --- | --- | --- |
-| Arquitetura (R1–R4) | 15 | Um job por camada, verificação de camada antes de ler, Bronze append-only com proveniência (arquivo de origem). Rodar o script de sequência do zero e conferir que termina sem erro. |
+| Arquitetura (R1–R4) | 15 | Um job por camada, verificação de camada antes de ler, Bronze append-only com proveniência (arquivo de origem). Rodar o script de sequência do zero e conferir que termina sem erro. O `pipeline/comum.py` (sessão, caminhos, `exigir_camada`, `ler_eventos`/`gravar_eventos`) vem pronto: usá-lo não vale ponto nem desconta; o que conta é o resto de cada job. |
 | Silver (R5–R10) | 25 | Linhas na Bronze 64372, duplicatas 656, aprovados 61813 e rejeitados por motivo (seção 3), dentro de ±1%. Sessões perto de 8793 (±2%) e calculadas sem `session_hint`. Stitching de visitante presente. |
 | Gold (seção 5.3 do enunciado) | 30 | As 15 tabelas existem. Funil, receita e lead batem com as seções 4 a 6 (±2%). Modelo sem vazamento: AUC honesto em 0,9243 ±0,03 e nunca ≥ 0,98. Mapa de calor bate com a seção 8 e acende no site: rodar o job de exportação, abrir `site/index.html` e clicar em **Mapa de calor** (R11). |
 | Relatório | 20 | Cada resposta cita tabela e número da Gold. A recomendação é coerente com os dados (por exemplo, a maior perda do funil em `select_item`, o reembolso alto em instagram / paid_social, os termos de FAQ sem resultado). |

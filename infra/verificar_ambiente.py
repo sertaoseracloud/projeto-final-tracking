@@ -1,58 +1,35 @@
 """Confere que o Spark lê e grava no floci por s3a:// (rode dentro do contêiner app).
 
     docker compose run --rm app python infra/verificar_ambiente.py
+
+Usa a mesma sessão que os seus jobs: criar_sessao() de pipeline/comum.py.
 """
 
 from __future__ import annotations
 
-import os
 import sys
+from pathlib import Path
 
-from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 
-ENDPOINT = os.environ.get("AWS_ENDPOINT_URL", "http://floci:4566")
-BUCKET = os.environ.get("AWS_S3_BUCKET", "datalake-tracking")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pipeline"))
 
-
-def criar_sessao() -> SparkSession:
-    spark = (
-        SparkSession.builder
-        .appName("verificar-ambiente")
-        .master("local[2]")
-        .config("spark.ui.enabled", "false")
-        .config("spark.sql.session.timeZone", "UTC")
-        # partições year=AAAA/month=MM/day=DD: sem inferência, month continua "09" (e não 9)
-        .config("spark.sql.sources.partitionColumnTypeInference.enabled", "false")
-        .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
-        .config("spark.hadoop.fs.s3a.endpoint", ENDPOINT)
-        .config("spark.hadoop.fs.s3a.path.style.access", "true")
-        .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false")
-        .config("spark.hadoop.fs.s3a.aws.credentials.provider",
-                "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider")
-        .config("spark.hadoop.fs.s3a.access.key", os.environ.get("AWS_ACCESS_KEY_ID", "test"))
-        .config("spark.hadoop.fs.s3a.secret.key", os.environ.get("AWS_SECRET_ACCESS_KEY", "test"))
-        .getOrCreate()
-    )
-    spark.sparkContext.setLogLevel("ERROR")
-    return spark
+from comum import apagar_camada, caminho, criar_sessao, ler_eventos  # noqa: E402
 
 
 def main() -> int:
-    spark = criar_sessao()
-    landing = f"s3a://{BUCKET}/landing/"
-    teste = f"s3a://{BUCKET}/_verificacao/"
+    spark = criar_sessao("verificar-ambiente")
+    teste = "_verificacao"
     try:
-        eventos = spark.read.json(landing)
-        print(f"[ok] landing lida por s3a: {eventos.count()} linhas em {landing}")
+        eventos = ler_eventos(spark, "landing", "json")
+        print(f"[ok] landing lida por s3a: {eventos.count()} linhas em {caminho('landing/')}")
         eventos.groupBy("event_name").count().orderBy(F.desc("count")).show(25, truncate=False)
 
-        spark.range(5).write.mode("overwrite").parquet(teste)
-        lidos = spark.read.parquet(teste).count()
-        print(f"[ok] escrita e leitura de Parquet por s3a: {lidos} linhas em {teste}")
+        spark.range(5).write.mode("overwrite").parquet(caminho(teste))
+        lidos = spark.read.parquet(caminho(teste)).count()
+        print(f"[ok] escrita e leitura de Parquet por s3a: {lidos} linhas em {caminho(teste + '/')}")
 
-        caminho = spark._jvm.org.apache.hadoop.fs.Path(teste)
-        caminho.getFileSystem(spark._jsc.hadoopConfiguration()).delete(caminho, True)
+        apagar_camada(spark, teste)
         print("[ok] pasta de verificação removida")
     except Exception as erro:  # diagnóstico para o aluno
         print(f"[erro] {type(erro).__name__}: {str(erro).splitlines()[0]}", file=sys.stderr)
