@@ -25,7 +25,7 @@ import streamlit as st
 
 from streamlit.runtime.scriptrunner_utils.exceptions import RerunException, StopException
 
-from explorador import athena, consultas, glue, particoes, s3, tutorial, ui
+from explorador import athena, consultas, glue, particoes, preferencias, s3, tutorial, ui
 from explorador.tutorial import TELA_ATHENA, TELA_CATALOGO, TELA_JOBS, TELA_S3
 
 RAIZ = Path(__file__).resolve().parents[1]
@@ -495,15 +495,39 @@ def _arquivo_preferencias() -> Path:
     return Path(os.environ.get("EXPLORADOR_PREFERENCIAS", RAIZ / ".explorador" / "preferencias.json"))
 
 
+def _salvas() -> dict:
+    return preferencias.carregar(_arquivo_preferencias())
+
+
+def _atuais() -> dict:
+    """O que está valendo nesta sessão: o valor dos widgets `pref_*`, ou o salvo para os que ainda não existem."""
+    return {k: st.session_state.get(f"pref_{k}", v) for k, v in _salvas().items()}
+
+
 def _salvar_preferencia() -> None:
-    ligado = bool(st.session_state.get("pref_tutorial", True))
-    if tutorial.carregar(_arquivo_preferencias())["tutorial"] != ligado:     # só grava quando muda
-        tutorial.salvar(_arquivo_preferencias(), {"tutorial": ligado})
+    atuais = _atuais()
+    if atuais != _salvas():                                                  # só grava quando muda
+        preferencias.salvar(_arquivo_preferencias(), atuais)
 
 
 def _desligar_tutorial() -> None:
     st.session_state["pref_tutorial"] = False
     _salvar_preferencia()
+
+
+def _restaurar_acessibilidade() -> None:
+    for chave, valor in preferencias.PADRAO.items():
+        if chave != "tutorial":
+            st.session_state[f"pref_{chave}"] = valor
+    _salvar_preferencia()
+
+
+def _inicial(chave: str, salvas: dict, parametro: str = "value") -> dict:
+    # o valor inicial vem do arquivo; depois, o próprio widget guarda o estado da sessão
+    if f"pref_{chave}" in st.session_state:
+        return {}
+    valor = salvas[chave]
+    return {parametro: preferencias.TAMANHOS.index(valor) if parametro == "index" else valor}
 
 
 def _abrir_tour() -> None:
@@ -529,8 +553,38 @@ def _mostrar_tour() -> None:
 
 # ---------------------------------------------------------------- página ----------------------------------------------------------------
 
+TAMANHO_ROTULO = {100: "A", 115: "A+", 130: "A++"}
+
+
+def _barra_flutuante(salvas: dict) -> None:
+    """Três botões redondos no canto inferior direito: ⬆ topo (só depois de rolar), 🎓 tutorial desta tela
+    e ♿, um menu com a chave do tutorial e as opções de acessibilidade."""
+    with st.container(key="dock"):
+        st.button("⬆", key="topo", help="Voltar ao topo da página")
+        st.button("🎓", key="tour-abrir", on_click=_abrir_tour,
+                  help="Abrir o tutorial desta tela: mostra, num modal, para que serve cada parte.")
+        with st.popover("♿", help="Tutorial e acessibilidade"):
+            st.markdown("**Tutorial**")
+            st.toggle("Mostrar tutorial", key="pref_tutorial", on_change=_salvar_preferencia, **_inicial("tutorial", salvas),
+                      help="Ligado, o tutorial abre sozinho na primeira visita a cada tela. Desligado, só pelo botão 🎓.")
+            st.markdown("**Acessibilidade**")
+            st.radio("Tamanho do texto", preferencias.TAMANHOS, key="pref_texto", horizontal=True,
+                     format_func=TAMANHO_ROTULO.get, on_change=_salvar_preferencia,
+                     **_inicial("texto", salvas, "index"))
+            st.toggle("Alto contraste", key="pref_contraste", on_change=_salvar_preferencia,
+                      **_inicial("contraste", salvas), help="Textos e bordas mais escuros.")
+            st.toggle("Sublinhar links", key="pref_sublinhar", on_change=_salvar_preferencia,
+                      **_inicial("sublinhar", salvas), help="Deixa claro o que é clicável sem depender da cor.")
+            st.toggle("Mais espaço entre letras e linhas", key="pref_espacamento", on_change=_salvar_preferencia,
+                      **_inicial("espacamento", salvas), help="Facilita a leitura, por exemplo para quem tem dislexia.")
+            st.toggle("Reduzir movimento", key="pref_movimento", on_change=_salvar_preferencia,
+                      **_inicial("movimento", salvas), help="Tira animações e a rolagem suave.")
+            st.button("Voltar ao padrão", key="a11y-padrao", type="tertiary", on_click=_restaurar_acessibilidade)
+        # botão invisível: o "Não mostrar mais o tutorial" do modal clica nele para gravar a preferência
+        st.button("desligar tutorial", key="tour-desligar", on_click=_desligar_tutorial)
+
+
 def _menu() -> str:
-    salvo = tutorial.carregar(_arquivo_preferencias())["tutorial"]
     opcoes = [TELA_S3, TELA_CATALOGO, TELA_JOBS, TELA_ATHENA]
     if st.session_state.get("tela") not in opcoes:
         st.session_state["tela"] = TELA_S3
@@ -542,14 +596,6 @@ def _menu() -> str:
             st.cache_data.clear()
             st.cache_resource.clear()
             st.rerun()
-        st.button("🎓 Abrir tutorial desta tela", key="tour-abrir", on_click=_abrir_tour,
-                  help="Mostra, num modal, para que serve cada parte da tela atual.")
-        # o valor inicial vem do arquivo; depois, o próprio widget guarda o estado da sessão
-        inicial = {} if "pref_tutorial" in st.session_state else {"value": salvo}
-        st.toggle("Mostrar tutorial", key="pref_tutorial", on_change=_salvar_preferencia, **inicial,
-                  help="Ligado, o tutorial abre sozinho na primeira visita a cada tela. Desligado, só pelo botão acima.")
-        # botão invisível: o "Não mostrar mais o tutorial" do modal clica nele para gravar a preferência
-        st.button("desligar tutorial", key="tour-desligar", on_click=_desligar_tutorial)
         st.caption("Ferramenta de estudo inspirada nos consoles do S3, do Glue e do Athena. Roda no seu computador.")
     return tela
 
@@ -558,11 +604,17 @@ def _pagina() -> None:
     st.set_page_config(page_title="Console do datalake", layout="wide", initial_sidebar_state="expanded")
     st.markdown(ui.CSS, unsafe_allow_html=True)
     pasta_jobs = os.environ.get("EXPLORADOR_JOBS", "pipeline").rstrip("/")
-    st.markdown(f'<div class="barra-console"><span class="marca">☁ Console do datalake</span>'
+    st.markdown(f'<div class="barra-console">'
+                f'<span class="marca"><span aria-hidden="true">☁ </span>Console do datalake</span>'
                 f'<span class="servicos">S3 · Glue · Athena</span>'
                 f'<span class="detalhe">s3://{s3.BUCKET} · {s3.ENDPOINT} · Athena só lê · Jobs ETL executam {pasta_jobs}/</span>'
                 f'<span class="regiao">{s3.REGIAO}</span></div>', unsafe_allow_html=True)
     tela = _menu()
+    salvas = _salvas()
+    _barra_flutuante(salvas)
+    escolhas = _atuais()
+    st.markdown(ui.css_acessibilidade(escolhas), unsafe_allow_html=True)
+    ui.apoio_acessibilidade(reduzir_movimento=escolhas["movimento"])
     st.session_state.pop("contexto_tour", None)
     try:
         _conteudo(tela)

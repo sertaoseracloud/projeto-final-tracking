@@ -20,17 +20,50 @@ Na primeira vez que você abre cada tela, aparece um **tour em modal**: a tela e
 
 > **Pense assim:** é o **guia de um museu** que para em frente a cada peça e conta para que ela serve. Na primeira visita ele te acompanha; depois você anda sozinho e chama o guia só quando quiser.
 
-- **Rever o tour:** no menu lateral, clique em **🎓 Abrir tutorial desta tela**. Funciona mesmo com o tutorial desligado.
-- **Desligar:** marque **Não mostrar mais o tutorial** no balão, ou desligue a chave **Mostrar tutorial** no menu lateral. A escolha fica gravada em `.explorador/preferencias.json` (fora do git) e vale também depois de reiniciar o explorador. Para religar, ligue a chave de novo.
+- **Rever o tour:** clique no botão redondo **🎓**, no canto inferior direito. Funciona mesmo com o tutorial desligado.
+- **Desligar:** marque **Não mostrar mais o tutorial** no balão, ou abra o botão **♿** (canto inferior direito) e desligue a chave **Mostrar tutorial**. A escolha fica gravada em `.explorador/preferencias.json` (fora do git) e vale também depois de reiniciar o explorador. Para religar, ligue a chave de novo.
 
 ```mermaid
 flowchart LR
     abrir["você abre uma tela"] --> ligado{"tutorial<br/>ligado?"}
     ligado -->|sim, primeira visita| tour["tour em modal<br/>destaca e explica cada parte"]
     ligado -->|não| tela["só a tela"]
-    botao["🎓 Abrir tutorial<br/>desta tela"] --> tour
+    botao["botão 🎓"] --> tour
     tour -->|Não mostrar mais| desliga["chave Mostrar tutorial<br/>fica desligada"]
 ```
+
+## Botões flutuantes e acessibilidade
+
+No canto inferior direito ficam três botões redondos, sempre à mão:
+
+| Botão | Para que serve |
+|---|---|
+| **⬆** | volta ao topo da página. Só aparece depois que você rola a tela. |
+| **🎓** | abre o tutorial da tela em que você está. |
+| **♿** | abre o menu **Tutorial e acessibilidade**. |
+
+No menu **♿** você ajusta o console ao seu jeito de ler e navegar:
+
+- **Tamanho do texto:** A, A+ ou A++ (100%, 115% ou 130%).
+- **Alto contraste:** textos e bordas mais escuros; os links continuam azuis.
+- **Sublinhar links:** mostra o que é clicável sem depender da cor.
+- **Mais espaço entre letras e linhas:** facilita a leitura, por exemplo para quem tem dislexia.
+- **Reduzir movimento:** tira animações e a rolagem suave. Se o seu sistema já pede menos movimento, o console obedece sozinho.
+- **Voltar ao padrão:** desfaz as opções acima (não mexe no tutorial).
+
+As escolhas ficam gravadas no mesmo `.explorador/preferencias.json` do tutorial.
+
+> **Pense assim:** é a **rampa e o corrimão** de um prédio. Quem precisa usa; para quem não precisa, eles não atrapalham em nada.
+
+O console também foi feito para quem usa **só o teclado** ou um **leitor de tela** (NVDA, JAWS, VoiceOver):
+
+- O primeiro **Tab** da página mostra **Pular para o conteúdo**, que leva direto à tela, sem passar pelo menu.
+- O foco do teclado sempre aparece com um contorno azul.
+- A página é lida em português e tem regiões com nome: topo, menu de serviços, conteúdo, caminho (breadcrumb) e ajuda.
+- Títulos de página e de painel são lidos como títulos, e as tabelas são lidas como tabelas, com linhas, colunas e cabeçalhos.
+- Botões só com ícone (⬆, 🎓, ♿, ＋, ✕) têm nome. Os ícones dos status (✔, ✖) são pulados e o leitor diz só "Sucesso" ou "Falhou".
+- O que muda sozinho é anunciado sem tirar o foco do lugar: o status das execuções de um job e os resultados de uma consulta do Athena.
+- O tutorial em modal recebe o foco ao abrir, prende o Tab dentro do balão, esconde o resto da página do leitor de tela, fecha com Esc e devolve o foco para onde estava.
 
 ## As quatro telas: S3, Glue e Athena
 

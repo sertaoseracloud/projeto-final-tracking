@@ -29,10 +29,10 @@ CSS = """
   /* barra superior */
   .barra-console { position: fixed; top: 0; left: 0; right: 0; z-index: 1000002; height: 44px;
     background: #232f3e; color: #fff; display: flex; align-items: center; gap: 18px; padding: 0 20px;
-    font-size: 14px; border-bottom: 1px solid #414d5c; }
-  .barra-console .marca { color: #ff9900; font-weight: 800; font-size: 16px; letter-spacing: .01em; }
+    font-size: .875rem; border-bottom: 1px solid #414d5c; }
+  .barra-console .marca { color: #ff9900; font-weight: 800; font-size: 1rem; letter-spacing: .01em; }
   .barra-console .servicos { color: #fff; font-weight: 700; border-left: 1px solid #414d5c; padding-left: 18px; }
-  .barra-console .detalhe { margin-left: auto; color: #d1d5db; font-size: 13px; }
+  .barra-console .detalhe { margin-left: auto; color: #d1d5db; font-size: .8125rem; }
   .barra-console .regiao { color: #fff; font-weight: 700; border-left: 1px solid #414d5c; padding-left: 18px; }
   .barra-console span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   @media (max-width: 760px) { .barra-console span:not(.marca) { display: none; } }
@@ -41,17 +41,17 @@ CSS = """
   [data-testid="stSidebar"] { background: #ffffff; border-right: 1px solid #c6c6cd;
     top: 44px !important; height: calc(100vh - 44px) !important; }
   [data-testid="stSidebarHeader"] { height: 2.2rem; padding: 0 8px; }
-  .menu-titulo { font-size: 18px; font-weight: 700; color: #0f141a; padding: 0 0 6px 2px; }
+  .menu-titulo { font-size: 1.125rem; font-weight: 700; color: #0f141a; padding: 0 0 6px 2px; }
   [data-testid="stSidebar"] [role="radiogroup"] { gap: 0; }
   [data-testid="stSidebar"] [role="radiogroup"] > div { display: block; width: 100%; }
   [data-testid="stSidebar"] [data-testid="stRadioOption"] { width: 100%; margin: 0; padding: 7px 12px 7px 14px;
     border-left: 3px solid transparent; cursor: pointer; }
   [data-testid="stSidebar"] [data-testid="stRadioOption"] > div > div:first-child { display: none; }
-  [data-testid="stSidebar"] [data-testid="stRadioOption"] p { font-size: 14px; color: #424650; }
+  [data-testid="stSidebar"] [data-testid="stRadioOption"] p { font-size: .875rem; color: #424650; }
   [data-testid="stSidebar"] [data-testid="stRadioOption"]:hover p { color: #006ce0; }
   [data-testid="stSidebar"] [data-testid="stRadioOption"][data-selected="true"] { border-left-color: #006ce0; background: #f0f7ff; }
   [data-testid="stSidebar"] [data-testid="stRadioOption"][data-selected="true"] p { color: #006ce0; font-weight: 700; }
-  [data-testid="stSidebar"] [role="radiogroup"] > div::before { display: block; font-size: 12px; font-weight: 700;
+  [data-testid="stSidebar"] [role="radiogroup"] > div::before { display: block; font-size: .75rem; font-weight: 700;
     color: #656871; text-transform: uppercase; letter-spacing: .04em; padding: 12px 0 4px 2px; }
   [data-testid="stSidebar"] [role="radiogroup"] > div:nth-child(1)::before { content: "S3"; padding-top: 2px; }
   [data-testid="stSidebar"] [role="radiogroup"] > div:nth-child(2)::before { content: "Glue"; }
@@ -59,12 +59,12 @@ CSS = """
   [data-testid="stSidebar"] [role="radiogroup"] > div:nth-child(5)::before { content: "Aprender"; }
 
   /* títulos de página, breadcrumb, textos de apoio */
-  .pag-titulo { font-size: 24px; font-weight: 700; color: #0f141a; line-height: 1.3; margin: 2px 0 2px; }
+  .pag-titulo { font-size: 1.5rem; font-weight: 700; color: #0f141a; line-height: 1.3; margin: 2px 0 2px; }
   .pag-titulo .contador { color: #656871; font-weight: 400; }
-  .pag-desc { color: #656871; font-size: 14px; margin-bottom: 8px; }
-  .trilha-sep { color: #656871; font-size: 14px; }
-  .trilha-atual { color: #656871; font-size: 14px; }
-  [class*="st-key-trilha"] button p { font-size: 14px !important; }
+  .pag-desc { color: #656871; font-size: .875rem; margin-bottom: 8px; }
+  .trilha-sep { color: #656871; font-size: .875rem; }
+  .trilha-atual { color: #656871; font-size: .875rem; }
+  [class*="st-key-trilha"] button p { font-size: .875rem !important; }
 
   /* botões: primário laranja, normal com contorno azul, link azul */
   .stButton button, .stDownloadButton button { border-radius: 20px; font-weight: 700; }
@@ -83,9 +83,9 @@ CSS = """
   /* painéis (contêineres do console) */
   [class*="st-key-painel-"] { border: none !important; border-radius: 16px !important; background: #fff;
     box-shadow: 0 1px 1px 1px #e9ebed, 0 6px 36px rgba(0, 7, 22, .10); padding: 14px 20px 16px !important; }
-  .painel-titulo { font-size: 18px; font-weight: 700; color: #0f141a; }
+  .painel-titulo { font-size: 1.125rem; font-weight: 700; color: #0f141a; }
   .painel-titulo .contador { color: #656871; font-weight: 400; }
-  .painel-desc { color: #656871; font-size: 14px; margin-top: -4px; }
+  .painel-desc { color: #656871; font-size: .875rem; margin-top: -4px; }
 
   /* tabelas do console */
   [class*="st-key-tabcab-"] { border-bottom: 1px solid #c6c6cd; padding: 6px 0 4px; }
@@ -93,36 +93,36 @@ CSS = """
   [class*="st-key-tablinha-"]:hover { background: #f6f6f9; }
   [class*="st-key-tabcab-"] [data-testid="stMarkdownContainer"] p,
   [class*="st-key-tablinha-"] [data-testid="stMarkdownContainer"] p { margin: 0; }
-  .tab-titulo { font-weight: 700; color: #424650; font-size: 14px; white-space: nowrap; }
-  .tab-texto { font-size: 14px; color: #0f141a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .tab-titulo { font-weight: 700; color: #424650; font-size: .875rem; white-space: nowrap; }
+  .tab-texto { font-size: .875rem; color: #0f141a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
   [class*="st-key-tablinha-"] [data-testid="stMarkdown"], [class*="st-key-tabcab-"] [data-testid="stMarkdown"],
   [class*="st-key-tablinha-"] [data-testid="stMarkdownContainer"], [class*="st-key-tabcab-"] [data-testid="stMarkdownContainer"] {
-    margin: 0 !important; min-height: 21px; }
-  [class*="st-key-tablinha-"] .stButton button { min-height: 0; height: auto; line-height: 21px; }
-  [class*="st-key-tablinha-"] .stButton button p { font-size: 14px; line-height: 21px; margin: 0; }
-  [class*="st-key-tablinha-"] .tab-texto, [class*="st-key-tablinha-"] .selo { line-height: 21px; }
-  .tab-vazio { text-align: center; color: #656871; padding: 18px 0; font-size: 14px; }
+    margin: 0 !important; min-height: 1.3rem; }
+  [class*="st-key-tablinha-"] .stButton button { min-height: 0; height: auto; line-height: 1.5; }
+  [class*="st-key-tablinha-"] .stButton button p { font-size: .875rem; line-height: 1.5; margin: 0; }
+  [class*="st-key-tablinha-"] .tab-texto, [class*="st-key-tablinha-"] .selo { line-height: 1.5; }
+  .tab-vazio { text-align: center; color: #656871; padding: 18px 0; font-size: .875rem; }
 
   /* selos de status */
-  .selo { font-size: 14px; white-space: nowrap; }
+  .selo { font-size: .875rem; white-space: nowrap; }
   .selo-ok { color: #00802f; } .selo-erro { color: #db0000; } .selo-run { color: #006ce0; } .selo-neutro { color: #656871; }
 
   /* pares rótulo/valor (visão geral) */
   .kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px 24px; margin-top: 6px; }
-  .kv-rotulo { color: #656871; font-size: 13px; font-weight: 700; }
-  .kv-valor { color: #0f141a; font-size: 14px; word-break: break-all; }
+  .kv-rotulo { color: #656871; font-size: .8125rem; font-weight: 700; }
+  .kv-valor { color: #0f141a; font-size: .875rem; word-break: break-all; }
 
   /* abas */
   [data-testid="stTabs"] [role="tablist"] { border-bottom: 1px solid #c6c6cd; }
-  [data-testid="stTab"] p { font-weight: 700; color: #424650; font-size: 15px; }
+  [data-testid="stTab"] p { font-weight: 700; color: #424650; font-size: .9375rem; }
   [data-testid="stTab"][aria-selected="true"] p { color: #006ce0; }
 
   /* árvore de dados do Athena */
   [data-testid="stExpander"] details { border-radius: 8px; border-color: #e9ebed; }
-  [data-testid="stExpander"] summary p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
+  [data-testid="stExpander"] summary p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .875rem; }
 
   /* editor SQL: fonte de código e calha à esquerda, como o editor do Athena */
-  .stTextArea textarea { font-family: Monaco, Menlo, Consolas, "Courier New", monospace; font-size: 14px;
+  .stTextArea textarea { font-family: Monaco, Menlo, Consolas, "Courier New", monospace; font-size: .875rem;
     line-height: 1.55; padding-left: 52px !important; border-radius: 8px;
     background: linear-gradient(to right, #f6f6f9 0, #f6f6f9 40px, #e9ebed 40px, #e9ebed 41px, #fff 41px) local; }
 
@@ -130,7 +130,32 @@ CSS = """
   [class*="st-key-tour-desligar"] { display: none !important; }
   [data-testid="stElementContainer"]:has(> iframe[height="0"]),
   [data-testid="stElementContainer"]:has(iframe[title="st.iframe"][height="0"]) { display: none; }
-  [class*="st-key-tour-abrir"] button { width: 100%; }
+
+  /* botões flutuantes no canto inferior direito: topo, tutorial e o menu ♿ (tutorial e acessibilidade) */
+  .st-key-dock { position: fixed; right: 20px; bottom: 20px; z-index: 1000005; width: 44px !important;
+    gap: 10px; align-items: center; background: transparent; }
+  .st-key-dock [data-testid="stPopover"], .st-key-dock [data-testid="stPopover"] div,
+  .st-key-dock [data-testid="stPopover"] span, .st-key-dock .stButton { width: 44px !important; }
+  .st-key-dock button { width: 44px !important; height: 44px; min-height: 44px; padding: 0 !important;
+    border-radius: 50% !important; border: 1px solid #e9ebed !important; background: #fff !important;
+    color: #0f141a !important; box-shadow: 0 2px 10px rgba(0, 7, 22, .14); justify-content: center; }
+  .st-key-dock button p { font-size: 1.15rem !important; margin: 0; }
+  .st-key-dock button:hover { border-color: #006ce0 !important; box-shadow: 0 2px 14px rgba(0, 108, 224, .25); }
+  .st-key-dock [data-testid="stPopoverButton"] [data-testid="stIconMaterial"] { display: none; }   /* sem a setinha */
+  .st-key-topo { transition: opacity .2s ease; }
+  html.topo-escondido .st-key-topo { opacity: 0; pointer-events: none; }
+  [data-testid="stPopoverBody"] { min-width: 300px; }
+
+  /* "Pular para o conteúdo": o primeiro Tab da página; invisível até o teclado chegar nele */
+  #pular-conteudo { position: fixed; left: 12px; top: -60px; background: #fff; color: #0f141a !important;
+    padding: 8px 14px; border-radius: 8px; font-weight: 700; z-index: 1000020; text-decoration: underline; }
+  #pular-conteudo:focus { top: 6px; }
+
+  /* foco do teclado sempre visível */
+  .stApp :focus-visible, #tour-raiz :focus-visible { outline: 3px solid #006ce0 !important; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+      transition: none !important; scroll-behavior: auto !important; } }
 
   /* faixa de aviso (flashbar) */
   [class*="st-key-flash"] { background: #006ce0; border-radius: 12px; padding: 10px 16px !important; margin-bottom: 8px; }
@@ -171,7 +196,8 @@ def _texto(celula: Any) -> str:
 
 def titulo(texto: str, contador: int | None = None, descricao: str | None = None) -> None:
     extra = f' <span class="contador">({contador})</span>' if contador is not None else ""
-    st.markdown(f'<div class="pag-titulo">{html.escape(texto)}{extra}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="pag-titulo" role="heading" aria-level="1">{html.escape(texto)}{extra}</div>',
+                unsafe_allow_html=True)
     if descricao:
         st.markdown(f'<div class="pag-desc">{descricao}</div>', unsafe_allow_html=True)
 
@@ -183,10 +209,10 @@ def trilha(itens: list[tuple[str, str | None, Callable | None, dict]], chave: st
         if chave_botao:
             linha.button(rotulo, key=chave_botao, type="tertiary", on_click=ao_clicar, kwargs=kwargs or {})
         else:
-            linha.markdown(f'<span class="trilha-atual">{html.escape(rotulo)}</span>', width="content",
+            linha.markdown(f'<span class="trilha-atual" aria-current="page">{html.escape(rotulo)}</span>', width="content",
                            unsafe_allow_html=True)
         if i < len(itens) - 1:
-            linha.markdown('<span class="trilha-sep">›</span>', width="content", unsafe_allow_html=True)
+            linha.markdown('<span class="trilha-sep" aria-hidden="true">›</span>', width="content", unsafe_allow_html=True)
 
 
 def painel(chave: str, titulo_painel: str | None = None, contador: int | None = None,
@@ -194,7 +220,8 @@ def painel(chave: str, titulo_painel: str | None = None, contador: int | None = 
     caixa = st.container(border=True, key=f"painel-{_slug(chave)}")
     if titulo_painel:
         extra = f' <span class="contador">({contador})</span>' if contador is not None else ""
-        caixa.markdown(f'<div class="painel-titulo">{html.escape(titulo_painel)}{extra}</div>', unsafe_allow_html=True)
+        caixa.markdown(f'<div class="painel-titulo" role="heading" aria-level="2">{html.escape(titulo_painel)}{extra}</div>',
+                       unsafe_allow_html=True)
     if descricao:
         caixa.markdown(f'<div class="painel-desc">{descricao}</div>', unsafe_allow_html=True)
     return caixa
@@ -204,7 +231,7 @@ def selo(status: str) -> Html:
     classes = {"Sucesso": ("selo-ok", "✔"), "Concluída": ("selo-ok", "✔"), "Falhou": ("selo-erro", "✖"),
                "Em execução": ("selo-run", "⟳")}
     classe, icone = classes.get(status, ("selo-neutro", "–"))
-    return Html(f'<span class="selo {classe}">{icone} {html.escape(status)}</span>')
+    return Html(f'<span class="selo {classe}"><span aria-hidden="true">{icone}</span> {html.escape(status)}</span>')
 
 
 def pares(dados: dict[str, str]) -> None:
@@ -225,22 +252,24 @@ def tabela(chave: str, colunas: list[tuple[str, float]], linhas: list[list[Any]]
         if termo:
             linhas = [l for l in linhas if termo.lower() in " ".join(_texto(c) for c in l).lower()]
     pesos = [peso for _, peso in colunas]
-    with st.container(key=f"tabcab-{_slug(chave)}"):
-        for coluna, (nome, _) in zip(st.columns(pesos, gap="small", vertical_alignment="center"), colunas):
-            coluna.markdown(f'<span class="tab-titulo">{html.escape(nome)}</span>', unsafe_allow_html=True)
-    if not linhas:
-        st.markdown(f'<div class="tab-vazio">{vazio}</div>', unsafe_allow_html=True)
-        return 0
-    for i, linha in enumerate(linhas):
-        with st.container(key=f"tablinha-{_slug(chave)}-{i}"):
-            for coluna, celula in zip(st.columns(pesos, gap="small", vertical_alignment="center"), linha):
-                if isinstance(celula, Link):
-                    coluna.button(celula.rotulo, key=celula.chave, type="tertiary", on_click=celula.on_click,
-                                  args=celula.args, kwargs=celula.kwargs)
-                elif isinstance(celula, Html):
-                    coluna.markdown(celula.conteudo, unsafe_allow_html=True)
-                else:
-                    coluna.markdown(f'<span class="tab-texto">{html.escape(str(celula))}</span>', unsafe_allow_html=True)
+    # "grade-…": o script de acessibilidade marca este bloco como tabela (linhas, cabeçalhos e células)
+    with st.container(key=f"grade-{_slug(chave)}"):
+        with st.container(key=f"tabcab-{_slug(chave)}"):
+            for coluna, (nome, _) in zip(st.columns(pesos, gap="small", vertical_alignment="center"), colunas):
+                coluna.markdown(f'<span class="tab-titulo">{html.escape(nome)}</span>', unsafe_allow_html=True)
+        if not linhas:
+            st.markdown(f'<div class="tab-vazio" role="status">{vazio}</div>', unsafe_allow_html=True)
+            return 0
+        for i, linha in enumerate(linhas):
+            with st.container(key=f"tablinha-{_slug(chave)}-{i}"):
+                for coluna, celula in zip(st.columns(pesos, gap="small", vertical_alignment="center"), linha):
+                    if isinstance(celula, Link):
+                        coluna.button(celula.rotulo, key=celula.chave, type="tertiary", on_click=celula.on_click,
+                                      args=celula.args, kwargs=celula.kwargs)
+                    elif isinstance(celula, Html):
+                        coluna.markdown(celula.conteudo, unsafe_allow_html=True)
+                    else:
+                        coluna.markdown(f'<span class="tab-texto">{html.escape(str(celula))}</span>', unsafe_allow_html=True)
     return len(linhas)
 
 
@@ -271,31 +300,44 @@ _TOUR_JS = r"""
       outline: 3px solid #ff9900; transition: all .2s ease; pointer-events: none; }
     #tour-raiz .balao { position: fixed; width: min(380px, calc(100vw - 32px)); background: #fff; color: #0f141a;
       border-radius: 16px; box-shadow: 0 8px 40px rgba(0,7,22,.35); padding: 18px 20px 14px; pointer-events: auto;
-      font: 14px/1.5 "Amazon Ember","Helvetica Neue",Roboto,Arial,sans-serif; }
-    #tour-raiz .contagem { color: #656871; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
-    #tour-raiz h3 { margin: 4px 0 6px; font-size: 18px; font-weight: 700; }
+      font: .875rem/1.5 "Amazon Ember","Helvetica Neue",Roboto,Arial,sans-serif; }
+    #tour-raiz .contagem { color: #656871; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    #tour-raiz h3 { margin: 4px 0 6px; font-size: 1.125rem; font-weight: 700; }
     #tour-raiz p { margin: 0 0 12px; color: #424650; }
     #tour-raiz .acoes { display: flex; gap: 8px; align-items: center; }
-    #tour-raiz button { border-radius: 20px; font: 700 14px/1 inherit; padding: 8px 16px; cursor: pointer; }
+    #tour-raiz button { border-radius: 20px; font: 700 .875rem/1 inherit; padding: 8px 16px; cursor: pointer; }
     #tour-raiz .prox { background: #ff9900; border: 2px solid #ff9900; color: #0f141a; margin-left: auto; }
     #tour-raiz .ant { background: #fff; border: 2px solid #006ce0; color: #006ce0; }
-    #tour-raiz .fechar { position: absolute; top: 10px; right: 12px; background: none; border: none; font-size: 18px;
+    #tour-raiz .fechar { position: absolute; top: 10px; right: 12px; background: none; border: none; font-size: 1.125rem;
       color: #656871; padding: 4px 8px; }
-    #tour-raiz .nunca { display: flex; gap: 6px; align-items: center; margin-top: 10px; color: #656871; font-size: 13px; }
+    #tour-raiz .nunca { display: flex; gap: 6px; align-items: center; margin-top: 10px; color: #656871; font-size: .8125rem; }
   `;
   D.head.appendChild(css);
   const raiz = D.createElement("div");
   raiz.id = "tour-raiz";
   raiz.innerHTML = `<div class="fundo"></div><div class="foco"></div>
-    <div class="balao" role="dialog" aria-modal="true">
-      <button class="fechar" title="Fechar">✕</button>
-      <div class="contagem"></div><h3></h3><p></p>
+    <div class="balao" role="dialog" aria-modal="true" tabindex="-1"
+         aria-labelledby="tour-titulo" aria-describedby="tour-contagem tour-texto">
+      <button class="fechar" title="Fechar o tutorial" aria-label="Fechar o tutorial">✕</button>
+      <div aria-live="polite"><div class="contagem" id="tour-contagem"></div><h3 id="tour-titulo"></h3><p id="tour-texto"></p></div>
       <div class="acoes"><button class="ant">Anterior</button><button class="prox">Próximo</button></div>
       <label class="nunca"><input type="checkbox"> Não mostrar mais o tutorial</label>
     </div>`;
   D.body.appendChild(raiz);
   const fundo = raiz.querySelector(".fundo"), foco = raiz.querySelector(".foco"), balao = raiz.querySelector(".balao");
   let i = 0, alvo = null;
+
+  // acessibilidade do modal: o resto da página some para o leitor de tela, o foco fica dentro do balão
+  // (Tab e Shift+Tab dão a volta) e, ao fechar, volta para onde estava
+  const antes = D.activeElement, app = D.getElementById("root");
+  if (app) app.setAttribute("aria-hidden", "true");
+  balao.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab") return;
+    const itens = [...balao.querySelectorAll("button, input")].filter((b) => b.offsetParent && b.style.visibility !== "hidden");
+    const primeiro = itens[0], ultimo = itens[itens.length - 1];
+    if (e.shiftKey && (D.activeElement === primeiro || D.activeElement === balao)) { e.preventDefault(); ultimo.focus(); }
+    else if (!e.shiftKey && D.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
+  });
 
   function posicionar() {
     const vw = P.innerWidth, vh = P.innerHeight, bw = balao.offsetWidth, bh = balao.offsetHeight;
@@ -330,6 +372,7 @@ _TOUR_JS = r"""
     balao.querySelector(".prox").textContent = i === cfg.passos.length - 1 ? "Concluir" : "Próximo";
     requestAnimationFrame(posicionar);
     setTimeout(posicionar, 80);                                 // também sem animação (aba em segundo plano)
+    if (n === 0) balao.focus({ preventScroll: true });          // ao abrir, o leitor de tela lê título e texto; depois, a região viva anuncia
   }
 
   function fechar() {
@@ -337,6 +380,8 @@ _TOUR_JS = r"""
     P.removeEventListener("resize", posicionar);
     P.removeEventListener("scroll", posicionar, true);
     raiz.remove(); css.remove();
+    if (app) app.removeAttribute("aria-hidden");
+    if (antes && antes.isConnected && antes.focus) antes.focus({ preventScroll: true });   // o foco volta para onde estava
     if (balao.querySelector(".nunca input").checked) {
       const botao = D.querySelector('[class*="st-key-tour-desligar"] button');
       if (botao) botao.click();                                 // avisa o Python: grava "tutorial": false
@@ -366,3 +411,146 @@ def tour(contexto: str, passos: list, auto: bool, forcar: int = 0) -> None:
     config = {"contexto": contexto, "auto": auto, "forcar": forcar,
               "passos": [{"seletor": p.seletor, "titulo": p.titulo, "texto": p.texto} for p in passos]}
     componentes.html(_TOUR_JS.replace("__CONFIG__", json.dumps(config, ensure_ascii=False)), height=0)
+
+
+def css_acessibilidade(escolhas: dict) -> str:
+    """CSS das opções de acessibilidade escolhidas na barra flutuante (o texto do Streamlit é em rem)."""
+    conteudo = '[data-testid="stMain"] .block-container, [data-testid="stSidebar"], .st-key-dock, [data-testid="stPopoverBody"]'
+    regras = [f"html {{ font-size: {int(escolhas.get('texto', 100))}% !important; }}"]
+    if escolhas.get("contraste"):
+        regras += [
+            f":is({conteudo}) :is(p, span, label, li, div.tab-texto, div.kv-valor):not(button *, .barra-console *)"
+            " {{ color: #000 !important; }}",
+            ".pag-desc, .painel-desc, .kv-rotulo, .trilha-sep, .trilha-atual, .contador, .tab-titulo, .tab-vazio,"
+            ' [data-testid="stCaptionContainer"], .selo-neutro { color: #000 !important; }',
+            '.stButton button[kind="tertiary"] p, [data-testid="stTab"][aria-selected="true"] p,'
+            ' [data-testid="stRadioOption"][data-selected="true"] p { color: #003b8f !important; }',
+            '.stButton button[kind="secondary"], .st-key-dock button'
+            " { border-color: #003b8f !important; color: #003b8f !important; }",
+            ".selo-ok { color: #005c1f !important; } .selo-erro { color: #a30000 !important; }"
+            " .selo-run { color: #003b8f !important; }",
+            '[class*="st-key-tablinha-"], [class*="st-key-tabcab-"], [data-testid="stTabs"] [role="tablist"]'
+            " { border-bottom-color: #000 !important; }",
+            '[class*="st-key-painel-"], .st-key-dock button { box-shadow: 0 0 0 2px #000 !important; }',
+            'input, textarea, [data-baseweb="select"] > div { border: 2px solid #000 !important; }',
+            "#tour-raiz .balao p, #tour-raiz .contagem, #tour-raiz .nunca { color: #000 !important; }",
+        ]
+    if escolhas.get("sublinhar"):
+        regras.append('.stButton button[kind="tertiary"] p, .stApp a, [data-testid="stRadioOption"] p'
+                      " { text-decoration: underline !important; text-underline-offset: 3px; }")
+    if escolhas.get("espacamento"):
+        regras.append(f":is({conteudo}, #tour-raiz) :is(p, span, label, li, div.tab-texto, div.kv-valor, h3)"
+                      " { letter-spacing: .12em !important; word-spacing: .16em !important; line-height: 1.6 !important; }")
+    if escolhas.get("movimento"):
+        regras.append("*, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important;"
+                      " transition: none !important; scroll-behavior: auto !important; }")
+    return "<style>\n" + "\n".join(regras) + "\n</style>"
+
+
+_APOIO_JS = r"""
+<script>
+(function () {
+  const P = window.parent, D = P.document, cfg = __CONFIG__;
+  const $ = (s, r) => (r || D).querySelector(s), $$ = (s, r) => [...(r || D).querySelectorAll(s)];
+  const marca = (el, attrs) => { if (!el) return; for (const [k, v] of Object.entries(attrs)) if (el.getAttribute(k) !== v) el.setAttribute(k, v); };
+
+  // quem rola a página no Streamlit é o contêiner principal, não a janela
+  const rolador = () => [$('[data-testid="stMain"]'), $('[data-testid="stAppViewContainer"]')]
+    .find((e) => e && e.scrollHeight > e.clientHeight + 4) || D.scrollingElement;
+
+  // botões só com ícone: o leitor de tela lê o nome, não o desenho do emoji
+  const NOMES = { ".st-key-topo button": "Voltar ao topo da página",
+                  ".st-key-tour-abrir button": "Abrir o tutorial desta tela",
+                  '.st-key-dock [data-testid="stPopoverButton"]': "Tutorial e acessibilidade",
+                  ".st-key-nova_aba button": "Nova consulta",
+                  ".st-key-fechar_aba button": "Fechar esta consulta",
+                  '[data-testid="stSidebarCollapseButton"] button': "Recolher o menu de serviços",
+                  '[data-testid="stExpandSidebarButton"]': "Abrir o menu de serviços" };
+
+  // sobe do filho até o pai sem papel definido no meio: as divs do Streamlit viram "none" para o leitor
+  // de tela enxergar tabela → linha → célula
+  function semPapelEntre(filho, pai) {
+    for (let e = filho.parentElement; e && e !== pai; e = e.parentElement) if (!e.getAttribute("role")) e.setAttribute("role", "none");
+  }
+
+  function estruturar() {
+    D.documentElement.lang = "pt-BR";                                 // leitores de tela leem em português
+    if (!D.getElementById("pular-conteudo")) {                        // fora do React: é o primeiro item do Tab
+      const pular = D.createElement("a");
+      pular.id = "pular-conteudo"; pular.href = "#conteudo"; pular.textContent = "Pular para o conteúdo";
+      D.body.insertBefore(pular, D.body.firstChild);
+    }
+    // regiões da página: topo, menu e conteúdo (com o alvo do "Pular para o conteúdo")
+    marca($(".barra-console"), { role: "banner" });
+    marca($('[data-testid="stSidebar"]'), { role: "navigation", "aria-label": "Menu de serviços" });
+    marca($('[data-testid="stMain"]'), { role: "main", id: "conteudo", tabindex: "-1" });
+    marca($(".st-key-dock"), { role: "complementary", "aria-label": "Ajuda e acessibilidade" });
+    for (const t of $$('[class*="st-key-trilha-"]')) marca(t, { role: "navigation", "aria-label": "Caminho" });
+    for (const [s, nome] of Object.entries(NOMES)) { const b = $(s); if (b) { marca(b, { "aria-label": nome }); if (b.title !== nome) b.title = nome; } }
+
+    // tabelas do console: cabeçalho e linhas viram uma tabela de verdade para o leitor de tela
+    for (const grade of $$('[class*="st-key-grade-"]')) {
+      const painel = grade.closest('[class*="st-key-painel-"]');
+      const nome = painel && $(".painel-titulo", painel) ? $(".painel-titulo", painel).textContent.trim() : "Tabela";
+      marca(grade, { role: "table", "aria-label": nome });
+      for (const linha of $$('[class*="st-key-tabcab-"], [class*="st-key-tablinha-"]', grade)) {
+        const cabecalho = String(linha.className).includes("st-key-tabcab-");
+        marca(linha, { role: "row" }); semPapelEntre(linha, grade);
+        for (const celula of $$('[data-testid="stColumn"]', linha)) {
+          marca(celula, { role: cabecalho ? "columnheader" : "cell" }); semPapelEntre(celula, linha);
+        }
+      }
+    }
+    // o que muda sozinho é anunciado sem roubar o foco: execuções do job e resultado da consulta
+    for (const s of ['[class*="st-key-painel-execucoes"]', '[class*="st-key-painel-athena-resultados"]'])
+      for (const e of $$(s)) marca(e, { "aria-live": "polite" });
+
+    // o botão Topo some no começo da página: some também para o teclado e o leitor de tela
+    const longe = rolador().scrollTop > 240;
+    D.documentElement.classList.toggle("topo-escondido", !longe);   // no html: o React reescreve a classe do contêiner
+    const topo = $(".st-key-topo button");
+    if (topo) { topo.tabIndex = longe ? 0 : -1; marca(topo, { "aria-hidden": longe ? "false" : "true" }); }
+  }
+
+  function clique(e) {
+    const alvo = e.target.closest ? e.target : null;
+    if (alvo && alvo.closest("#pular-conteudo")) {                   // "Pular para o conteúdo"
+      e.preventDefault(); const m = $("#conteudo"); if (m) m.focus(); return;
+    }
+    if (!alvo || !alvo.closest(".st-key-topo button")) return;
+    e.preventDefault(); e.stopPropagation();                          // só rola: não precisa recarregar a tela
+    const suave = !cfg.reduzirMovimento && !P.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    rolador().scrollTo({ top: 0, behavior: suave ? "smooth" : "auto" });
+    const titulo = $(".pag-titulo");                                   // o foco volta para o começo da página
+    if (titulo) { titulo.tabIndex = -1; titulo.focus({ preventScroll: true }); }
+  }
+
+  // o Streamlit redesenha a tela a cada clique: refaz as marcações quando a página muda
+  let pendente = null;
+  const agendar = () => { if (!pendente) pendente = setTimeout(() => { pendente = null; estruturar(); }, 120); };
+
+  // a cada nova versão deste script, troca os ouvintes antigos pelos novos
+  const antigo = P.__apoioConsole;
+  if (antigo) {
+    D.removeEventListener("click", antigo.clique, true); D.removeEventListener("scroll", antigo.estruturar, true);
+    antigo.observador.disconnect();
+  }
+  const observador = new MutationObserver(agendar);
+  observador.observe(D.body, { childList: true, subtree: true });
+  P.__apoioConsole = { clique, estruturar, observador };
+  D.addEventListener("click", clique, true);
+  D.addEventListener("scroll", estruturar, true);
+  estruturar(); setTimeout(estruturar, 400);
+})();
+</script>
+"""
+
+
+def apoio_acessibilidade(reduzir_movimento: bool) -> None:
+    """Script de acessibilidade na página: idioma pt-BR, regiões (topo, menu, conteúdo), tabelas que o leitor
+    de tela entende, nomes nos botões só com ícone, avisos do que muda sozinho e o botão "Topo"."""
+    import json
+    import streamlit.components.v1 as componentes
+
+    config = {"reduzirMovimento": bool(reduzir_movimento)}
+    componentes.html(_APOIO_JS.replace("__CONFIG__", json.dumps(config)), height=0)

@@ -211,7 +211,7 @@ def test_jobs_lista_executa_e_mostra_o_log(bucket_local, tmp_path, monkeypatch):
         if any("Sucesso" in str(m.value) for m in at.markdown):
             break
         time.sleep(0.2)
-    assert any("✔ Sucesso" in str(m.value) for m in at.markdown)
+    assert any("selo-ok" in str(m.value) and "Sucesso" in str(m.value) for m in at.markdown)
     assert any("bronze gravada" in c.value for c in at.code)
 
 
@@ -266,3 +266,43 @@ def test_abrir_o_console_nao_grava_preferencias(bucket_local, preferencias_isola
     at.radio(key="tela").set_value(ATHENA).run()
     assert not at.exception
     assert not preferencias_isoladas.exists()           # só grava quando a pessoa muda a chave
+
+
+def test_botoes_flutuantes_e_menu_de_acessibilidade(bucket_local):
+    at = _rodar()
+    assert not at.exception
+    assert at.button(key="topo").label == "⬆"
+    assert at.button(key="tour-abrir").label == "🎓"
+    assert at.radio(key="pref_texto").value == 100
+    assert at.toggle(key="pref_contraste").value is False
+
+
+def test_acessibilidade_e_gravada_e_aplicada(bucket_local, preferencias_isoladas):
+    at = _rodar()
+    at.radio(key="pref_texto").set_value(130).run()
+    at.toggle(key="pref_contraste").set_value(True).run()
+    salvo = preferencias_isoladas.read_text(encoding="utf-8")
+    assert '"texto": 130' in salvo and '"contraste": true' in salvo
+    estilos = " ".join(str(m.value) for m in at.markdown)
+    assert "font-size: 130%" in estilos and "#000" in estilos
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    nova = _rodar()                                                   # nova sessão: continua valendo
+    assert nova.radio(key="pref_texto").value == 130
+    assert nova.toggle(key="pref_contraste").value is True
+
+
+def test_voltar_ao_padrao_desfaz_a_acessibilidade_e_mantem_o_tutorial(bucket_local, preferencias_isoladas):
+    at = _rodar()
+    at.toggle(key="pref_tutorial").set_value(False).run()
+    at.toggle(key="pref_movimento").set_value(True).run()
+    at.button(key="a11y-padrao").click().run()
+    assert at.toggle(key="pref_movimento").value is False
+    assert at.toggle(key="pref_tutorial").value is False
+    assert '"movimento": false' in preferencias_isoladas.read_text(encoding="utf-8")
+
+
+def test_titulos_e_tabelas_marcados_para_leitor_de_tela(bucket_local):
+    at = _rodar()
+    textos = " ".join(str(m.value) for m in at.markdown)
+    assert 'role="heading" aria-level="1"' in textos and 'role="heading" aria-level="2"' in textos
