@@ -101,7 +101,7 @@ O **Data Catalog** é a lista de "o que existe no lake": quais bancos, quais tab
 - **Bancos de dados:** um por camada do medalhão: `landing`, `bronze`, `silver` e `gold`, cada um com a sua localização `s3://datalake-tracking/<banco>/`.
 - **Tabelas do banco:** nome, formato (Parquet ou JSON), localização, quantas partições e quantas colunas.
 - **Detalhe da tabela:**
-  - **Esquema:** as colunas e os tipos; as chaves de partição aparecem marcadas;
+  - **Esquema:** as colunas e os tipos; as chaves de partição aparecem marcadas. Um tipo `struct` (ou `struct[]`, uma lista de structs) aparece só com essa palavra, em azul: clique nele para abrir um **overlay com a tipagem interna** (os campos de dentro, em árvore), em vez de ver o tipo inteiro numa linha enorme;
   - **Partições:** uma linha por partição, com arquivos e tamanho;
   - **Propriedades:** banco, localização, classificação e o nome para usar no Athena.
 - O botão **Consultar no Athena** abre uma aba nova no editor já com `SELECT * FROM <banco>.<tabela> LIMIT 10`.
@@ -136,7 +136,7 @@ sequenceDiagram
 
 ### Athena · Editor de consultas
 
-- **À esquerda, a árvore de dados:** escolha o **banco de dados** (`landing`, `bronze`, `silver`, `gold`) e veja as **tabelas** dele. Abra uma tabela para ver as colunas e os tipos; o botão **Inserir no editor** escreve `<banco>.<tabela>` no fim da sua consulta. Ali também ficam as **consultas de exemplo**.
+- **À esquerda, a árvore de dados:** escolha o **banco de dados** (`landing`, `bronze`, `silver`, `gold`) e veja as **tabelas** dele. Abra uma tabela para ver as colunas e os tipos (um `struct` abre a tipagem interna num overlay, como no Data Catalog); o botão **Inserir no editor** escreve `<banco>.<tabela>` no fim da sua consulta. Ali também ficam as **consultas de exemplo**.
 - **Abas de consulta:** "Consulta 1", "Consulta 2"… Cada aba guarda a própria SQL e o próprio resultado. O **＋** abre uma aba nova; o **✕** fecha a aba atual (a última nunca fecha).
 - **Editor:** escreva a SQL e clique em **Executar**. O campo **Limite de linhas** diz quantas linhas trazer: o padrão é 1 000 e o máximo é 50 000. Se a consulta tiver mais linhas que o limite, o resultado é cortado e aparece um aviso.
 - **Resultados:** a faixa verde mostra os **detalhes da execução**, como o Athena: status, tempo de execução, número de linhas e **dados lidos (estimado)**. Embaixo, a tabela e o botão **Baixar resultados (CSV)**.

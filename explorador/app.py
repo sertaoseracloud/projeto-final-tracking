@@ -238,13 +238,16 @@ def _arvore(datasets, colunas) -> None:
         bancos = glue.bancos(datasets)
         banco = st.selectbox("Banco de dados", list(bancos), key="athena_banco")
         nomes = [d.nome_view for d in bancos.get(banco, []) if d.nome_view in colunas]
-        st.markdown(f'<div class="painel-titulo" style="font-size:15px">Tabelas <span class="contador">({len(nomes)})</span></div>',
+        st.markdown(f'<div class="painel-titulo" style="font-size:.9375rem">Tabelas <span class="contador">({len(nomes)})</span></div>',
                     unsafe_allow_html=True)
         for nome in nomes:
             with st.expander(f"▦ {particoes.banco_e_tabela(nome)[1]}"):
                 st.button("Inserir no editor", key=f"inserir:{nome}", type="tertiary", on_click=_por_no_editor, args=(nome,))
-                st.markdown("\n".join(f"- `{c}` <span style='color:#656871'>{t.lower()}</span>" for c, t in colunas[nome]),
-                            unsafe_allow_html=True)
+                for c, t in colunas[nome]:
+                    # struct aparece curto; o clique no tipo abre a tipagem interna num overlay
+                    with st.container(horizontal=True, vertical_alignment="center", gap="small", key=f"arvcol-{nome}-{c}"):
+                        st.markdown(f"`{c}`", width="content")
+                        ui.tipo(st, c, t, f"arvore-{nome}-{c}")
     with ui.painel("athena-exemplos", "Consultas de exemplo"):
         for titulo, sql in EXEMPLOS.items():
             st.button(titulo, key=f"exemplo:{titulo}", type="tertiary", on_click=_por_no_editor, args=(sql, True))
@@ -397,8 +400,10 @@ def _tela_catalogo(objetos, datasets, colunas) -> None:
                   "Nome no Athena": tabela})
     aba_esquema, aba_particoes = st.tabs(["Esquema", "Partições"])
     with aba_esquema:
-        st.dataframe(pd.DataFrame([{"Coluna": c, "Tipo": t.lower(), "Chave de partição": "sim" if c in chaves else ""}
-                                   for c, t in colunas.get(tabela, [])]), hide_index=True)
+        # struct aparece curto; o clique no tipo abre a tipagem interna num overlay
+        ui.tabela("esquema", [("Coluna", 2), ("Tipo", 2), ("Chave de partição", 1)],
+                  [[c, ui.Tipo(c, t, f"esquema-{tabela}-{c}"), "sim" if c in chaves else ""]
+                   for c, t in colunas.get(tabela, [])], localizar=len(colunas.get(tabela, [])) > 8)
     with aba_particoes:
         if chaves:
             st.caption(f"Chaves de partição: {', '.join(chaves)}")
