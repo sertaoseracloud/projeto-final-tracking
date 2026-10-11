@@ -131,10 +131,11 @@ body.painel-aberto .alternar-painel { right: 416px; }
 
 [hidden] { display: none !important; }
 /* ---------------- mapa de calor (overlay; não recebe cliques) ---------------- */
-#calor-raiz { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 30; }
-.calor-camada { position: absolute; pointer-events: none; border-radius: 10px; outline: 2px solid rgba(0,0,0,.2); }
+#calor-raiz { position: absolute; left: 0; top: 0; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+.calor-camada { position: absolute; z-index: 30; pointer-events: none; border-radius: 10px; outline: 2px solid rgba(0,0,0,.2); }
+.calor-camada.no-modal { z-index: 51; }
 .calor-etiqueta { position: absolute; top: -12px; right: -6px; background: #111827; color: #fff; font: 600 11px/1.4 system-ui, sans-serif; padding: 2px 7px; border-radius: 6px; white-space: nowrap; }
-.calor-faixa { position: absolute; width: 72px; pointer-events: none; border-left: 2px solid rgba(0,0,0,.25); }
+.calor-faixa { position: absolute; z-index: 30; width: 72px; pointer-events: none; border-left: 2px solid rgba(0,0,0,.25); }
 .calor-marco { position: absolute; right: 6px; transform: translateY(-50%); background: #111827; color: #fff; font: 600 11px/1.4 system-ui, sans-serif; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
 #mapa-calor.ligado { background: #b91c1c; color: #fff; }
 </style>
@@ -886,7 +887,14 @@ body.painel-aberto .alternar-painel { right: 416px; }
 
   function desenharCalor() {
     $calorRaiz.innerHTML = "";
+    $calorRaiz.style.width = "0px";
+    $calorRaiz.style.height = "0px";
     if (!calor.ligado || !window.MAPA_CALOR) return;
+    // mede a página sem o overlay e prende o overlay nesse tamanho (overflow: hidden):
+    // assim ele nunca aumenta a rolagem nem muda os marcos do evento scroll
+    var doc = document.documentElement;
+    $calorRaiz.style.width = doc.scrollWidth + "px";
+    $calorRaiz.style.height = doc.scrollHeight + "px";
     var pagina = paginaAtual(), porElemento = {};
     (window.MAPA_CALOR.cliques || []).forEach(function (l) { if (l.pagina === pagina) porElemento[l.element_id] = l; });
     document.querySelectorAll("[data-heat]").forEach(function (el) {
@@ -894,7 +902,7 @@ body.painel-aberto .alternar-painel { right: 416px; }
       var r = el.getBoundingClientRect();
       if (!l || !r.width || !r.height) return;          // sem dado, escondido ou de outra tela
       var c = document.createElement("div");
-      c.className = "calor-camada";
+      c.className = "calor-camada" + (el.closest("#modal") ? " no-modal" : "");
       c.style.left = (r.left + window.scrollX) + "px";
       c.style.top = (r.top + window.scrollY) + "px";
       c.style.width = r.width + "px";
@@ -952,6 +960,17 @@ body.painel-aberto .alternar-painel { right: 416px; }
   window.addEventListener("resize", redesenharCalorDepois);
   window.addEventListener("hashchange", redesenharCalorDepois);
   document.getElementById("alternar-painel").addEventListener("click", redesenharCalorDepois);
+  // conteúdo que muda de tamanho (filtro do FAQ, resumo do pedido, login, modal aberto) → redesenha
+  if ("ResizeObserver" in window) {
+    var observadorCalor = new ResizeObserver(redesenharCalorDepois);
+    var observar = function (el) { if (el) observadorCalor.observe(el); };
+    observar(document.querySelector("main"));
+    observar(document.querySelector("#modal .modal"));
+  }
+  // garantia extra: toda interação (clique, digitação, troca de opção) agenda um redesenho
+  ["click", "input", "change"].forEach(function (tipo) {
+    document.addEventListener(tipo, function () { if (calor.ligado) redesenharCalorDepois(); }, true);
+  });
 
   irPara(true);
 })();

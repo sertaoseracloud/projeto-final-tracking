@@ -33,3 +33,20 @@ def test_site_carrega_o_mapa_antes_do_script_principal_e_tem_o_botao():
 def test_camadas_do_overlay_nao_recebem_clique():
     assert re.search(r"\.calor-camada\s*\{[^}]*pointer-events:\s*none", HTML)
     assert re.search(r"\.calor-faixa\s*\{[^}]*pointer-events:\s*none", HTML)
+
+
+def test_overlay_nao_aumenta_a_pagina_nem_cria_contexto_abaixo_do_modal():
+    regra = re.search(r"#calor-raiz\s*\{([^}]*)\}", HTML).group(1)
+    assert "overflow: hidden" in regra
+    assert "z-index" not in regra          # sem contexto próprio: a camada do modal pode ficar acima dele
+
+
+def test_overlay_redesenha_quando_o_conteudo_muda_de_tamanho():
+    assert "new ResizeObserver(redesenharCalorDepois)" in HTML
+    assert re.search(r'observar\(document\.querySelector\("main"\)\)', HTML)
+    assert re.search(r'observar\(document\.querySelector\("#modal \.modal"\)\)', HTML)
+
+
+def test_overlay_redesenha_a_cada_interacao_mesmo_sem_resizeobserver():
+    assert '["click", "input", "change"].forEach' in HTML
+    assert "if (calor.ligado) redesenharCalorDepois();" in HTML
