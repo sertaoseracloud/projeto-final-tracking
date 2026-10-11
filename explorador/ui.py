@@ -57,8 +57,7 @@ CSS = """
     color: #656871; text-transform: uppercase; letter-spacing: .04em; padding: 12px 0 4px 2px; }
   [data-testid="stSidebar"] [role="radiogroup"] > div:nth-child(1)::before { content: "S3"; padding-top: 2px; }
   [data-testid="stSidebar"] [role="radiogroup"] > div:nth-child(2)::before { content: "Glue"; }
-  [data-testid="stSidebar"] [role="radiogroup"] > div:nth-child(4)::before { content: "Athena"; }
-  [data-testid="stSidebar"] [role="radiogroup"] > div:nth-child(5)::before { content: "Aprender"; }
+  [data-testid="stSidebar"] [role="radiogroup"] > div:nth-child(5)::before { content: "Athena"; }
 
   /* títulos de página, breadcrumb, textos de apoio */
   .pag-titulo { font-size: 1.5rem; font-weight: 700; color: #0f141a; line-height: 1.3; margin: 2px 0 2px; }

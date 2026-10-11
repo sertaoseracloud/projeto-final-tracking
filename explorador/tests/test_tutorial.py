@@ -1,7 +1,7 @@
 from explorador import tutorial
 
 CONTEXTOS = ["s3-buckets", "s3-bucket", "catalogo-bancos", "catalogo-tabelas", "catalogo-tabela",
-             "jobs-lista", "jobs-detalhe", "athena"]
+             "jobs-lista", "jobs-detalhe", "workflows-lista", "workflows-detalhe", "workflows-form", "athena"]
 
 
 def test_toda_tela_tem_um_roteiro_com_titulo_e_explicacao():

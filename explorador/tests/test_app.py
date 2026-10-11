@@ -1,4 +1,5 @@
 import functools
+import json
 import time
 from pathlib import Path
 
@@ -7,7 +8,7 @@ import pytest
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 
-from explorador import consultas, s3
+from explorador import consultas, s3, workflows
 from explorador.particoes import Objeto
 
 APP = str(Path(__file__).resolve().parents[1] / "app.py")
@@ -71,7 +72,8 @@ def _executar(at, sql, aba="Consulta 1"):
 def test_abre_no_s3_com_a_lista_de_buckets_e_entra_no_bucket(bucket_local):
     at = _rodar()
     assert not at.exception
-    assert at.radio(key="tela").options[:4] == ["🪣  Buckets", "🗂  Data Catalog", "⚙  Jobs ETL", "🔎  Editor de consultas"]
+    assert at.radio(key="tela").options == ["🪣  Buckets", "🗂  Data Catalog", "⚙  Jobs ETL", "🔀  Workflows",
+                                             "🔎  Editor de consultas"]
     assert at.button(key="abrir_bucket").label.endswith(s3.BUCKET)
     at.button(key="abrir_bucket").click().run()
     assert [t.label for t in at.tabs] == ["Objetos", "Partições", "Propriedades"]
@@ -330,3 +332,74 @@ def test_arvore_do_athena_mostra_struct_curto_e_a_tipagem_interna_no_overlay(buc
     at = _athena(_rodar())
     assert not at.exception
     _struct_na_tela(at)
+
+
+WORKFLOWS = "Glue · Workflows"
+
+
+@pytest.fixture
+def pasta_workflows(tmp_path, monkeypatch):
+    jobs = tmp_path / "meus_jobs"
+    jobs.mkdir()
+    for nome in ("bronze", "silver", "gold"):
+        (jobs / f"{nome}.py").write_text(f"print('{nome} gravada')\n")
+    monkeypatch.setenv("EXPLORADOR_JOBS", str(jobs))
+    monkeypatch.setenv("EXPLORADOR_EXECUCOES", str(tmp_path / "execucoes"))
+    return jobs
+
+
+def _workflows(at):
+    return at.radio(key="tela").set_value(WORKFLOWS).run()
+
+
+def test_cria_workflow_pelo_console_e_salva_o_json(pasta_workflows):
+    at = _workflows(_rodar())
+    assert not at.exception
+    at.button(key="criar_workflow").click().run()
+    at.text_input(key="wf_form_nome").input("medalhao").run()
+    at.multiselect(key="wf_form_jobs").select("bronze").select("silver").select("gold").run()
+    at.button(key="wf_encadear").click().run()                       # cada job depende do anterior
+    assert at.multiselect(key="wf_form_dep:gold").value == ["silver"]
+    at.button(key="wf_salvar").click().run()
+    assert not at.exception
+    salvo = json.loads((pasta_workflows / "workflows" / "medalhao.json").read_text(encoding="utf-8"))
+    assert salvo["etapas"] == [{"job": "bronze", "depende_de": []}, {"job": "silver", "depende_de": ["bronze"]},
+                               {"job": "gold", "depende_de": ["silver"]}]
+    assert at.session_state["wf_sel"] == "medalhao"                  # abre o workflow recém-criado
+    assert [t.label for t in at.tabs] == ["Execução", "Histórico", "Definição"]
+
+
+def test_formulario_recusa_ciclo_e_explica(pasta_workflows):
+    at = _workflows(_rodar())
+    at.button(key="criar_workflow").click().run()
+    at.text_input(key="wf_form_nome").input("circular").run()
+    at.multiselect(key="wf_form_jobs").select("bronze").select("silver").run()
+    at.multiselect(key="wf_form_dep:bronze").select("silver").run()
+    at.multiselect(key="wf_form_dep:silver").select("bronze").run()
+    assert any("ciclo" in w.value for w in at.warning)               # a prévia já avisa
+    at.button(key="wf_salvar").click().run()
+    assert any("ciclo" in e.value for e in at.error)
+    assert not (pasta_workflows / "workflows" / "circular.json").exists()
+
+
+def test_executa_workflow_e_mostra_o_status_de_cada_etapa(pasta_workflows):
+    wf = workflows.Workflow("medalhao", "", 2, (workflows.Etapa("bronze"), workflows.Etapa("silver", ("bronze",)),
+                                               workflows.Etapa("gold", ("bronze",))))
+    workflows.salvar(pasta_workflows, wf)
+    at = _workflows(_rodar())
+    at.button(key="wf:medalhao").click().run()
+    at.button(key="executar_workflow").click().run()
+    for _ in range(150):
+        at.run()
+        if any("Sucesso" in str(m.value) and "duração" in str(m.value) for m in at.markdown):
+            break
+        time.sleep(0.2)
+    assert not at.exception
+    resumo = next(str(m.value) for m in at.markdown if "duração" in str(m.value))
+    assert "Sucesso" in resumo
+    at.selectbox(key="wf_log_sel").set_value("gold").run()
+    assert any("gold gravada" in c.value for c in at.code)            # log da etapa escolhida
+    # cada etapa também aparece no histórico do job, marcada com a origem
+    at.radio(key="tela").set_value(JOBS).run()
+    at.button(key="job:silver").click().run()
+    assert any(">workflow medalhao<" in str(m.value) for m in at.markdown)

@@ -1,6 +1,11 @@
 """Roda os oito jobs da solução de referência em sequência. Não gera dados.
 
     docker compose run --rm app python professor/solucao/executar_pipeline.py
+
+O mesmo pipeline como workflow (um grafo: as Golds rodam lado a lado depois da Silver) fica em
+workflows/medalhao.json; rode pela tela Glue · Workflows do explorador ou pelo terminal:
+
+    docker compose run --rm app python -m explorador.workflows professor/solucao/workflows/medalhao.json
 """
 
 from __future__ import annotations

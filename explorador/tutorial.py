@@ -12,6 +12,7 @@ from dataclasses import dataclass
 TELA_S3 = "S3 · Buckets"
 TELA_CATALOGO = "Glue · Data Catalog"
 TELA_JOBS = "Glue · Jobs ETL"
+TELA_WORKFLOWS = "Glue · Workflows"
 TELA_ATHENA = "Athena · Editor de consultas"
 
 MENU = '[data-testid="stSidebar"] [role="radiogroup"]'
@@ -37,10 +38,11 @@ ROTEIROS: dict[str, list[Passo]] = {
               "Este tour mostra para que serve cada parte da tela. Use Próximo e Anterior, ou feche quando quiser."),
         Passo(".barra-console", "Barra do console",
               "Mostra o bucket, o endereço do S3 local e a região. Também lembra a regra de ouro: o Athena só lê; "
-              "só a tela de Jobs ETL executa código."),
+              "só as telas de Jobs ETL e Workflows executam código."),
         Passo(MENU, "Serviços",
-              "O menu lateral leva às quatro telas: Buckets (os arquivos), Data Catalog (as tabelas), "
-              "Jobs ETL (rodar o seu pipeline) e Editor de consultas (SQL). Cada tela tem o seu próprio tour."),
+              "O menu lateral leva às cinco telas: Buckets (os arquivos), Data Catalog (as tabelas), "
+              "Jobs ETL (rodar um job), Workflows (rodar vários jobs em ordem) e Editor de consultas (SQL). "
+              "Cada tela tem o seu próprio tour."),
         Passo(_k("painel-buckets"), "Lista de buckets",
               "Um bucket é um \"disco\" do S3. O projeto tem um só, o datalake-tracking. Clique no nome dele para ver "
               "as pastas landing/, bronze/, silver/ e gold/."),
@@ -105,6 +107,43 @@ ROTEIROS: dict[str, list[Passo]] = {
               "Tudo o que o job imprimiu. Se a execução falhar, o motivo quase sempre está nas últimas linhas."),
         Passo(ABAS, "Script",
               "A aba Script mostra o código do job (só leitura). Para mudar o job, edite o arquivo no seu editor."),
+    ],
+    "workflows-lista": [
+        Passo(None, "Workflows",
+              "Um workflow junta vários jobs num grafo: cada job diz de quais outros depende. Ao executar, o console "
+              "roda cada job assim que as dependências dele terminam com sucesso, como o executar_pipeline.py, "
+              "mas jobs independentes podem rodar ao mesmo tempo."),
+        Passo(_k("criar_workflow"), "Criar workflow",
+              "Abre o formulário: você dá um nome, escolhe os jobs e diz de quem cada um depende. O workflow fica "
+              "salvo num arquivo .json dentro da pasta de jobs, em workflows/."),
+        Passo(_k("painel-workflows"), "Seus workflows",
+              "Cada linha é um workflow, com quantos jobs tem e o status da última execução. Clique no nome para abrir."),
+    ],
+    "workflows-detalhe": [
+        Passo(_k("executar_workflow"), "Executar",
+              "Começa uma execução nova do workflow inteiro. Enquanto ela roda, o botão fica desligado e aparece o "
+              "botão Parar: ele não começa jobs novos, e os que já rodam terminam."),
+        Passo(_k("painel-grafo"), "Grafo",
+              "Cada caixa é um job e cada seta diz \"este roda depois daquele\". As cores mostram o status na "
+              "execução escolhida: azul rodando, verde sucesso, vermelho falhou, tracejado não executado."),
+        Passo(_k("painel-etapas"), "Etapas",
+              "A mesma informação do grafo em tabela: dependências, status, início e duração de cada job. "
+              "Escolha uma etapa logo abaixo para ver o log dela."),
+        Passo(ABAS, "Histórico e definição",
+              "Histórico lista todas as execuções do workflow. Definição mostra o arquivo .json e onde ele fica."),
+    ],
+    "workflows-form": [
+        Passo(_k("wf_form_nome"), "Nome",
+              "Letras minúsculas, números, _ ou -. Vira o nome do arquivo: workflows/<nome>.json."),
+        Passo(_k("wf_form_jobs"), "Jobs do workflow",
+              "Escolha os jobs da pasta que fazem parte do workflow, na ordem em que você pensa neles."),
+        Passo(_k("painel-dependencias"), "Dependências",
+              "Para cada job, marque de quais outros ele depende. Um job sem dependências começa logo. "
+              "Ciclos (A espera B e B espera A) não são aceitos."),
+        Passo(_k("wf_form_paralelo"), "Jobs ao mesmo tempo",
+              "Quantos jobs independentes podem rodar juntos. Cada um abre um Spark: mais de 2 pode faltar memória."),
+        Passo(_k("painel-previa"), "Prévia",
+              "O grafo vai se desenhando enquanto você preenche. Se algo estiver errado, o aviso aparece aqui."),
     ],
     "athena": [
         Passo(_k("painel-athena-dados"), "Dados",

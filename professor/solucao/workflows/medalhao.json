@@ -1,0 +1,15 @@
+{
+  "nome": "medalhao",
+  "descricao": "Pipeline completo: Bronze, Silver e as Golds (as Golds independentes rodam lado a lado)",
+  "paralelo": 2,
+  "etapas": [
+    {"job": "01_bronze_ingestao", "depende_de": []},
+    {"job": "02_silver_eventos", "depende_de": ["01_bronze_ingestao"]},
+    {"job": "03_gold_funil", "depende_de": ["02_silver_eventos"]},
+    {"job": "04_gold_engajamento", "depende_de": ["02_silver_eventos"]},
+    {"job": "05_gold_receita_aquisicao", "depende_de": ["02_silver_eventos"]},
+    {"job": "06_gold_ml", "depende_de": ["02_silver_eventos"]},
+    {"job": "07_gold_mapa_calor", "depende_de": ["02_silver_eventos"]},
+    {"job": "08_exportar_mapa_calor", "depende_de": ["07_gold_mapa_calor"]}
+  ]
+}

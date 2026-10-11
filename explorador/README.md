@@ -65,9 +65,9 @@ O console também foi feito para quem usa **só o teclado** ou um **leitor de te
 - O que muda sozinho é anunciado sem tirar o foco do lugar: o status das execuções de um job e os resultados de uma consulta do Athena.
 - O tutorial em modal recebe o foco ao abrir, prende o Tab dentro do balão, esconde o resto da página do leitor de tela, fecha com Esc e devolve o foco para onde estava.
 
-## As quatro telas: S3, Glue e Athena
+## As cinco telas: S3, Glue e Athena
 
-O explorador imita o jeito de trabalhar do console da AWS, para você treinar o fluxo que vai usar no mercado. O menu lateral (**Serviços**) tem quatro telas:
+O explorador imita o jeito de trabalhar do console da AWS, para você treinar o fluxo que vai usar no mercado. O menu lateral (**Serviços**) tem cinco telas:
 
 > **Pense assim:** é um **simulador de cabine**. Os botões estão no mesmo lugar dos do avião de verdade (o console da AWS), mas tudo roda no seu computador: o floci no lugar do S3, o DuckDB no lugar do Athena e o Spark do contêiner no lugar do Glue. Nada aqui usa nem cobra serviços da AWS.
 
@@ -76,7 +76,9 @@ flowchart LR
     menu["Menu lateral<br/>Serviços"] --> s3["S3 · Buckets<br/>arquivos e partições"]
     menu --> cat["Glue · Data Catalog<br/>bancos e tabelas"]
     menu --> jobs["Glue · Jobs ETL<br/>executar pipeline/"]
+    menu --> wf["Glue · Workflows<br/>vários jobs em grafo"]
     menu --> ath["Athena · Editor<br/>de consultas"]
+    wf -->|roda em ordem| jobs
     jobs -->|grava camadas| bucket[("bucket")]
     s3 -->|só lê| bucket
     cat -->|só lê| bucket
@@ -118,7 +120,8 @@ Aqui ficam os **seus jobs**: os arquivos `.py` da pasta `pipeline/` (menos o `co
   - **Execuções:** status (**Em execução**, **Sucesso** ou **Falhou**), início, duração e código de saída de cada execução, com o **log** logo abaixo. Enquanto um job roda, o painel se atualiza sozinho a cada 3 segundos.
   - **Script:** o código do job, só para leitura (você edita no seu editor, como sempre).
 - O histórico de execuções fica dentro do contêiner do explorador: se ele reiniciar, o histórico zera (os dados gravados no bucket continuam lá).
-- Esta é a única tela que **grava** no bucket, e só através do código dos seus jobs. As outras três só leem.
+- Esta tela e a de Workflows são as únicas que **gravam** no bucket, e só através do código dos seus jobs. As outras três só leem.
+- A coluna **Origem** diz quem começou a execução: `console` (o botão Executar desta tela) ou `workflow <nome>`.
 
 ```mermaid
 sequenceDiagram
@@ -133,6 +136,40 @@ sequenceDiagram
     C-->>V: Sucesso (ou Falhou) + duração
     V->>C: Data Catalog: bronze.eventos apareceu
 ```
+
+### Glue · Workflows
+
+Um **workflow** junta vários jobs num **grafo**: cada job diz de quais outros depende. Ao executar, o console roda cada job assim que todas as dependências dele terminam com **Sucesso**. É o mesmo papel do `executar_pipeline.py`, só que, em vez de uma fila fixa, quem não depende um do outro pode rodar ao mesmo tempo.
+
+> **Pense assim:** é a **receita de um almoço**. O arroz e o feijão podem ir ao fogo juntos; a salada só depois de lavar as folhas; a mesa só se põe quando tudo está pronto. O workflow é essa receita escrita: o que espera o quê. Se uma etapa queima, você não serve o resto.
+
+```mermaid
+flowchart LR
+    b["01_bronze_ingestao"] --> s["02_silver_eventos"]
+    s --> g3["03_gold_funil"]
+    s --> g4["04_gold_engajamento"]
+    s --> g5["05_gold_receita_aquisicao"]
+    s --> g6["06_gold_ml"]
+    s --> g7["07_gold_mapa_calor"]
+    g7 --> e["08_exportar_mapa_calor"]
+```
+
+*O grafo da solução de referência (`professor/solucao/workflows/medalhao.json`): as cinco Golds só dependem da Silver, então podem rodar lado a lado.*
+
+- **Criar workflow:** dê um **nome** (letras minúsculas, números, `_` ou `-`), escolha os **jobs** da pasta e, para cada um, de quais outros ele **depende**. O botão **Encadear em sequência** monta uma fila simples (cada job depende do anterior), igual ao `executar_pipeline.py`. A **prévia** desenha o grafo enquanto você preenche e avisa se algo estiver errado, por exemplo um **ciclo** (A espera B e B espera A).
+- **Jobs ao mesmo tempo:** quantos jobs independentes podem rodar juntos (de 1 a 4; o padrão é 2). Cada job abre um Spark, e mais de 2 ao mesmo tempo pode faltar memória.
+- **Onde fica salvo:** em `pipeline/workflows/<nome>.json`, junto com os seus scripts. Dá para versionar no git e abrir no editor.
+- **Executar:** começa uma execução nova. A aba **Execução** mostra o grafo com as cores do status de cada job (azul rodando, verde sucesso, vermelho falhou, tracejado não executado), a tabela de **Etapas** (dependências, status, início e duração) e o **log** da etapa escolhida. Tudo se atualiza sozinho a cada 2 segundos.
+- **Se um job falha:** nenhum job novo começa. Os que já estavam rodando terminam, e quem dependia do que falhou fica como **Não executado**. O log da etapa que falhou já aparece escolhido.
+- **Parar:** não começa jobs novos; os que já rodam terminam. A execução termina como **Parado**.
+- **Histórico:** todas as execuções do workflow, com status, duração e quantos jobs terminaram com sucesso. Cada etapa também aparece no histórico do job, na tela Jobs ETL, com a origem `workflow <nome>`.
+- **Definição:** o arquivo `.json` e o comando para rodar o mesmo workflow pelo terminal:
+
+```bash
+docker compose run --rm app python -m explorador.workflows pipeline/workflows/medalhao.json
+```
+
+Pelo terminal, o progresso aparece na tela (`>>>` quando um job começa, `<<<` quando termina) e, se algo falhar, as últimas linhas do log. Essa execução roda num contêiner à parte, então não entra no **Histórico** do console. Os dados gravados no bucket são os mesmos.
 
 ### Athena · Editor de consultas
 
@@ -176,7 +213,7 @@ DESCRIBE silver.eventos;
 
 ## Somente leitura (S3, Data Catalog e Athena)
 
-Três das quatro telas só **leem**. As consultas do Athena têm duas proteções:
+Três das cinco telas só **leem**. As consultas do Athena têm duas proteções:
 
 1. Aceita consultas que começam com `SELECT`, `WITH`, `DESCRIBE`, `SHOW`, `SUMMARIZE`, `FROM`, `EXPLAIN` ou `PRAGMA table_info`, uma por vez. Comandos que mudam dados (`COPY`, `CREATE`, `DROP`, `INSERT`…) são recusados. `EXPLAIN ANALYZE` também é recusado, porque ele executa o comando de verdade; use só `EXPLAIN`.
 2. A conexão com o DuckDB é **trancada** no bucket: ela não lê arquivos do computador nem muda configurações.

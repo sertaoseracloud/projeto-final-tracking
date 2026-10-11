@@ -59,6 +59,7 @@ class Execucao:
     status: str
     codigo: int | None
     duracao: float
+    origem: str = "console"                         # "console" ou "workflow <nome>"
 
 
 def listar_jobs(pasta: Path) -> list[Job]:
@@ -82,7 +83,7 @@ import os; os.replace(fim + ".tmp", fim)
 """
 
 
-def iniciar(job: Job, pasta: Path, raiz: Path) -> str:
+def iniciar(job: Job, pasta: Path, raiz: Path, origem: str = "console") -> str:
     """Começa uma execução em segundo plano e devolve o id dela."""
     pasta = Path(pasta)
     pasta.mkdir(parents=True, exist_ok=True)
@@ -93,7 +94,8 @@ def iniciar(job: Job, pasta: Path, raiz: Path) -> str:
         [sys.executable, "-c", _EXECUTOR, str(job.script), f"{base}.log", f"{base}.fim", str(raiz)],
         cwd=str(raiz), start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     (pasta / f"{id_execucao}.json").write_text(
-        json.dumps({"job": job.nome, "script": str(job.script), "inicio": agora, "pid": processo.pid}), encoding="utf-8")
+        json.dumps({"job": job.nome, "script": str(job.script), "inicio": agora, "pid": processo.pid, "origem": origem}),
+        encoding="utf-8")
     return id_execucao
 
 
@@ -112,13 +114,15 @@ def execucao(pasta: Path, id_execucao: str) -> Execucao:
     pasta = Path(pasta)
     dados = json.loads((pasta / f"{id_execucao}.json").read_text(encoding="utf-8"))
     fim = pasta / f"{id_execucao}.fim"
+    origem = dados.get("origem", "console")
     if fim.exists():
         final = json.loads(fim.read_text(encoding="utf-8"))
         status = SUCESSO if final["codigo"] == 0 else FALHOU
-        return Execucao(id_execucao, dados["job"], dados["inicio"], status, final["codigo"], final["fim"] - dados["inicio"])
+        return Execucao(id_execucao, dados["job"], dados["inicio"], status, final["codigo"], final["fim"] - dados["inicio"],
+                        origem)
     if not _vivo(dados["pid"]):                     # o processo morreu sem gravar o .fim (contêiner reiniciado, kill…)
-        return Execucao(id_execucao, dados["job"], dados["inicio"], FALHOU, None, time.time() - dados["inicio"])
-    return Execucao(id_execucao, dados["job"], dados["inicio"], EM_EXECUCAO, None, time.time() - dados["inicio"])
+        return Execucao(id_execucao, dados["job"], dados["inicio"], FALHOU, None, time.time() - dados["inicio"], origem)
+    return Execucao(id_execucao, dados["job"], dados["inicio"], EM_EXECUCAO, None, time.time() - dados["inicio"], origem)
 
 
 def execucoes(pasta: Path, job: str | None = None) -> list[Execucao]:

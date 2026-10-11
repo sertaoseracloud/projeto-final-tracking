@@ -9,10 +9,12 @@ nenhuma marca nem serviço da AWS.
 
 from __future__ import annotations
 
+import html
+import json
 import os
 import sys
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -25,11 +27,12 @@ import streamlit as st
 
 from streamlit.runtime.scriptrunner_utils.exceptions import RerunException, StopException
 
-from explorador import athena, consultas, glue, particoes, preferencias, s3, tutorial, ui
-from explorador.tutorial import TELA_ATHENA, TELA_CATALOGO, TELA_JOBS, TELA_S3
+from explorador import athena, consultas, glue, particoes, preferencias, s3, tutorial, ui, workflows
+from explorador.tutorial import TELA_ATHENA, TELA_CATALOGO, TELA_JOBS, TELA_S3, TELA_WORKFLOWS
 
 RAIZ = Path(__file__).resolve().parents[1]
 ICONES = {TELA_S3: "🪣  Buckets", TELA_CATALOGO: "🗂  Data Catalog", TELA_JOBS: "⚙  Jobs ETL",
+          TELA_WORKFLOWS: "🔀  Workflows",
           TELA_ATHENA: "🔎  Editor de consultas"}
 
 EXEMPLOS = {
@@ -440,9 +443,10 @@ def _painel_execucoes(job: glue.Job, pasta: Path, rodando_antes: bool = False) -
         st.rerun()                                  # terminou: redesenha a página toda (reativa o botão Executar)
     execucoes = glue.execucoes(pasta, job.nome)
     with ui.painel("execucoes", "Execuções", len(execucoes)):
-        ui.tabela("execucoes", [("Execução", 3), ("Status", 1.4), ("Início", 2), ("Duração", 1), ("Código de saída", 1)],
+        ui.tabela("execucoes", [("Execução", 3), ("Status", 1.4), ("Início", 2), ("Duração", 1), ("Código de saída", 1),
+                                ("Origem", 1.6)],
                   [[e.id, ui.selo(e.status), _quando(e.inicio), f"{e.duracao:.1f} s".replace(".", ","),
-                    "—" if e.codigo is None else str(e.codigo)] for e in execucoes],
+                    "—" if e.codigo is None else str(e.codigo), e.origem] for e in execucoes],
                   vazio="Nenhuma execução ainda. Clique em Executar.")
     if not execucoes:
         return
@@ -492,6 +496,261 @@ def _tela_jobs() -> None:
     with aba_script:
         with ui.painel("script", _relativo(job.script)):
             st.code(job.script.read_text(encoding="utf-8"), language="python")
+
+
+# ------------------------------------------------------------- Glue · Workflows -------------------------------------------------------------
+
+NOVO = "__novo__"
+
+
+def _abrir_form(wf: workflows.Workflow | None, disponiveis: list[str]) -> None:
+    """Prepara o formulário: os widgets leem estes valores quando a página redesenhar."""
+    for chave in [k for k in st.session_state if str(k).startswith("wf_form_")]:
+        del st.session_state[chave]
+    st.session_state["wf_editar"] = wf.nome if wf else NOVO
+    st.session_state["wf_form_nome"] = wf.nome if wf else ""
+    st.session_state["wf_form_descricao"] = wf.descricao if wf else ""
+    st.session_state["wf_form_paralelo"] = wf.paralelo if wf else 2
+    jobs = [e.job for e in wf.etapas if e.job in disponiveis] if wf else []
+    st.session_state["wf_form_jobs"] = jobs
+    for e in (wf.etapas if wf else ()):
+        if e.job in jobs:
+            st.session_state[f"wf_form_dep:{e.job}"] = [d for d in e.depende_de if d in jobs]
+
+
+def _workflow_do_form() -> workflows.Workflow:
+    escolhidos = list(st.session_state.get("wf_form_jobs", []))
+    etapas = tuple(workflows.Etapa(j, tuple(d for d in st.session_state.get(f"wf_form_dep:{j}", []) if d in escolhidos))
+                   for j in escolhidos)
+    return workflows.Workflow(st.session_state.get("wf_form_nome", "").strip(),
+                              st.session_state.get("wf_form_descricao", "").strip(),
+                              int(st.session_state.get("wf_form_paralelo", 2)), etapas)
+
+
+def _encadear() -> None:
+    """Atalho: cada job depende do anterior, em sequência, como o executar_pipeline.py."""
+    escolhidos = list(st.session_state.get("wf_form_jobs", []))
+    for anterior, job in zip([None] + escolhidos, escolhidos):
+        st.session_state[f"wf_form_dep:{job}"] = [anterior] if anterior else []
+
+
+def _salvar_form(pasta_jobs: Path, disponiveis: set[str], editando: bool) -> None:
+    wf = _workflow_do_form()
+    try:
+        workflows.validar(wf, disponiveis)
+        if not editando and (workflows.pasta_definicoes(pasta_jobs) / f"{wf.nome}.json").exists():
+            raise workflows.WorkflowInvalido(f"Já existe um workflow chamado {wf.nome}. Escolha outro nome.")
+    except workflows.WorkflowInvalido as erro:
+        st.session_state["wf_form_erro"] = str(erro)
+        return
+    arquivo = workflows.salvar(pasta_jobs, wf)
+    st.session_state.update(wf_editar=None, wf_sel=wf.nome, wf_exec_sel=None,
+                            wf_flash=f"Workflow {wf.nome} salvo em {_relativo(arquivo)}.")
+
+
+def _excluir_workflow(pasta_jobs: Path, nome: str) -> None:
+    workflows.excluir(pasta_jobs, nome)
+    st.session_state.update(wf_sel=None, wf_flash=f"Workflow {nome} excluído. O histórico de execuções continua guardado.")
+
+
+def _executar_workflow(wf: workflows.Workflow, pasta_jobs: Path, pasta_exec: Path, disponiveis: set[str]) -> None:
+    try:
+        workflows.validar(wf, disponiveis)
+    except workflows.WorkflowInvalido as erro:
+        st.session_state["wf_flash_erro"] = f"Não dá para executar: {erro}"
+        return
+    if not workflows.em_execucao(pasta_exec, wf.nome):
+        st.session_state["wf_exec_sel"] = workflows.iniciar(wf, pasta_jobs, pasta_exec, RAIZ)
+
+
+def _parar_workflow(pasta_exec: Path, nome: str) -> None:
+    for e in workflows.execucoes(pasta_exec, nome):
+        if e.status == workflows.EM_EXECUCAO:
+            workflows.parar(pasta_exec, e.id)
+
+
+def _avisos_workflow() -> None:
+    if mensagem := st.session_state.pop("wf_flash", None):
+        st.success(mensagem)
+    if mensagem := st.session_state.pop("wf_flash_erro", None):
+        st.error(mensagem)
+
+
+def _duracao(segundos: float | None) -> str:
+    return "—" if segundos is None else f"{segundos:.1f} s".replace(".", ",")
+
+
+def _painel_execucao_workflow(wf: workflows.Workflow, pasta_exec: Path, rodando_antes: bool = False) -> None:
+    execucoes = workflows.execucoes(pasta_exec, wf.nome)
+    if rodando_antes and not any(e.status == workflows.EM_EXECUCAO for e in execucoes):
+        st.rerun()                                  # terminou: redesenha a página toda (reativa o botão Executar)
+    ids = [e.id for e in execucoes]
+    if ids and st.session_state.get("wf_exec_sel") not in ids:
+        st.session_state["wf_exec_sel"] = ids[0]
+    escolhida = next((e for e in execucoes if e.id == st.session_state.get("wf_exec_sel")), None)
+    grafo = escolhida.workflow if escolhida else wf     # a execução guarda o workflow do jeito que ele estava
+    status = {j: s.status for j, s in escolhida.etapas.items()} if escolhida else {}
+
+    with ui.painel("grafo", "Grafo", descricao="Cada seta quer dizer \"roda depois de\". As cores mostram o status "
+                   "de cada job na execução escolhida."):
+        if escolhida:
+            por_id = {e.id: e for e in execucoes}
+            st.selectbox("Execução", ids, key="wf_exec_sel", format_func=lambda i: f"{i} · {por_id[i].status}")
+            st.markdown(f"{ui.selo(escolhida.status).conteudo} · início {_quando(escolhida.inicio)} · "
+                        f"duração {_duracao(escolhida.duracao)}", unsafe_allow_html=True)
+        else:
+            st.caption("Nenhuma execução ainda: o grafo aparece sem cores. Clique em Executar.")
+        st.graphviz_chart(workflows.dot(grafo, status), use_container_width=True)
+
+    linhas = []
+    for etapa in grafo.etapas:
+        s = escolhida.etapas.get(etapa.job) if escolhida else None
+        linhas.append([etapa.job, ", ".join(etapa.depende_de) or "—", ui.selo(s.status) if s else "—",
+                       _quando(s.inicio) if s and s.inicio else "—", _duracao(s.duracao) if s else "—"])
+    with ui.painel("etapas", "Etapas", len(linhas)):
+        ui.tabela("etapas", [("Job", 2.2), ("Depende de", 2.4), ("Status", 1.4), ("Início", 1.8), ("Duração", 1)], linhas)
+        if not escolhida:
+            return
+        for nome, s in escolhida.etapas.items():
+            if s.erro:
+                st.error(f"{nome}: {s.erro}")
+        com_log = [j for j, s in escolhida.etapas.items() if s.execucao]
+        if com_log:
+            if st.session_state.get("wf_log_sel") not in com_log:
+                falhou = [j for j in com_log if escolhida.etapas[j].status == workflows.FALHOU]
+                st.session_state["wf_log_sel"] = (falhou or com_log)[-1]
+            etapa = st.selectbox("Log da etapa", com_log, key="wf_log_sel")
+            st.code(glue.log(pasta_exec, escolhida.etapas[etapa].execucao, ultimas=200) or "(sem saída ainda)",
+                    language="text")
+
+
+def _form_workflow(pasta_jobs: Path, disponiveis: list[str]) -> None:
+    _contexto("workflows-form")
+    editando = st.session_state["wf_editar"] != NOVO
+    acao = "Editar workflow" if editando else "Criar workflow"
+    ui.trilha([("Glue", None, None, {}), ("Workflows", "wf:voltar", _escolher, {"wf_editar": None}),
+               (acao, None, None, {})], "workflows")
+    ui.titulo(acao, descricao="Escolha os jobs e diga de quem cada um depende. Jobs sem dependência entre si "
+              "podem rodar ao mesmo tempo.")
+    if not disponiveis:
+        st.info(f"Ainda não há jobs em {_relativo(pasta_jobs)}/. Crie os scripts do pipeline primeiro.")
+    esquerda, direita = st.columns([1, 1], gap="large")
+    with esquerda:
+        with ui.painel("propriedades", "Propriedades"):
+            st.text_input("Nome", key="wf_form_nome", disabled=editando, placeholder="medalhao",
+                          help="Letras minúsculas, números, _ ou -. Vira o arquivo workflows/<nome>.json.")
+            st.text_input("Descrição", key="wf_form_descricao", placeholder="Para que serve este workflow")
+            st.number_input("Jobs ao mesmo tempo", min_value=1, max_value=workflows.PARALELO_MAX, key="wf_form_paralelo",
+                            help="Cada job abre um Spark. Mais de 2 ao mesmo tempo pode faltar memória no contêiner.")
+            st.multiselect("Jobs do workflow", disponiveis, key="wf_form_jobs", placeholder="Escolha os jobs")
+        escolhidos = list(st.session_state.get("wf_form_jobs", []))
+        with ui.painel("dependencias", "Dependências", descricao="Para cada job, de quais outros ele depende."):
+            if not escolhidos:
+                st.caption("Escolha os jobs acima.")
+            for job in escolhidos:
+                outros = [o for o in escolhidos if o != job]
+                chave = f"wf_form_dep:{job}"
+                if chave in st.session_state:
+                    st.session_state[chave] = [d for d in st.session_state[chave] if d in outros]
+                st.multiselect(f"{job} depende de", outros, key=chave, placeholder="nenhum: começa logo")
+            if len(escolhidos) > 1:
+                st.button("Encadear em sequência (cada job depende do anterior)", key="wf_encadear", type="tertiary",
+                          on_click=_encadear)
+    with direita:
+        with ui.painel("previa", "Prévia"):
+            wf = _workflow_do_form()
+            if wf.etapas:
+                try:                                # sem nome ainda: valida o resto com um nome provisório
+                    workflows.validar(replace(wf, nome=wf.nome or "rascunho"), set(disponiveis))
+                    st.caption(" → ".join(" + ".join(c) for c in workflows.niveis(wf)))
+                except workflows.WorkflowInvalido as erro:
+                    st.warning(str(erro))
+                st.graphviz_chart(workflows.dot(wf), use_container_width=True)
+            else:
+                st.caption("O grafo aparece aqui quando você escolher os jobs.")
+    if erro := st.session_state.pop("wf_form_erro", None):
+        st.error(erro)
+    with st.container(horizontal=True):
+        st.button("Cancelar", key="wf_cancelar", on_click=_escolher, kwargs={"wf_editar": None})
+        st.button("Salvar workflow", key="wf_salvar", type="primary", on_click=_salvar_form,
+                  args=(pasta_jobs, set(disponiveis), editando))
+
+
+def _tela_workflows() -> None:
+    pasta_jobs, pasta_exec = _pastas_jobs()
+    disponiveis = [j.nome for j in glue.listar_jobs(pasta_jobs)]
+    if st.session_state.get("wf_editar"):
+        _form_workflow(pasta_jobs, disponiveis)
+        return
+    lista, avisos = workflows.listar(pasta_jobs)
+    wf = next((w for w in lista if w.nome == st.session_state.get("wf_sel")), None)
+
+    if wf is None:
+        _contexto("workflows-lista")
+        ui.trilha([("Glue", None, None, {}), ("Workflows", None, None, {})], "workflows")
+        titulo, botao = st.columns([4, 1], vertical_alignment="center")
+        with titulo:
+            ui.titulo("Workflows", len(lista), "Grafos de jobs salvos em "
+                      f"<code>{_relativo(workflows.pasta_definicoes(pasta_jobs))}/</code>. Executar um workflow é como "
+                      "rodar o executar_pipeline.py, seguindo as dependências do grafo.")
+        botao.button("Criar workflow", key="criar_workflow", type="primary", on_click=_abrir_form,
+                     args=(None, disponiveis))
+        _avisos_workflow()
+        for aviso in avisos:
+            st.warning(aviso)
+        linhas = []
+        for w in lista:
+            ultima = next(iter(workflows.execucoes(pasta_exec, w.nome)), None)
+            linhas.append([ui.Link(w.nome, f"wf:{w.nome}", _escolher, kwargs={"wf_sel": w.nome, "wf_exec_sel": None}),
+                           w.descricao or "—", str(len(w.etapas)), ui.selo(ultima.status) if ultima else "—",
+                           _quando(ultima.inicio) if ultima else "—"])
+        with ui.painel("workflows", "Workflows", len(lista)):
+            ui.tabela("workflows", [("Nome", 2), ("Descrição", 3.2), ("Jobs", 0.6), ("Última execução", 1.4),
+                                    ("Início", 1.6)], linhas, localizar=len(linhas) > 8,
+                      vazio="Nenhum workflow ainda. Clique em Criar workflow.")
+        return
+
+    _contexto("workflows-detalhe")
+    ui.trilha([("Glue", None, None, {}), ("Workflows", "wf:inicio", _escolher, {"wf_sel": None}),
+               (wf.nome, None, None, {})], "workflows")
+    rodando = workflows.em_execucao(pasta_exec, wf.nome)
+    titulo, acoes = st.columns([3, 2], vertical_alignment="center")
+    with titulo:
+        ui.titulo(wf.nome, descricao=f"{html.escape(wf.descricao) + ' · ' if wf.descricao else ''}"
+                  f"{len(wf.etapas)} jobs · até {wf.paralelo} ao mesmo tempo")
+    with acoes, st.container(horizontal=True, horizontal_alignment="right", vertical_alignment="center"):
+        st.button("Editar", key="editar_workflow", disabled=rodando, on_click=_abrir_form, args=(wf, disponiveis))
+        with st.popover("Excluir", disabled=rodando, key="excluir_menu"):
+            st.markdown(f"Excluir o workflow **{wf.nome}**? O arquivo .json é apagado; os jobs e o histórico de "
+                        "execuções continuam.")
+            st.button("Excluir de vez", key="excluir_workflow", type="primary", on_click=_excluir_workflow,
+                      args=(pasta_jobs, wf.nome))
+        if rodando:
+            st.button("Parar", key="parar_workflow", on_click=_parar_workflow, args=(pasta_exec, wf.nome),
+                      help="Não começa jobs novos; os que já rodam terminam.")
+        st.button("Executar", key="executar_workflow", type="primary", disabled=rodando, on_click=_executar_workflow,
+                  args=(wf, pasta_jobs, pasta_exec, set(disponiveis)))
+    _avisos_workflow()
+    aba_execucao, aba_historico, aba_definicao = st.tabs(["Execução", "Histórico", "Definição"])
+    with aba_execucao:
+        # enquanto o workflow roda, o grafo e as etapas se atualizam sozinhos a cada 2 s
+        st.fragment(run_every=2 if rodando else None)(_painel_execucao_workflow)(wf, pasta_exec, rodando)
+    with aba_historico:
+        execucoes = workflows.execucoes(pasta_exec, wf.nome)
+        with ui.painel("historico", "Execuções", len(execucoes),
+                       "Clique numa execução para vê-la no grafo da aba Execução."):
+            ui.tabela("historico", [("Execução", 3), ("Status", 1.4), ("Início", 1.8), ("Duração", 1),
+                                    ("Jobs com sucesso", 1.2)],
+                      [[ui.Link(e.id, f"wfexec:{e.id}", _escolher, kwargs={"wf_exec_sel": e.id}), ui.selo(e.status),
+                        _quando(e.inicio), _duracao(e.duracao),
+                        f"{sum(s.status == workflows.SUCESSO for s in e.etapas.values())} de {len(e.etapas)}"]
+                       for e in execucoes], vazio="Nenhuma execução ainda. Clique em Executar.")
+    with aba_definicao:
+        arquivo = workflows.pasta_definicoes(pasta_jobs) / f"{wf.nome}.json"
+        with ui.painel("definicao", _relativo(arquivo)):
+            st.code(json.dumps(wf.para_dict(), ensure_ascii=False, indent=2), language="json")
+            st.caption("Para rodar pelo terminal, como o executar_pipeline.py:")
+            st.code(f"docker compose run --rm app python -m explorador.workflows {_relativo(arquivo)}", language="bash")
 
 
 # --------------------------------------------------------------- Tutorial ---------------------------------------------------------------
@@ -590,7 +849,7 @@ def _barra_flutuante(salvas: dict) -> None:
 
 
 def _menu() -> str:
-    opcoes = [TELA_S3, TELA_CATALOGO, TELA_JOBS, TELA_ATHENA]
+    opcoes = [TELA_S3, TELA_CATALOGO, TELA_JOBS, TELA_WORKFLOWS, TELA_ATHENA]
     if st.session_state.get("tela") not in opcoes:
         st.session_state["tela"] = TELA_S3
     with st.sidebar:
@@ -628,7 +887,10 @@ def _pagina() -> None:
 
 
 def _conteudo(tela: str) -> None:
-    if tela == TELA_JOBS:                      # os jobs não dependem do bucket já ter dados
+    if tela == TELA_WORKFLOWS:                 # jobs e workflows não dependem do bucket já ter dados
+        _tela_workflows()
+        return
+    if tela == TELA_JOBS:
         _tela_jobs()
         return
 

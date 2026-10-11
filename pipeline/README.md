@@ -16,6 +16,14 @@ Troque `<seu_job>` pelo nome do seu arquivo. Se você nunca usou Docker, o [SETU
 
 Outra forma: abra o explorador (http://localhost:8501), vá em **Glue · Jobs ETL**, escolha o job e clique em **Executar**. Ele roda o mesmo comando e mostra o status (**Sucesso** ou **Falhou**), a duração e o log, como o console do Glue. Veja [explorador/README.md](../explorador/README.md#glue--jobs-etl).
 
+Para rodar **vários jobs de uma vez**, na ordem certa, monte um workflow em **Glue · Workflows**: você escolhe os jobs e diz de quem cada um depende (a Silver depende da Bronze, as Golds dependem da Silver…). Ele fica salvo em `pipeline/workflows/<nome>.json` e também roda pelo terminal:
+
+```bash
+docker compose run --rm app python -m explorador.workflows pipeline/workflows/<nome>.json
+```
+
+Veja [explorador/README.md](../explorador/README.md#glue--workflows).
+
 ## Falando com o S3
 
 O pipeline acessa o bucket **só pelo Spark**, com caminhos `s3a://datalake-tracking/...`. Nada de `boto3` aqui.
