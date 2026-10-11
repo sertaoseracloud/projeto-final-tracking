@@ -25,19 +25,3 @@ def test_seletores_usam_a_classe_que_o_streamlit_gera():
 
 def test_roteiro_de_tela_desconhecida_e_vazio():
     assert tutorial.roteiro("nao-existe") == []
-
-
-def test_preferencias_padrao_com_tutorial_ligado(tmp_path):
-    assert tutorial.carregar(tmp_path / "nao_existe.json") == {"tutorial": True}
-
-
-def test_salvar_e_carregar_preferencias(tmp_path):
-    arquivo = tmp_path / "pasta" / "preferencias.json"
-    tutorial.salvar(arquivo, {"tutorial": False})
-    assert tutorial.carregar(arquivo) == {"tutorial": False}
-
-
-def test_arquivo_estragado_volta_ao_padrao(tmp_path):
-    arquivo = tmp_path / "preferencias.json"
-    arquivo.write_text("{isto não é json", encoding="utf-8")
-    assert tutorial.carregar(arquivo) == {"tutorial": True}

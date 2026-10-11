@@ -1,21 +1,18 @@
 """Tutorial do console: um tour em modal por tela, que destaca cada elemento e explica para que serve.
 
 Cada roteiro é uma lista de passos (seletor CSS do elemento, título e texto). Os seletores usam as
-classes `st-key-<chave>` que o Streamlit põe nos elementos com `key`. Sem Streamlit aqui: só dados
-e as preferências (o "não mostrar mais"), gravadas num JSON local fora do git.
+classes `st-key-<chave>` que o Streamlit põe nos elementos com `key`. Sem Streamlit aqui: só dados.
+O "não mostrar mais" é gravado pelo módulo `preferencias`.
 """
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from pathlib import Path
 
 TELA_S3 = "S3 · Buckets"
 TELA_CATALOGO = "Glue · Data Catalog"
 TELA_JOBS = "Glue · Jobs ETL"
 TELA_ATHENA = "Athena · Editor de consultas"
-PADRAO = {"tutorial": True}
 
 MENU = '[data-testid="stSidebar"] [role="radiogroup"]'
 ABAS = '[data-testid="stTabs"] [role="tablist"]'
@@ -49,9 +46,11 @@ ROTEIROS: dict[str, list[Passo]] = {
               "as pastas landing/, bronze/, silver/ e gold/."),
         Passo(_k("recarregar"), "Recarregar",
               "Depois de rodar um job, clique aqui para o console ler o bucket de novo e enxergar as pastas e colunas novas."),
-        Passo(_k("tour-abrir"), "Rever o tutorial",
-              "Este botão abre o tour da tela em que você estiver. A chave \"Mostrar tutorial\", logo abaixo, "
-              "desliga os tours automáticos."),
+        Passo(_k("dock"), "Ajuda e acessibilidade",
+              "Esta barra fica sempre no canto inferior direito. 🎓 abre o tour da tela em que você estiver; "
+              "a chave \"Mostrar tutorial\" desliga os tours automáticos; ♿ abre as opções de acessibilidade "
+              "(tamanho do texto, alto contraste, links sublinhados, espaçamento e menos movimento); "
+              "⬆ volta ao topo da página."),
     ],
     "s3-bucket": [
         Passo(_k("trilha-s3"), "Caminho (breadcrumb)",
@@ -127,18 +126,3 @@ ROTEIROS: dict[str, list[Passo]] = {
 
 def roteiro(contexto: str) -> list[Passo]:
     return ROTEIROS.get(contexto, [])
-
-
-def carregar(arquivo: Path) -> dict:
-    """Preferências salvas; se o arquivo não existe ou está estragado, o padrão (tutorial ligado)."""
-    try:
-        dados = json.loads(Path(arquivo).read_text(encoding="utf-8"))
-        return {**PADRAO, **{k: v for k, v in dados.items() if k in PADRAO}}
-    except (OSError, ValueError, AttributeError):
-        return dict(PADRAO)
-
-
-def salvar(arquivo: Path, preferencias: dict) -> None:
-    arquivo = Path(arquivo)
-    arquivo.parent.mkdir(parents=True, exist_ok=True)
-    arquivo.write_text(json.dumps(preferencias, ensure_ascii=False), encoding="utf-8")
