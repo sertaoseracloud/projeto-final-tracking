@@ -59,13 +59,23 @@ def views_usadas(sql: str, nomes_views: list[str]) -> list[str]:
     except consultas.SqlNaoPermitido:
         return []
     conhecidas = {n.lower(): n for n in nomes_views}
-    achadas = set()
-    for tipo, texto in tokens:
-        if tipo not in ("identifier", "keyword"):
+
+    def palavra(i: int) -> str | None:
+        if i >= len(tokens) or tokens[i][0] not in ("identifier", "keyword"):
+            return None
+        achada = re.match(r'\s*"?([A-Za-z_][A-Za-z0-9_]*)"?', tokens[i][1])
+        return achada.group(1).lower() if achada else None
+
+    achadas, i = set(), 0
+    while i < len(tokens):
+        banco = palavra(i)
+        ponto = i + 1 < len(tokens) and tokens[i + 1][1].strip() == "."
+        tabela = palavra(i + 2) if ponto else None
+        if banco and tabela and f"{banco}.{tabela}" in conhecidas:     # banco.tabela, com ou sem aspas
+            achadas.add(conhecidas[f"{banco}.{tabela}"])
+            i += 3
             continue
-        palavra = re.match(r'\s*"?([A-Za-z_][A-Za-z0-9_]*)"?', texto)
-        if palavra and palavra.group(1).lower() in conhecidas:
-            achadas.add(conhecidas[palavra.group(1).lower()])
+        i += 1
     return sorted(achadas)
 
 

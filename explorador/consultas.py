@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import duckdb
 import pandas as pd
 
-from explorador.particoes import Dataset, formato_do_arquivo
+from explorador.particoes import Dataset, banco_e_tabela, formato_do_arquivo, sql_nome
 
 MENSAGEM_SO_LEITURA = "O explorador só faz consultas de leitura (SELECT, WITH, DESCRIBE…)."
 MENSAGEM_UM_COMANDO = "Rode um comando por vez (sem `;` no meio)."
@@ -147,10 +147,13 @@ def _origem(raiz: str, dataset: Dataset) -> str:
 
 
 def criar_views(con: duckdb.DuckDBPyConnection, raiz: str, datasets: list[Dataset]) -> dict[str, str]:
+    """Uma view por dataset, num schema por camada (como os bancos do Glue): silver.eventos, gold.funil_compra…"""
     views = {}
     for dataset in datasets:
         origem = _origem(raiz, dataset)
-        con.sql(f'CREATE OR REPLACE VIEW "{dataset.nome_view}" AS SELECT * FROM {origem}')
+        banco, _ = banco_e_tabela(dataset.nome_view)
+        con.sql(f'CREATE SCHEMA IF NOT EXISTS "{banco}"')
+        con.sql(f"CREATE OR REPLACE VIEW {sql_nome(dataset.nome_view)} AS SELECT * FROM {origem}")
         views[dataset.nome_view] = origem
     return views
 

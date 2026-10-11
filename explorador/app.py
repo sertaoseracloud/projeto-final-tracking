@@ -31,13 +31,13 @@ BANCO = "datalake"
 
 EXEMPLOS = {
     "Eventos por nome (landing)": (
-        "SELECT event_name, count(*) AS eventos\nFROM landing\n"
+        "SELECT event_name, count(*) AS eventos\nFROM landing.eventos\n"
         "GROUP BY event_name\nORDER BY eventos DESC"
     ),
     "Linhas por dia (Silver)": (
-        "SELECT year, month, day, count(*) AS linhas\nFROM silver\nGROUP BY ALL\nORDER BY ALL"
+        "SELECT year, month, day, count(*) AS linhas\nFROM silver.eventos\nGROUP BY ALL\nORDER BY ALL"
     ),
-    "Colunas de uma tabela": "DESCRIBE silver",
+    "Colunas de uma tabela": "DESCRIBE silver.eventos",
 }
 
 # Cores e formas inspiradas no console: barra escura, destaque laranja, links azuis, tabelas com cabeçalho cinza.
@@ -90,7 +90,7 @@ def _conexao(datasets: tuple[particoes.Dataset, ...], raiz: str):
     views = consultas.criar_views(con, raiz, list(datasets))
     colunas = {}
     for nome in views:
-        descricao = con.sql(f'DESCRIBE "{nome}"').df()
+        descricao = con.sql(f"DESCRIBE {particoes.sql_nome(nome)}").df()
         colunas[nome] = list(zip(descricao["column_name"], descricao["column_type"]))
     consultas.travar(con, raiz)
     return con, colunas
@@ -195,8 +195,8 @@ def _aba_particoes(objetos, datasets, con) -> None:
                f"{particoes.tamanho_legivel(int(tabela['bytes'].sum()))}")
     if st.button("Contar linhas por partição", key="contar"):
         campos = [c for c in particoes.CAMPOS if any(getattr(l, c) != particoes.SEM_PARTICAO for l in linhas)]
-        sql = (f'SELECT {", ".join(campos)}, count(*) AS linhas FROM "{nome}" GROUP BY ALL ORDER BY ALL'
-               if campos else f'SELECT count(*) AS linhas FROM "{nome}"')
+        sql = (f'SELECT {", ".join(campos)}, count(*) AS linhas FROM {particoes.sql_nome(nome)} GROUP BY ALL ORDER BY ALL'
+               if campos else f'SELECT count(*) AS linhas FROM {particoes.sql_nome(nome)}')
         try:
             with st.spinner("Contando linhas… (lê todos os arquivos do dataset)"):
                 contagem = consultas.executar(con.cursor(), sql, consultas.LIMITE_MAXIMO).tabela
@@ -366,7 +366,7 @@ def _tela_athena(objetos, datasets, con, colunas) -> None:
         if _chave_sql(aba) not in st.session_state:
             st.session_state[_chave_sql(aba)] = aba.sql
         st.text_area("Consulta", key=_chave_sql(aba), height=200, label_visibility="collapsed",
-                     placeholder="SELECT * FROM silver LIMIT 10")
+                     placeholder="SELECT * FROM silver.eventos LIMIT 10")
         executar, limite_col, _ = st.columns([1, 2, 3])
         limite = limite_col.number_input("Limite de linhas", min_value=1, max_value=consultas.LIMITE_MAXIMO,
                                          value=aba.limite, step=100, key=f"limite:{aba.nome}")

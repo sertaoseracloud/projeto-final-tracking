@@ -71,8 +71,27 @@ def _prefixo_do_dataset(chave: str) -> str:
     return "/".join(base)
 
 
+def _limpo(texto: str) -> str:
+    return re.sub(r"[^0-9a-zA-Z]+", "_", texto).strip("_").lower()
+
+
 def _nome_view(prefixo: str) -> str:
-    return re.sub(r"[^0-9a-zA-Z]+", "_", prefixo).strip("_").lower()
+    """Nome no catálogo, como no Glue: 'banco.tabela'. O banco é a camada (a 1ª pasta).
+
+    'silver' -> 'silver.eventos' (partições event_name= na raiz da camada);
+    'silver/itens' -> 'silver.itens'; 'gold/funil_compra' -> 'gold.funil_compra'."""
+    banco, _, resto = prefixo.partition("/")
+    return f"{_limpo(banco)}.{_limpo(resto) or 'eventos'}"
+
+
+def banco_e_tabela(nome_view: str) -> tuple[str, str]:
+    banco, _, tabela = nome_view.partition(".")
+    return banco, tabela
+
+
+def sql_nome(nome_view: str) -> str:
+    """'silver.eventos' -> '"silver"."eventos"' (pronto para usar no SQL)."""
+    return ".".join(f'"{parte}"' for parte in banco_e_tabela(nome_view))
 
 
 def datasets(chaves: Iterable[str]) -> list[Dataset]:

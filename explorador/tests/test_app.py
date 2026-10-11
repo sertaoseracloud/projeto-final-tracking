@@ -96,7 +96,7 @@ def test_navega_pelo_breadcrumb_e_mostra_a_previa_do_arquivo(bucket_local):
 def test_aba_particoes_lista_os_dias_e_conta_linhas(bucket_local):
     at = _rodar()
     at.button(key="abrir_bucket").click().run()
-    assert at.selectbox(key="dataset").value == "silver"
+    assert at.selectbox(key="dataset").value == "silver.eventos"
     at.button(key="contar").click().run()
     assert not at.exception
     contagens = [d.value for d in at.dataframe if "linhas" in d.value.columns]
@@ -104,7 +104,7 @@ def test_aba_particoes_lista_os_dias_e_conta_linhas(bucket_local):
 
 
 def test_athena_executa_e_mostra_detalhes_da_execucao(bucket_local):
-    at = _executar(_athena(_rodar()), "SELECT count(*) AS n FROM silver")
+    at = _executar(_athena(_rodar()), "SELECT count(*) AS n FROM silver.eventos")
     assert not at.exception
     assert [t.label for t in at.tabs] == ["Resultados", "Consultas recentes"]
     assert at.dataframe[0].value["n"].tolist() == [4]
@@ -150,8 +150,8 @@ def test_athena_abas_guardam_cada_uma_a_sua_consulta(bucket_local):
 def test_athena_arvore_insere_o_nome_da_tabela_no_editor(bucket_local):
     at = _athena(_rodar())
     at.text_area(key=SQL).input("SELECT * FROM").run()
-    at.button(key="inserir:silver").click().run()
-    assert at.text_area(key=SQL).value == "SELECT * FROM silver"
+    at.button(key="inserir:silver.eventos").click().run()
+    assert at.text_area(key=SQL).value == "SELECT * FROM silver.eventos"
 
 
 def test_athena_historico_guarda_as_consultas_e_reabre_no_editor(bucket_local):

@@ -35,13 +35,13 @@ def lago(tmp_path):
 
 def test_cria_uma_view_por_dataset(lago):
     _, views, _ = lago
-    assert set(views) == {"gold_funil_compra", "landing", "silver", "silver_itens"}
+    assert set(views) == {"gold.funil_compra", "landing.eventos", "silver.eventos", "silver.itens"}
 
 
 def test_particoes_viram_colunas_de_texto(lago):
     con, _, _ = lago
     r = consultas.executar(con, "SELECT DISTINCT event_name, month, day, typeof(month) AS tipo "
-                                "FROM silver ORDER BY day")
+                                "FROM silver.eventos ORDER BY day")
     assert r.tabela.to_dict("records") == [
         {"event_name": "page_view", "month": "09", "day": "01", "tipo": "VARCHAR"},
         {"event_name": "page_view", "month": "09", "day": "02", "tipo": "VARCHAR"},
@@ -51,7 +51,7 @@ def test_particoes_viram_colunas_de_texto(lago):
 def test_contagens_das_views(lago):
     con, _, _ = lago
     contar = lambda v: consultas.executar(con, f"SELECT count(*) AS n FROM {v}").tabela["n"][0]
-    assert (contar("silver"), contar("silver_itens"), contar("landing"), contar("gold_funil_compra")) == (6, 1, 2, 1)
+    assert (contar("silver.eventos"), contar("silver.itens"), contar("landing.eventos"), contar("gold.funil_compra")) == (6, 1, 2, 1)
 
 def test_executar_corta_no_limite_e_avisa(lago):
     con, _, _ = lago
@@ -71,7 +71,7 @@ def test_executar_recusa_sql_proibido_sem_executar(lago):
     con, _, tmp_path = lago
     destino = tmp_path / "copia.csv"
     with pytest.raises(consultas.SqlNaoPermitido):
-        consultas.executar(con, f"COPY silver TO '{destino}'")
+        consultas.executar(con, f"COPY silver.eventos TO '{destino}'")
     assert not destino.exists()
 
 
@@ -103,7 +103,7 @@ def test_conexao_travada_nao_le_fora_da_raiz(lago):
 
 @pytest.mark.parametrize("sql, trecho", [
     ("SELECT * FROM nao_existe", "tabela ou view não existe"),
-    ("SELECT coluna_inventada FROM silver", "coluna ou função não foi encontrada"),
+    ("SELECT coluna_inventada FROM silver.eventos", "coluna ou função não foi encontrada"),
     ("SELECT CAST('abc' AS INTEGER)", "não pôde ser convertido"),
 ])
 def test_explicar_erro_traduz_erros_comuns(lago, sql, trecho):
