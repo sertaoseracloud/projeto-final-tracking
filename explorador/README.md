@@ -88,7 +88,7 @@ flowchart LR
 
 ### S3 · Buckets
 
-- **Lista de buckets:** a tabela mostra **todos os buckets** do floci, com a região, quantos objetos cada um tem, o tamanho total e quem usa o bucket. O `datalake-tracking` vem primeiro: é o do projeto, o único que alimenta o Data Catalog e o Athena. Os outros (por exemplo, um bucket que você criou para testar) só aparecem aqui. Clique no nome para entrar. Se o `datalake-tracking` estiver vazio ou ainda não existir, um aviso lembra de rodar o gerador.
+- **Lista de buckets:** a tabela mostra **todos os buckets** do floci, com a região, quantos objetos cada um tem, o tamanho total e quem usa o bucket. O `datalake-tracking` vem primeiro: é o do projeto. Os outros (por exemplo, um bucket que você criou para testar) também entram no Data Catalog e no Athena, cada um como um banco com o nome dele. Clique no nome para entrar. Se o `datalake-tracking` estiver vazio ou ainda não existir, um aviso lembra de rodar o gerador.
 - **Caminho no topo (breadcrumb):** `Buckets › datalake-tracking › silver › event_name=purchase`. Clique em qualquer parte para voltar até ela.
 - **Aba Objetos:** as pastas (📁) e os arquivos (📄) da pasta atual, com tipo, última modificação e tamanho. Clique numa pasta para entrar; clique num `.parquet` ou `.jsonl` para ver as primeiras 100 linhas logo abaixo.
 - **Aba Partições:** escolha um dataset e veja uma linha por partição (`event_name`, `year`, `month`, `day`) com quantos arquivos e quantos bytes ela tem. Quando o dataset não tem uma dessas partições, a coluna mostra `—`. O botão "Contar linhas por partição" conta as linhas de cada uma.
@@ -101,7 +101,8 @@ O **Data Catalog** é a lista de "o que existe no lake": quais bancos, quais tab
 
 > **Pense assim:** é o **catálogo de uma biblioteca**. Os livros (os arquivos) estão nas estantes (o bucket); o catálogo diz em que estante está cada livro, de que assunto ele é e como ele é organizado, sem você precisar andar pelos corredores.
 
-- **Bancos de dados:** um por camada do medalhão: `landing`, `bronze`, `silver` e `gold`, cada um com a sua localização `s3://datalake-tracking/<banco>/`. O catálogo (e o Athena) olham só o bucket do datalake; outros buckets aparecem apenas na tela S3.
+- **Bancos de dados:** um por camada do medalhão: `landing`, `bronze`, `silver` e `gold`, cada um com a sua localização `s3://datalake-tracking/<banco>/`. Depois deles vem **um banco para cada outro bucket** do floci, com o nome do bucket (`rascunho-turma` vira o banco `rascunho_turma`, em `s3://rascunho-turma/`). A coluna **Bucket** diz de onde vem cada banco.
+- Se uma tabela de algum bucket não puder ser lida (um arquivo estragado, por exemplo), ela fica de fora e um aviso no topo diz qual e por quê; o resto do catálogo continua funcionando.
 - **Tabelas do banco:** nome, formato (Parquet ou JSON), localização, quantas partições e quantas colunas.
 - **Detalhe da tabela:** no topo, o painel **Visão geral da tabela** (banco, localização, classificação, chaves de partição, quantos arquivos e o nome para usar no Athena); embaixo, duas abas:
   - **Esquema:** as colunas e os tipos; as chaves de partição aparecem marcadas. Um tipo `struct` (ou `struct[]`, uma lista de structs) aparece só com essa palavra, em azul: clique nele para abrir um **overlay com a tipagem interna** (os campos de dentro, em árvore), em vez de ver o tipo inteiro numa linha enorme;
@@ -175,7 +176,7 @@ O workflow é uma ajuda para rodar e testar o pipeline; o **R3** do enunciado co
 
 ### Athena · Editor de consultas
 
-- **À esquerda, a árvore de dados:** escolha o **banco de dados** (`landing`, `bronze`, `silver`, `gold`) e veja as **tabelas** dele. Abra uma tabela para ver as colunas e os tipos (um `struct` abre a tipagem interna num overlay, como no Data Catalog); o botão **Inserir no editor** escreve `<banco>.<tabela>` no fim da sua consulta. Ali também ficam as **consultas de exemplo**.
+- **À esquerda, a árvore de dados:** escolha o **banco de dados** (`landing`, `bronze`, `silver`, `gold` e os dos outros buckets) e veja as **tabelas** dele. Abra uma tabela para ver as colunas e os tipos (um `struct` abre a tipagem interna num overlay, como no Data Catalog); o botão **Inserir no editor** escreve `<banco>.<tabela>` no fim da sua consulta. Ali também ficam as **consultas de exemplo**.
 - **Abas de consulta:** "Consulta 1", "Consulta 2"… Cada aba guarda a própria SQL e o próprio resultado. O **＋** abre uma aba nova; o **✕** fecha a aba atual (a última nunca fecha).
 - **Editor:** escreva a SQL e clique em **Executar**. O campo **Limite de linhas** diz quantas linhas trazer: o padrão é 1 000 e o máximo é 50 000. Se a consulta tiver mais linhas que o limite, o resultado é cortado e aparece um aviso.
 - **Resultados:** a faixa verde mostra os **detalhes da execução**, como o Athena: status, tempo de execução, número de linhas e **dados lidos (estimado)**. Embaixo, a tabela e o botão **Baixar resultados (CSV)**.
@@ -197,8 +198,12 @@ Cada pasta com dados vira uma **tabela** do catálogo, no formato `<banco>.<tabe
 | `silver/itens/` | `silver.itens` |
 | `silver/eventos_rejeitados/` | `silver.eventos_rejeitados` |
 | `gold/funil_compra/` | `gold.funil_compra` |
+| `s3://rascunho-turma/notas/` (outro bucket) | `rascunho_turma.notas` |
+| arquivos soltos na raiz de `s3://rascunho-turma/` | `rascunho_turma.raiz` |
 
 A tabela `silver.eventos` lê só as pastas `event_name=…`: as vizinhas `silver/itens/` e `silver/eventos_rejeitados/` são tabelas próprias.
+
+Nos **outros buckets**, o banco é o nome do bucket (com `_` no lugar de `-`) e a tabela é o caminho da pasta. Se um bucket tiver o mesmo nome de uma camada (um bucket chamado `gold`, por exemplo), o banco dele ganha o final `_bucket` (`gold_bucket`), para não se misturar com a camada. Uma consulta pode juntar tabelas de buckets diferentes.
 
 Se uma pasta tiver arquivos `.parquet` e `.jsonl` misturados, ela vira duas tabelas, com o formato no fim do nome (ex.: `landing.mista_jsonl` e `landing.mista_parquet`).
 
@@ -218,7 +223,7 @@ DESCRIBE silver.eventos;
 Três das cinco telas só **leem**. As consultas do Athena têm duas proteções:
 
 1. Aceita consultas que começam com `SELECT`, `WITH`, `DESCRIBE`, `SHOW`, `SUMMARIZE`, `FROM`, `EXPLAIN` ou `PRAGMA table_info`, uma por vez. Comandos que mudam dados (`COPY`, `CREATE`, `DROP`, `INSERT`…) são recusados. `EXPLAIN ANALYZE` também é recusado, porque ele executa o comando de verdade; use só `EXPLAIN`.
-2. A conexão com o DuckDB é **trancada** no bucket do datalake: ela não lê arquivos do computador, nem outros buckets, nem muda configurações. Na tela S3, cada bucket aberto ganha uma conexão própria, trancada nele.
+2. A conexão com o DuckDB é **trancada** nos buckets do floci: ela não lê arquivos do computador nem muda configurações. Na tela S3, cada bucket aberto ganha uma conexão própria, trancada só nele.
 
 > **Pense assim:** é um prédio com **duas portarias**. A primeira (a validação) confere se o seu pedido é só de leitura; a segunda (a trava da conexão) garante que, mesmo que algo escape da primeira, ninguém sai do andar do bucket.
 

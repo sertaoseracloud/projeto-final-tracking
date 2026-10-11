@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Iterable
 
 import duckdb
 import pandas as pd
@@ -137,18 +138,30 @@ def conectar(s3: bool = True, endpoint: str = "http://floci:4566", chave: str = 
     return con
 
 
-def origem(raiz: str, dataset: Dataset) -> str:
+def _raiz_do_dataset(raiz, dataset: Dataset) -> str:
+    """`raiz` é a do bucket do datalake (texto) ou uma função bucket -> raiz (None = datalake)."""
+    if callable(raiz):
+        return raiz(dataset.bucket)
+    return raiz if dataset.bucket is None else f"s3://{dataset.bucket}"
+
+
+def origem(raiz, dataset: Dataset) -> str:
     """A leitura de um dataset (read_parquet ou read_json_auto), usada nas views e na contagem por partição."""
     extensao = "parquet" if dataset.formato == "parquet" else "jsonl"
     funcao = "read_parquet" if dataset.formato == "parquet" else "read_json_auto"
     # Particionado: só as pastas k=v, para não misturar as vizinhas (silver/itens ao lado de silver/event_name=…).
     pastas = "*=*/**" if dataset.particionado else "**"
-    padrao = f"{raiz.rstrip('/')}/{dataset.prefixo}/{pastas}/*.{extensao}"
+    base = _raiz_do_dataset(raiz, dataset).rstrip("/")
+    if dataset.caminho:
+        base = f"{base}/{dataset.caminho}"
+    padrao = f"{base}/{pastas}/*.{extensao}"
     return f"{funcao}({_texto_sql(padrao)}, {OPCOES_LEITURA})"
 
 
-def criar_views(con: duckdb.DuckDBPyConnection, raiz: str, datasets: list[Dataset]) -> dict[str, str]:
-    """Uma view por dataset, num schema por camada (como os bancos do Glue): silver.eventos, gold.funil_compra…"""
+def criar_views(con: duckdb.DuckDBPyConnection, raiz, datasets: list[Dataset]) -> dict[str, str]:
+    """Uma view por dataset, num schema por banco (como os bancos do Glue): silver.eventos, gold.funil_compra…
+
+    `raiz`: a do bucket do datalake, ou uma função bucket -> raiz para os datasets de outros buckets."""
     views = {}
     for dataset in datasets:
         leitura = origem(raiz, dataset)
@@ -159,10 +172,11 @@ def criar_views(con: duckdb.DuckDBPyConnection, raiz: str, datasets: list[Datase
     return views
 
 
-def travar(con: duckdb.DuckDBPyConnection, raiz: str) -> None:
-    """Depois das views: só deixa ler dentro da raiz do bucket e congela a configuração."""
-    pasta = raiz.rstrip("/") + "/"
-    con.sql(f"SET allowed_directories = [{_texto_sql(pasta)}]")
+def travar(con: duckdb.DuckDBPyConnection, raizes: str | Iterable[str]) -> None:
+    """Depois das views: só deixa ler dentro das raízes dos buckets e congela a configuração."""
+    pastas = [raizes] if isinstance(raizes, str) else list(raizes)
+    lista = ", ".join(_texto_sql(p.rstrip("/") + "/") for p in pastas)
+    con.sql(f"SET allowed_directories = [{lista}]")
     con.sql("SET enable_external_access = false")
     con.sql("SET lock_configuration = true")
 

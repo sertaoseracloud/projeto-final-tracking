@@ -71,7 +71,8 @@ ROTEIROS: dict[str, list[Passo]] = {
     "catalogo-bancos": [
         Passo(_k("painel-bancos"), "Bancos de dados",
               "O Data Catalog é a lista do que existe no lake. Aqui há um banco por camada do medalhão: landing, bronze, "
-              "silver e gold. Clique num banco para ver as tabelas dele."),
+              "silver e gold, no bucket do datalake, e um banco para cada outro bucket do floci, com o nome dele. "
+              "Clique num banco para ver as tabelas dele."),
         Passo(_k("trilha-catalogo"), "Caminho",
               "Glue › Data Catalog › banco › tabela. Clique em Data Catalog para voltar à lista de bancos."),
     ],
@@ -151,7 +152,8 @@ ROTEIROS: dict[str, list[Passo]] = {
               "Escolha o banco de dados e veja as tabelas dele. Abra uma tabela para ver as colunas; Inserir no editor "
               "escreve banco.tabela na sua consulta."),
         Passo(_k("athena_banco"), "Banco de dados",
-              "landing, bronze, silver e gold: os mesmos bancos do Data Catalog."),
+              "Os mesmos bancos do Data Catalog: landing, bronze, silver e gold, e um para cada outro bucket. "
+              "Uma consulta pode juntar tabelas de buckets diferentes."),
         Passo(_k("painel-athena-editor"), "Editor de consultas",
               "Escreva a SQL aqui. As abas Consulta 1, Consulta 2… guardam consultas diferentes; ＋ abre uma nova e ✕ "
               "fecha a atual. Só são aceitas consultas de leitura."),

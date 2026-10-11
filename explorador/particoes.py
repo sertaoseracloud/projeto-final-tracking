@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Iterable
 
@@ -24,12 +24,39 @@ class Objeto:
     modificado: datetime | None = None
 
 
+# Os arquivos dos outros buckets entram no catálogo com a chave "@<bucket>/<chave>": assim eles nunca se
+# misturam com as pastas do bucket do datalake, e o Dataset sabe de que bucket veio.
+MARCA_BUCKET = "@"
+
+
+def chave_virtual(bucket: str, chave: str) -> str:
+    return f"{MARCA_BUCKET}{bucket}/{chave}"
+
+
+def separar_bucket(prefixo: str) -> tuple[str | None, str]:
+    """'@rascunho/notas' -> ('rascunho', 'notas'); 'silver/itens' -> (None, 'silver/itens')."""
+    if not prefixo.startswith(MARCA_BUCKET):
+        return None, prefixo
+    bucket, _, caminho = prefixo[len(MARCA_BUCKET):].partition("/")
+    return bucket, caminho
+
+
 @dataclass(frozen=True)
 class Dataset:
     prefixo: str
     formato: str
     nome_view: str
     particionado: bool = False   # arquivos em pastas k=v logo abaixo do prefixo
+
+    @property
+    def bucket(self) -> str | None:
+        """None: o bucket do datalake; senão, o nome do outro bucket."""
+        return separar_bucket(self.prefixo)[0]
+
+    @property
+    def caminho(self) -> str:
+        """A pasta de verdade dentro do bucket (sem a marca @<bucket>/)."""
+        return separar_bucket(self.prefixo)[1]
 
 
 @dataclass(frozen=True)
@@ -79,7 +106,12 @@ def _nome_view(prefixo: str) -> str:
     """Nome no catálogo, como no Glue: 'banco.tabela'. O banco é a camada (a 1ª pasta).
 
     'silver' -> 'silver.eventos' (partições event_name= na raiz da camada);
-    'silver/itens' -> 'silver.itens'; 'gold/funil_compra' -> 'gold.funil_compra'."""
+    'silver/itens' -> 'silver.itens'; 'gold/funil_compra' -> 'gold.funil_compra'.
+    Outro bucket: o banco é o nome do bucket e a tabela é a pasta ('@rascunho/notas' -> 'rascunho.notas';
+    arquivos soltos na raiz do bucket -> 'rascunho.raiz')."""
+    bucket, caminho = separar_bucket(prefixo)
+    if bucket is not None:
+        return f"{_limpo(bucket)}.{_limpo(caminho) or 'raiz'}"
     banco, _, resto = prefixo.partition("/")
     return f"{_limpo(banco)}.{_limpo(resto) or 'eventos'}"
 
@@ -115,6 +147,12 @@ def datasets(chaves: Iterable[str]) -> list[Dataset]:
         for formato in sorted(achados):
             nome = _nome_view(prefixo) + (f"_{formato}" if len(achados) > 1 else "")
             resultado.append(Dataset(prefixo, formato, nome, prefixo in particionados))
+    # um bucket chamado "gold" não pode cair no mesmo banco da camada gold do datalake
+    bancos_do_datalake = {banco_e_tabela(d.nome_view)[0] for d in resultado if d.bucket is None}
+    for i, d in enumerate(resultado):
+        banco, tabela = banco_e_tabela(d.nome_view)
+        if d.bucket is not None and banco in bancos_do_datalake:
+            resultado[i] = replace(d, nome_view=f"{banco}_bucket.{tabela}")
     return resultado
 
 

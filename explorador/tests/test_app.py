@@ -433,3 +433,53 @@ def test_tela_s3_mostra_todos_os_buckets_e_abre_outro(bucket_local, monkeypatch)
     at.button(key="migalha:buckets").click().run()
     at.button(key=f"bucket:{s3.BUCKET}").click().run()                # volta para o datalake sem erro
     assert not at.exception and at.session_state["bucket_sel"] == s3.BUCKET
+
+
+@pytest.fixture
+def dois_buckets(bucket_local, monkeypatch):
+    outro = bucket_local / "outro-bucket"
+    (outro / "notas").mkdir(parents=True)
+    duckdb.sql(f"COPY (SELECT 'ana' AS aluno, 9 AS nota UNION ALL SELECT 'bia', 8) TO '{outro}/notas/a.parquet' (FORMAT parquet)")
+    por_bucket = {s3.BUCKET: s3.listar(),
+                  "rascunho-turma": [Objeto("notas/a.parquet", (outro / "notas/a.parquet").stat().st_size)]}
+    monkeypatch.setattr(s3, "listar_buckets", lambda *_, **__: [s3.BUCKET, "rascunho-turma"])
+    monkeypatch.setattr(s3, "listar", lambda prefixo="", cliente=None, bucket=None: por_bucket[bucket or s3.BUCKET])
+    monkeypatch.setattr(s3, "raiz", lambda bucket=None: str(outro) if bucket == "rascunho-turma" else str(bucket_local))
+    return outro
+
+
+def test_catalogo_tem_um_banco_para_cada_outro_bucket(dois_buckets):
+    at = _rodar()
+    at.radio(key="tela").set_value(CATALOGO).run()
+    assert not at.exception
+    assert at.button(key="banco:silver") and at.button(key="banco:rascunho_turma")
+    at.button(key="banco:rascunho_turma").click().run()
+    at.button(key="tabela:rascunho_turma.notas").click().run()
+    textos = " ".join(str(m.value) for m in at.markdown)
+    assert "s3://rascunho-turma/notas/" in textos and ">nota<" in textos
+    at.button(key="consultar_athena").click().run()
+    at.button(key="executar").click().run()
+    assert not at.exception
+    assert sorted(at.dataframe[0].value["aluno"].tolist()) == ["ana", "bia"]
+
+
+def test_athena_junta_tabelas_de_buckets_diferentes(dois_buckets):
+    at = _executar(_athena(_rodar()), "SELECT (SELECT count(*) FROM silver.eventos) AS eventos, "
+                                      "(SELECT max(nota) FROM rascunho_turma.notas) AS maior_nota")
+    assert not at.exception
+    assert at.dataframe[0].value.to_dict("records") == [{"eventos": 4, "maior_nota": 9}]
+    resumo = next(s.value for s in at.success)
+    assert "0 B" not in resumo                                         # a estimativa conta os dois buckets
+
+
+def test_tabela_ilegivel_de_um_bucket_vira_aviso_sem_derrubar_o_catalogo(dois_buckets, monkeypatch):
+    (dois_buckets / "quebrado").mkdir()
+    (dois_buckets / "quebrado" / "x.parquet").write_text("isto não é parquet")
+    por_bucket = {s3.BUCKET: s3.listar(), "rascunho-turma": s3.listar(bucket="rascunho-turma")
+                  + [Objeto("quebrado/x.parquet", 18)]}
+    monkeypatch.setattr(s3, "listar", lambda prefixo="", cliente=None, bucket=None: por_bucket[bucket or s3.BUCKET])
+    at = _rodar()
+    at.radio(key="tela").set_value(CATALOGO).run()
+    assert not at.exception
+    assert any("rascunho_turma.quebrado" in str(m.value) for m in at.markdown)   # o aviso cita a tabela
+    assert at.button(key="banco:silver")                                         # o resto continua
