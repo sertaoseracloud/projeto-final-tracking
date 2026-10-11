@@ -33,11 +33,11 @@ def test_particao_da_chave_mantem_o_mes_com_dois_digitos():
 
 def test_datasets_ignora_pastas_internas_arquivos_soltos_e_nao_dados():
     assert datasets(CHAVES) == [
-        Dataset("gold/funil_compra", "parquet", "gold_funil_compra", False),
-        Dataset("landing", "jsonl", "landing", True),
-        Dataset("silver", "parquet", "silver", True),
-        Dataset("silver/eventos_rejeitados", "parquet", "silver_eventos_rejeitados", False),
-        Dataset("silver/itens", "parquet", "silver_itens", True),
+        Dataset("gold/funil_compra", "parquet", "gold.funil_compra", False),
+        Dataset("landing", "jsonl", "landing.eventos", True),
+        Dataset("silver", "parquet", "silver.eventos", True),
+        Dataset("silver/eventos_rejeitados", "parquet", "silver.eventos_rejeitados", False),
+        Dataset("silver/itens", "parquet", "silver.itens", True),
     ]
 
 
@@ -87,8 +87,8 @@ def test_tamanho_legivel():
 def test_pasta_com_dois_formatos_vira_um_dataset_por_formato():
     chaves = ["landing/mista/year=2026/month=09/day=01/a.jsonl",
               "landing/mista/year=2026/month=09/day=01/b.parquet"]
-    assert datasets(chaves) == [Dataset("landing/mista", "jsonl", "landing_mista_jsonl", True),
-                                Dataset("landing/mista", "parquet", "landing_mista_parquet", True)]
+    assert datasets(chaves) == [Dataset("landing/mista", "jsonl", "landing.mista_jsonl", True),
+                                Dataset("landing/mista", "parquet", "landing.mista_parquet", True)]
     objetos = [Objeto(chaves[0], 10), Objeto(chaves[1], 30)]
     assert tabela_particoes(objetos, "landing/mista", "parquet") == [LinhaParticao(SEM_PARTICAO, "2026", "09", "01", 1, 30)]
     assert tabela_particoes(objetos, "landing/mista") == [LinhaParticao(SEM_PARTICAO, "2026", "09", "01", 2, 40)]

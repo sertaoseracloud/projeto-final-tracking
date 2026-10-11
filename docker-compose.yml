@@ -28,7 +28,10 @@ services:
     working_dir: /projeto
     volumes:
       - .:/projeto
-    environment: *ambiente-s3
+    environment:
+      <<: *ambiente-s3
+      # pasta dos jobs da tela "Glue · Jobs ETL" (o professor pode usar professor/solucao)
+      EXPLORADOR_JOBS: ${EXPLORADOR_JOBS:-pipeline}
     command: streamlit run explorador/app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true --browser.gatherUsageStats false --client.showErrorDetails none
     ports:
       - "8501:8501"

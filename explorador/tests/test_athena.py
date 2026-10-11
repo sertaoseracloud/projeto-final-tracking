@@ -32,22 +32,22 @@ def test_inserir_acrescenta_com_espaco():
 
 
 def test_views_usadas_acha_os_nomes_no_sql_sem_contar_strings_e_comentarios():
-    nomes = ["landing", "silver", "silver_itens", "gold_funil_compra"]
-    sql = "-- silver_itens\nSELECT * FROM silver s JOIN \"gold_funil_compra\" g ON 1=1 WHERE x = 'landing'"
-    assert athena.views_usadas(sql, nomes) == ["gold_funil_compra", "silver"]
+    nomes = ["landing.eventos", "silver.eventos", "silver.itens", "gold.funil_compra"]
+    sql = "-- silver.itens\nSELECT * FROM silver.eventos s JOIN \"gold\".\"funil_compra\" g ON 1=1 WHERE x = 'landing.eventos'"
+    assert athena.views_usadas(sql, nomes) == ["gold.funil_compra", "silver.eventos"]
     assert athena.views_usadas("SELECT 1", nomes) == []
     assert athena.views_usadas("isto não é sql (", nomes) == []
 
 
 def test_bytes_lidos_soma_os_arquivos_das_views_usadas():
-    datasets = [Dataset("silver", "parquet", "silver", True), Dataset("silver/itens", "parquet", "silver_itens", True)]
+    datasets = [Dataset("silver", "parquet", "silver.eventos", True), Dataset("silver/itens", "parquet", "silver.itens", True)]
     objetos = [
         Objeto("silver/event_name=scroll/year=2026/month=09/day=01/a.parquet", 100),
         Objeto("silver/event_name=click/year=2026/month=09/day=01/b.parquet", 50),
         Objeto("silver/itens/year=2026/month=09/day=01/c.parquet", 7),
     ]
-    assert athena.bytes_lidos(["silver"], datasets, objetos) == 150
-    assert athena.bytes_lidos(["silver", "silver_itens"], datasets, objetos) == 157
+    assert athena.bytes_lidos(["silver.eventos"], datasets, objetos) == 150
+    assert athena.bytes_lidos(["silver.eventos", "silver.itens"], datasets, objetos) == 157
     assert athena.bytes_lidos([], datasets, objetos) == 0
 
 
@@ -67,16 +67,16 @@ def test_resumo_da_execucao_em_portugues():
 
 
 def test_bytes_lidos_respeita_filtro_de_particao_por_event_name():
-    datasets = [Dataset("landing", "jsonl", "landing", True)]
+    datasets = [Dataset("landing", "jsonl", "landing.eventos", True)]
     objetos = [
         Objeto("landing/event_name=purchase/year=2026/month=09/day=01/a.jsonl", 10),
         Objeto("landing/event_name=refund/year=2026/month=09/day=01/b.jsonl", 5),
         Objeto("landing/event_name=scroll/year=2026/month=09/day=01/c.jsonl", 1000),
     ]
-    tudo = "SELECT count(*) FROM landing"
-    um = "SELECT count(*) FROM landing WHERE event_name = 'purchase'"
-    dois = "SELECT count(*) FROM landing WHERE event_name IN ('purchase', 'refund')"
-    assert athena.bytes_lidos(["landing"], datasets, objetos, tudo) == 1015
-    assert athena.bytes_lidos(["landing"], datasets, objetos, um) == 10
-    assert athena.bytes_lidos(["landing"], datasets, objetos, dois) == 15
+    tudo = "SELECT count(*) FROM landing.eventos"
+    um = "SELECT count(*) FROM landing.eventos WHERE event_name = 'purchase'"
+    dois = "SELECT count(*) FROM landing.eventos WHERE event_name IN ('purchase', 'refund')"
+    assert athena.bytes_lidos(["landing.eventos"], datasets, objetos, tudo) == 1015
+    assert athena.bytes_lidos(["landing.eventos"], datasets, objetos, um) == 10
+    assert athena.bytes_lidos(["landing.eventos"], datasets, objetos, dois) == 15
     assert athena.particoes_filtradas("SELECT 1 -- event_name = 'x'") is None    # comentário não conta

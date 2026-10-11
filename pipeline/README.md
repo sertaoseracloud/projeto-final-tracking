@@ -14,6 +14,8 @@ docker compose run --rm app python pipeline/<seu_job>.py
 
 Troque `<seu_job>` pelo nome do seu arquivo. Se você nunca usou Docker, o [SETUP.md](../SETUP.md) explica o que cada parte desse comando faz.
 
+Outra forma: abra o explorador (http://localhost:8501), vá em **Glue · Jobs ETL**, escolha o job e clique em **Executar**. Ele roda o mesmo comando e mostra o status (**Sucesso** ou **Falhou**), a duração e o log, como o console do Glue. Veja [explorador/README.md](../explorador/README.md#glue--jobs-etl).
+
 ## Falando com o S3
 
 O pipeline acessa o bucket **só pelo Spark**, com caminhos `s3a://datalake-tracking/...`. Nada de `boto3` aqui.
