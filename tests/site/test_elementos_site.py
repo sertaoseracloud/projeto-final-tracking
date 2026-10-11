@@ -65,3 +65,14 @@ def test_avisos_do_site_falam_a_lingua_do_aluno():
     assert "jobs 07 e 08" not in HTML
     assert "job de exportação do mapa de calor (R11)" in HTML
     assert "O mapa não tem cliques" in HTML        # landing antiga, sem element_id
+
+
+def test_elementos_fixos_tem_calor_em_camada_fixa_na_tela():
+    assert re.search(r"\.calor-fixo\s*\{[^}]*position:\s*fixed[^}]*pointer-events:\s*none", HTML)
+    assert 'el.closest(".topo")' in HTML           # cabeçalho grudado no topo (sticky)
+    assert 'el.closest("#modal")' in HTML          # modal (position: fixed)
+
+
+def test_cada_canvas_respeita_a_intensidade_da_gold_e_mapa_vazio_nao_tem_veu():
+    assert "teto" in HTML                          # o vermelho de cada canvas vem da intensidade, não do próprio máximo
+    assert "if (!pontos.length) return;" in HTML

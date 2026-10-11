@@ -81,3 +81,8 @@ def test_contexto_e_do_mesmo_visitante():
     eventos = [_do("a", "view_item", "PLANO-PRO"), _do("b", "add_to_cart", "PLANO-PRO")]
     marcar_elementos(eventos)
     assert eventos[1]["params"]["element_id"] == "plano-pro"
+
+
+def test_plano_desconhecido_fica_sem_element_id():
+    assert elemento(_ev("add_to_cart", items=[{"item_id": "PLANO-X"}])) is None
+    assert elemento(_ev("add_to_cart")) is None

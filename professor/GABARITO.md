@@ -200,12 +200,12 @@ O job 07 grava as duas tabelas e o job 08 exporta `site/mapa_calor.js` (24 eleme
 | --- | --- | --- | --- | --- | --- | --- |
 | / | btn-play | 2890 | 2890 | 8382 | 0,3448 | 1,0 |
 | / | cta-hero-ver-planos | 2543 | 2543 | 8382 | 0,3034 | 0,8799 |
-| / | modal-comprar | 1525 | 1268 | 8382 | 0,1513 | 0,5277 |
-| / | plano-pro | 803 | 803 | 8382 | 0,0958 | 0,2779 |
-| / | plano-basico | 595 | 595 | 8382 | 0,071 | 0,2059 |
+| / | plano-pro | 1086 | 836 | 8382 | 0,0997 | 0,3758 |
+| / | plano-basico | 879 | 647 | 8382 | 0,0772 | 0,3042 |
+| / | modal-comprar | 749 | 749 | 8382 | 0,0894 | 0,2592 |
+| / | plano-premium | 530 | 383 | 8382 | 0,0457 | 0,1834 |
 | / | form-lead | 522 | 522 | 8382 | 0,0623 | 0,1806 |
 | / | dl-ementa | 335 | 335 | 8382 | 0,04 | 0,1159 |
-| / | plano-premium | 321 | 321 | 8382 | 0,0383 | 0,1111 |
 | / | faq-busca | 303 | 303 | 8382 | 0,0361 | 0,1048 |
 | / | social-instagram | 102 | 102 | 8382 | 0,0122 | 0,0353 |
 | / | social-linkedin | 92 | 92 | 8382 | 0,011 | 0,0318 |
@@ -233,9 +233,9 @@ O job 07 grava as duas tabelas e o job 08 exporta `site/mapa_calor.js` (24 eleme
 | 75 | 4219 | 0,5033 |
 | 90 | 2177 | 0,2597 |
 
-Leitura: na landing, o ponto mais quente é o play do vídeo, seguido de perto pelo CTA "Ver planos"; os cartões de plano recebem bem menos cliques, coerente com a perda do funil em `select_item`. A rolagem perde gente de forma contínua e cai mais forte entre 75% e 90% (de 50% para 26% das sessões): o FAQ e o rodapé são vistos por cerca de um quarto das visitas. As somas batem com outras Golds: `plano-*` soma 1719 (o `select_item` do funil), `form-lead` 522 (leads) e `btn-comprar` 573 (pedidos).
+Leitura: na landing, o ponto mais quente é o play do vídeo, seguido de perto pelo CTA "Ver planos"; os cartões de plano recebem bem menos cliques, coerente com a perda do funil em `select_item`. A rolagem perde gente de forma contínua e cai mais forte entre 75% e 90% (de 50% para 26% das sessões): o FAQ e o rodapé são vistos por cerca de um quarto das visitas. As somas batem com outras Golds: `form-lead` 522 (leads) e `btn-comprar` 573 (pedidos). `plano-*` soma 2495 = 1719 `select_item` (o topo do funil) + 776 eventos de carrinho feitos pelo botão do cartão; os outros 749 vieram do botão do detalhe (`modal-comprar`, `add_to_cart` logo depois de `view_item`).
 
-`modal-comprar` está na landing, mas o modal fica fechado na abertura da página: no site, a camada dele só aparece com o detalhe do plano aberto.
+`modal-comprar` está na landing, mas o modal fica fechado na abertura da página: no site, a mancha dele só aparece com o detalhe do plano aberto, por cima do modal. Eventos sem `page_location` ficam fora do mapa (não há onde desenhar).
 
 ## 9. Tolerâncias para corrigir o trabalho do aluno
 

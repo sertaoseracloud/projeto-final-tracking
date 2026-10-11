@@ -59,7 +59,7 @@ def _plano_no_carrinho(evento: dict, anterior: dict | None, seguinte: dict | Non
     alvo = _item(evento)
     if nome == "remove_from_cart" and (seguinte or {}).get("event_name") == "add_to_cart":
         alvo = _item(seguinte) or alvo
-    return PLANOS.get(alvo, "modal-comprar")
+    return PLANOS.get(alvo)          # plano desconhecido: sem element_id
 
 
 def elemento(evento: dict, anterior: dict | None = None, seguinte: dict | None = None) -> str | None:

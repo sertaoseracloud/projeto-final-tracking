@@ -133,9 +133,9 @@ body.painel-aberto .alternar-painel { right: 416px; }
 /* ---------------- mapa de calor (overlay; não recebe cliques) ---------------- */
 #calor-raiz { position: absolute; left: 0; top: 0; width: 0; height: 0; overflow: hidden; pointer-events: none; }
 .calor-canvas { position: absolute; z-index: 30; pointer-events: none; }
-.calor-canvas.no-modal { z-index: 51; }
+.calor-fixo { position: fixed; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; pointer-events: none; z-index: 21; }
+.calor-fixo-modal { z-index: 51; }
 .calor-etiqueta { position: absolute; z-index: 31; pointer-events: none; background: #fff; color: #0f172a; border: 1px solid #1e3a8a; font: 700 10px/1.3 system-ui, sans-serif; padding: 0 4px; white-space: nowrap; }
-.calor-etiqueta.no-modal { z-index: 52; }
 .calor-faixa { position: absolute; z-index: 31; width: 72px; pointer-events: none; border-left: 1px solid rgba(255,255,255,.35); }
 .calor-marco { position: absolute; right: 6px; transform: translateY(-50%); background: #fff; color: #0f172a; border: 1px solid #1e3a8a; font: 700 10px/1.3 system-ui, sans-serif; padding: 0 4px; white-space: nowrap; }
 #mapa-calor.ligado { background: #b91c1c; color: #fff; }
@@ -878,6 +878,14 @@ body.painel-aberto .alternar-painel { right: 416px; }
   var $calorRaiz = document.createElement("div");
   $calorRaiz.id = "calor-raiz";
   document.body.appendChild($calorRaiz);
+  // elementos que não rolam com a página (cabeçalho sticky e modal fixo) ganham camadas fixas na tela
+  function camadaFixa(classe) {
+    var c = document.createElement("div");
+    c.className = "calor-fixo " + classe;
+    document.body.appendChild(c);
+    return c;
+  }
+  var $calorTopo = camadaFixa("calor-fixo-topo"), $calorModal = camadaFixa("calor-fixo-modal");
 
   function paginaAtual() { var r = rotaAtual(); return r === "landing" ? "/" : "/" + r; }
   function pct(v) { return v === null || v === undefined ? "—" : (v * 100).toFixed(1).replace(".", ",") + "%"; }
@@ -897,7 +905,8 @@ body.painel-aberto .alternar-painel { right: 416px; }
   var VEU = [18, 24, 110];            // azul escuro por cima da página toda
 
   // a Gold é por elemento: cada elemento vira alguns pontos de calor espalhados pela área dele
-  function pontosDoElemento(r, intensidade) {
+  // dx/dy: rolagem da página para camadas que rolam; 0 para as camadas fixas na tela
+  function pontosDoElemento(r, intensidade, dx, dy) {
     var colunas = Math.max(1, Math.min(6, Math.round(r.width / 60)));
     var linhas = Math.max(1, Math.min(4, Math.round(r.height / 50)));
     var raio = Math.max(60, Math.min(190, Math.min(r.width, r.height) * 0.9 + 50));
@@ -905,18 +914,20 @@ body.painel-aberto .alternar-painel { right: 416px; }
     var pontos = [];
     for (var i = 0; i < colunas; i++) {
       for (var j = 0; j < linhas; j++) {
-        pontos.push({ x: r.left + window.scrollX + r.width * (i + 0.5) / colunas,
-                      y: r.top + window.scrollY + r.height * (j + 0.5) / linhas, raio: raio, peso: peso });
+        pontos.push({ x: r.left + dx + r.width * (i + 0.5) / colunas,
+                      y: r.top + dy + r.height * (j + 0.5) / linhas, raio: raio, peso: peso });
       }
     }
     return pontos;
   }
 
   // 1º passo: cada ponto soma uma mancha difusa (só alfa). 2º passo: o alfa acumulado vira cor da paleta.
-  function pintarCalor(classe, esquerda, topo, largura, altura, pontos, comVeu) {
+  // teto: maior intensidade da Gold entre os elementos deste canvas (o vermelho só aparece onde a Gold diz 1)
+  function pintarCalor(alvo, esquerda, topo, largura, altura, pontos, comVeu, teto) {
+    if (!pontos.length) return;
     var w = Math.max(1, Math.ceil(largura * ESCALA_CALOR)), h = Math.max(1, Math.ceil(altura * ESCALA_CALOR));
     var cv = document.createElement("canvas");
-    cv.className = classe;
+    cv.className = "calor-canvas";
     cv.width = w; cv.height = h;
     cv.style.left = esquerda + "px"; cv.style.top = topo + "px";
     cv.style.width = largura + "px"; cv.style.height = altura + "px";
@@ -931,7 +942,7 @@ body.painel-aberto .alternar-painel { right: 416px; }
     });
     var img = g.getImageData(0, 0, w, h), d = img.data, maximo = 0;
     for (var m = 3; m < d.length; m += 4) if (d[m] > maximo) maximo = d[m];
-    var ganho = maximo ? 255 / maximo : 1;                     // o ponto mais quente da tela vira vermelho
+    var ganho = maximo ? 255 * Math.max(0.12, Math.min(1, teto)) / maximo : 1;   // o mais quente vira a cor da sua intensidade
     for (var k = 0; k < d.length; k += 4) {
       var a = Math.min(255, Math.round(d[k + 3] * ganho)), o = a * 4, t = Math.min(1, a / 40);   // t: transição do véu para a paleta
       if (comVeu) {
@@ -945,20 +956,20 @@ body.painel-aberto .alternar-painel { right: 416px; }
       }
     }
     g.putImageData(img, 0, 0);
-    $calorRaiz.appendChild(cv);
+    alvo.appendChild(cv);
   }
 
-  function etiquetaCalor(r, texto, noModal) {
+  function etiquetaCalor(r, texto, alvo, dx, dy) {
     var e = document.createElement("span");
-    e.className = "calor-etiqueta" + (noModal ? " no-modal" : "");
-    e.style.left = (r.left + window.scrollX) + "px";
-    e.style.top = (r.bottom + window.scrollY + 2) + "px";
+    e.className = "calor-etiqueta";
+    e.style.left = (r.left + dx) + "px";
+    e.style.top = (r.bottom + dy + 2) + "px";
     e.textContent = texto;
-    $calorRaiz.appendChild(e);
+    alvo.appendChild(e);
   }
 
   function desenharCalor() {
-    $calorRaiz.innerHTML = "";
+    $calorRaiz.innerHTML = $calorTopo.innerHTML = $calorModal.innerHTML = "";
     $calorRaiz.style.width = "0px";
     $calorRaiz.style.height = "0px";
     if (!calor.ligado || !window.MAPA_CALOR) return;
@@ -967,22 +978,28 @@ body.painel-aberto .alternar-painel { right: 416px; }
     var doc = document.documentElement;
     $calorRaiz.style.width = doc.scrollWidth + "px";
     $calorRaiz.style.height = doc.scrollHeight + "px";
-    var pagina = paginaAtual(), porElemento = {}, pontos = [], pontosModal = [], caixaModal = null;
+    var pagina = paginaAtual(), porElemento = {};
     (window.MAPA_CALOR.cliques || []).forEach(function (l) { if (l.pagina === pagina) porElemento[l.element_id] = l; });
+    // três grupos: a página (rola, em coordenadas da página), o cabeçalho e o modal (fixos, em coordenadas da tela)
+    var grupos = {
+      pagina: { alvo: $calorRaiz, dx: window.scrollX, dy: window.scrollY, pontos: [], teto: 0 },
+      topo: { alvo: $calorTopo, dx: 0, dy: 0, pontos: [], teto: 0 },
+      modal: { alvo: $calorModal, dx: 0, dy: 0, pontos: [], teto: 0, caixa: null }
+    };
     document.querySelectorAll("[data-heat]").forEach(function (el) {
       var l = porElemento[el.getAttribute("data-heat")];
       var r = el.getBoundingClientRect();
       if (!l || !r.width || !r.height) return;          // sem dado, escondido ou de outra tela
-      var noModal = !!el.closest("#modal");
-      if (noModal) caixaModal = el.closest(".modal").getBoundingClientRect();
-      Array.prototype.push.apply(noModal ? pontosModal : pontos, pontosDoElemento(r, l.intensidade));
-      etiquetaCalor(r, pct(l.taxa_clique), noModal);
+      var gr = el.closest("#modal") ? grupos.modal : el.closest(".topo") ? grupos.topo : grupos.pagina;
+      if (gr === grupos.modal) gr.caixa = el.closest(".modal").getBoundingClientRect();
+      Array.prototype.push.apply(gr.pontos, pontosDoElemento(r, l.intensidade, gr.dx, gr.dy));
+      gr.teto = Math.max(gr.teto, +l.intensidade || 0);
+      etiquetaCalor(r, pct(l.taxa_clique), gr.alvo, gr.dx, gr.dy);
     });
-    pintarCalor("calor-canvas", 0, 0, doc.scrollWidth, doc.scrollHeight, pontos, true);
-    if (pontosModal.length && caixaModal) {               // o modal fica acima do véu: calor dele num canvas próprio
-      pintarCalor("calor-canvas no-modal", caixaModal.left + window.scrollX, caixaModal.top + window.scrollY,
-                  caixaModal.width, caixaModal.height, pontosModal, false);
-    }
+    var p = grupos.pagina, t = grupos.topo, m = grupos.modal;
+    pintarCalor(p.alvo, 0, 0, doc.scrollWidth, doc.scrollHeight, p.pontos, true, p.teto);
+    pintarCalor(t.alvo, 0, 0, window.innerWidth, window.innerHeight, t.pontos, false, t.teto);
+    if (m.caixa) pintarCalor(m.alvo, m.caixa.left, m.caixa.top, m.caixa.width, m.caixa.height, m.pontos, false, m.teto);
     if (pagina === "/") desenharRolagem();
   }
 
