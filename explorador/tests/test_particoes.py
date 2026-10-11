@@ -104,3 +104,10 @@ def test_tabela_particoes_ignora_subpastas_que_nao_sao_particao():
 def test_tamanho_legivel_arredonda_para_a_unidade_seguinte():
     assert tamanho_legivel(1048575) == "1,0 MB"
     assert tamanho_legivel(1023) == "1023 B"
+
+
+def test_migalhas_do_caminho_para_o_breadcrumb():
+    from explorador.particoes import migalhas
+    assert migalhas("") == []
+    assert migalhas("silver/event_name=purchase/") == [("silver", "silver/"),
+                                                      ("event_name=purchase", "silver/event_name=purchase/")]

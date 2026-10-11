@@ -53,31 +53,114 @@ def bucket_local(tmp_path, monkeypatch):
     monkeypatch.setattr(consultas, "conectar", functools.partial(consultas.conectar, s3=False))
     return tmp_path
 
+ATHENA = "Athena · Editor de consultas"
+SQL = "sql:Consulta 1"
 
-def test_app_monta_as_tres_abas_e_executa_sql(bucket_local):
+
+def _athena(at):
+    return at.radio(key="tela").set_value(ATHENA).run()
+
+
+def _executar(at, sql, aba="Consulta 1"):
+    at.text_area(key=f"sql:{aba}").input(sql).run()
+    return at.button(key="executar").click().run()
+
+
+def test_abre_no_s3_com_a_lista_de_buckets_e_entra_no_bucket(bucket_local):
     at = _rodar()
     assert not at.exception
-    assert [t.label for t in at.tabs] == ["Arquivos", "Partições", "Consultas SQL"]
-    at.text_area(key="sql").input("SELECT count(*) AS n FROM silver").run()
-    at.button(key="executar").click().run()
+    assert at.radio(key="tela").options == ["S3 · Buckets", ATHENA]
+    assert at.button(key="abrir_bucket").label.endswith(s3.BUCKET)
+    at.button(key="abrir_bucket").click().run()
+    assert [t.label for t in at.tabs] == ["Objetos", "Partições", "Propriedades"]
+
+
+def test_navega_pelo_breadcrumb_e_mostra_a_previa_do_arquivo(bucket_local):
+    at = _rodar()
+    at.button(key="abrir_bucket").click().run()
+    caminho = ""
+    for pasta in ("silver", "event_name=page_view", "year=2026", "month=09", "day=01"):
+        caminho += pasta + "/"
+        at.button(key=f"obj:{caminho}").click().run()
+    assert at.session_state["pasta"] == "silver/event_name=page_view/year=2026/month=09/day=01/"
+    at.button(key=f"obj:{caminho}part-0.parquet").click().run()
     assert not at.exception
-    assert at.dataframe[-1].value["n"].tolist() == [4]
+    previa = next(d.value for d in at.dataframe if "event_id" in d.value.columns)
+    assert previa["event_id"].tolist() == ["e0", "e1", "e2", "e3"]
+    at.button(key="migalha:silver/event_name=page_view/").click().run()
+    assert at.session_state["pasta"] == "silver/event_name=page_view/"
+    at.button(key="migalha:buckets").click().run()
+    assert at.button(key="abrir_bucket")
 
 
-def test_app_recusa_sql_de_escrita(bucket_local):
+def test_aba_particoes_lista_os_dias_e_conta_linhas(bucket_local):
     at = _rodar()
-    at.text_area(key="sql").input("DROP VIEW silver").run()
-    at.button(key="executar").click().run()
-    assert any("só faz consultas de leitura" in w.value for w in at.warning)
+    at.button(key="abrir_bucket").click().run()
+    assert at.selectbox(key="dataset").value == "silver"
+    at.button(key="contar").click().run()
+    assert not at.exception
+    contagens = [d.value for d in at.dataframe if "linhas" in d.value.columns]
+    assert contagens[-1]["linhas"].tolist() == [4]
 
 
-def test_app_mostra_aviso_quando_corta_o_resultado(bucket_local):
-    at = _rodar()
-    at.text_area(key="sql").input("SELECT * FROM range(20)").run()
-    at.number_input(key="limite").set_value(5).run()
+def test_athena_executa_e_mostra_detalhes_da_execucao(bucket_local):
+    at = _executar(_athena(_rodar()), "SELECT count(*) AS n FROM silver")
+    assert not at.exception
+    assert [t.label for t in at.tabs] == ["Resultados", "Consultas recentes"]
+    assert at.dataframe[0].value["n"].tolist() == [4]
+    resumo = next(s.value for s in at.success)
+    assert resumo.startswith("Concluída · tempo de execução") and "dados lidos (estimado)" in resumo
+    assert "0 B" not in resumo                       # a view silver tem arquivos: a estimativa não é zero
+
+
+def test_athena_recusa_sql_de_escrita(bucket_local):
+    at = _executar(_athena(_rodar()), "DROP VIEW silver")
+    assert any("só faz consultas de leitura" in e.value for e in at.error)
+
+
+def test_athena_avisa_quando_corta_o_resultado(bucket_local):
+    at = _athena(_rodar())
+    at.text_area(key=SQL).input("SELECT * FROM range(20)").run()
+    at.number_input(key="limite:Consulta 1").set_value(5).run()
     at.button(key="executar").click().run()
-    assert len(at.dataframe[-1].value) == 5
+    assert len(at.dataframe[0].value) == 5
     assert any("cortado em 5 linhas" in w.value for w in at.warning)
+
+
+def test_athena_erro_de_sql_vem_explicado_em_portugues(bucket_local):
+    at = _executar(_athena(_rodar()), "SELECT * FROM view_que_nao_existe")
+    assert not at.exception
+    assert any("não existe" in e.value for e in at.error)
+    assert any("Mensagem original do DuckDB" in c.value for c in at.caption)
+
+
+def test_athena_abas_guardam_cada_uma_a_sua_consulta(bucket_local):
+    at = _executar(_athena(_rodar()), "SELECT 1 AS um")
+    at.button(key="nova_aba").click().run()
+    assert at.text_area(key="sql:Consulta 2").value == ""
+    at = _executar(at, "SELECT 2 AS dois", aba="Consulta 2")
+    assert at.dataframe[0].value.columns.tolist() == ["dois"]
+    at.radio(key="aba_ativa").set_value("Consulta 1").run()
+    assert at.text_area(key=SQL).value == "SELECT 1 AS um"
+    assert at.dataframe[0].value.columns.tolist() == ["um"]
+    at.button(key="fechar_aba").click().run()
+    assert at.radio(key="aba_ativa").options == ["Consulta 2"]
+
+
+def test_athena_arvore_insere_o_nome_da_tabela_no_editor(bucket_local):
+    at = _athena(_rodar())
+    at.text_area(key=SQL).input("SELECT * FROM").run()
+    at.button(key="inserir:silver").click().run()
+    assert at.text_area(key=SQL).value == "SELECT * FROM silver"
+
+
+def test_athena_historico_guarda_as_consultas_e_reabre_no_editor(bucket_local):
+    at = _executar(_athena(_rodar()), "SELECT 1 AS um")
+    at = _executar(at, "SELECT * FROM nao_existe")
+    tabela = at.dataframe[-1].value
+    assert tabela["Status"].tolist() == ["Falhou", "Concluída"]
+    at.button(key="abrir_hist:1").click().run()
+    assert at.text_area(key=SQL).value == "SELECT 1 AS um"
 
 
 def test_erro_inesperado_vira_mensagem_sem_stack_trace(monkeypatch):
@@ -87,51 +170,3 @@ def test_erro_inesperado_vira_mensagem_sem_stack_trace(monkeypatch):
     at = _rodar()
     assert not at.exception
     assert "Algo deu errado" in at.error[0].value
-
-
-def test_resultado_continua_na_tela_apos_outra_interacao(bucket_local):
-    at = _rodar()
-    at.text_area(key="sql").input("SELECT count(*) AS n FROM silver").run()
-    at.button(key="executar").click().run()
-    assert at.dataframe[-1].value["n"].tolist() == [4]
-    at.number_input(key="limite").set_value(7).run()
-    assert not at.exception
-    assert at.dataframe[-1].value["n"].tolist() == [4]
-
-
-def test_resultado_mostra_a_sql_que_o_gerou(bucket_local):
-    at = _rodar()
-    at.text_area(key="sql").input("SELECT count(*) AS n FROM silver").run()
-    at.button(key="executar").click().run()
-    assert at.code[-1].value == "SELECT count(*) AS n FROM silver"
-
-
-def test_erro_de_sql_vem_explicado_em_portugues(bucket_local):
-    at = _rodar()
-    at.text_area(key="sql").input("SELECT * FROM view_que_nao_existe").run()
-    at.button(key="executar").click().run()
-    assert not at.exception
-    assert any("não existe" in e.value for e in at.error)
-    assert any("Mensagem original do DuckDB" in c.value for c in at.caption)
-
-
-def test_navega_ate_o_arquivo_e_mostra_a_previa(bucket_local):
-    at = _rodar()
-    for pasta in ("silver", "event_name=page_view", "year=2026", "month=09", "day=01"):
-        atual = at.session_state["pasta"] if "pasta" in at.session_state else ""
-        at.button(key=f"pasta:{atual}{pasta}").click().run()
-    assert at.session_state["pasta"] == "silver/event_name=page_view/year=2026/month=09/day=01/"
-    at.selectbox(key="previa").select("part-0.parquet").run()
-    assert not at.exception
-    assert at.dataframe[1].value["event_id"].tolist() == ["e0", "e1", "e2", "e3"]
-    at.button(key="voltar").click().run()
-    assert at.session_state["pasta"] == "silver/event_name=page_view/year=2026/month=09/"
-
-
-def test_aba_particoes_lista_os_dias_e_conta_linhas(bucket_local):
-    at = _rodar()
-    assert at.selectbox(key="dataset").value == "silver"
-    at.button(key="contar").click().run()
-    assert not at.exception
-    contagens = [d.value for d in at.dataframe if "linhas" in d.value.columns]
-    assert contagens[-1]["linhas"].tolist() == [4]

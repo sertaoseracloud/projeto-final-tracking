@@ -1,4 +1,4 @@
-# Explorador do datalake
+# Explorador do datalake (console de estudo)
 
 Um site que roda no seu computador para **olhar o bucket** sem escrever código: ver os arquivos que o gerador e o seu pipeline gravaram, ver as partições (`event_name=`, `year=`, `month=`, `day=`) de cada pasta e fazer **consultas SQL** sobre os dados.
 
@@ -14,11 +14,43 @@ docker compose up -d floci explorador
 
 Abra **http://localhost:8501** no navegador. Para desligar: `docker compose stop explorador`.
 
-## As três abas
+## As duas telas: S3 e Athena
 
-- **Arquivos** — navegue pelas pastas do bucket (`landing/`, `bronze/`, `silver/`, `gold/`) e veja nome, tamanho e data de cada arquivo. Escolha um `.parquet` ou `.jsonl` para ver as primeiras 100 linhas.
-- **Partições** — escolha um dataset e veja uma linha por partição (`event_name`, `year`, `month`, `day`) com quantos arquivos e quantos bytes ela tem. Quando o dataset não tem uma dessas partições, a coluna mostra `—`. O botão "Contar linhas por partição" conta as linhas de cada uma.
-- **Consultas SQL** — escreva SQL e veja o resultado numa tabela. O campo **Limite de linhas** diz quantas linhas trazer: o padrão é 1 000 e o máximo é 50 000. Se a consulta tiver mais linhas que o limite, o resultado é cortado e aparece um aviso. O último resultado continua na tela, junto com a SQL que o gerou, e você pode baixá-lo em CSV. Se a consulta tiver um erro, o site explica em português o que costuma causá-lo (nome de view ou coluna errado, erro de escrita…) e mostra embaixo a mensagem original do DuckDB, que vem em inglês.
+O explorador imita o jeito de trabalhar do console da AWS, para você treinar o fluxo que vai usar no mercado. O menu lateral (**Serviços**) tem duas telas:
+
+> **Pense assim:** é um **simulador de cabine**. Os botões estão no mesmo lugar dos do avião de verdade (o console da AWS), mas tudo roda no seu computador, com o floci no lugar do S3 e o DuckDB no lugar do Athena. Nada aqui usa nem cobra serviços da AWS.
+
+```mermaid
+flowchart LR
+    menu["Menu lateral<br/>Serviços"] --> s3["S3 · Buckets"]
+    menu --> ath["Athena · Editor de consultas"]
+    s3 --> lista["lista de buckets"] --> bucket["datalake-tracking"]
+    bucket --> obj["Objetos<br/>pastas, arquivos e prévia"]
+    bucket --> part["Partições<br/>por evento e dia"]
+    bucket --> prop["Propriedades<br/>visão geral"]
+    ath --> arv["Tabelas e colunas<br/>(à esquerda)"]
+    ath --> abas["Abas de consulta<br/>+ editor + Executar"]
+    abas --> res["Resultados<br/>+ detalhes da execução"]
+    abas --> hist["Consultas recentes"]
+```
+
+### S3 · Buckets
+
+- **Lista de buckets:** a tabela mostra o bucket `datalake-tracking`, a região, quantos objetos ele tem e o tamanho total. Clique no nome para entrar.
+- **Caminho no topo (breadcrumb):** `Buckets › datalake-tracking › silver › event_name=purchase`. Clique em qualquer parte para voltar até ela.
+- **Aba Objetos:** as pastas (📁) e os arquivos (📄) da pasta atual, com tipo, última modificação e tamanho. Clique numa pasta para entrar; clique num `.parquet` ou `.jsonl` para ver as primeiras 100 linhas logo abaixo.
+- **Aba Partições:** escolha um dataset e veja uma linha por partição (`event_name`, `year`, `month`, `day`) com quantos arquivos e quantos bytes ela tem. Quando o dataset não tem uma dessas partições, a coluna mostra `—`. O botão "Contar linhas por partição" conta as linhas de cada uma.
+- **Aba Propriedades:** nome, região, endpoint, total de objetos e tamanho do bucket.
+
+### Athena · Editor de consultas
+
+- **À esquerda, a árvore de dados:** a fonte (floci), o banco `datalake` e as **tabelas** (as views). Abra uma tabela para ver as colunas e os tipos; o botão **Inserir no editor** escreve o nome da tabela no fim da sua consulta. Ali também ficam as **consultas de exemplo**.
+- **Abas de consulta:** "Consulta 1", "Consulta 2"… Cada aba guarda a própria SQL e o próprio resultado. O **＋** abre uma aba nova; o **✕** fecha a aba atual (a última nunca fecha).
+- **Editor:** escreva a SQL e clique em **Executar**. O campo **Limite de linhas** diz quantas linhas trazer: o padrão é 1 000 e o máximo é 50 000. Se a consulta tiver mais linhas que o limite, o resultado é cortado e aparece um aviso.
+- **Resultados:** a faixa verde mostra os **detalhes da execução**, como o Athena: status, tempo de execução, número de linhas e **dados lidos (estimado)**. Embaixo, a tabela e o botão **Baixar resultados (CSV)**.
+  - O Athena cobra pelos dados que lê, por isso mostra esse número. Aqui ele é uma **estimativa**: a soma do tamanho dos arquivos das tabelas que a sua SQL usa. Se a SQL filtra a partição com valores fixos (`WHERE event_name = 'purchase'` ou `event_name IN (...)`), só entram os arquivos dessas partições, como o Athena faz ao pular pastas inteiras ("partition pruning"). Compare `SELECT count(*) FROM landing` com a mesma consulta filtrando `event_name`: o número cai, e no Athena de verdade a conta também.
+- **Erros:** a faixa vermelha explica em português o que costuma causar o erro (nome de tabela ou coluna errado, erro de escrita…) e mostra embaixo a mensagem original do DuckDB, que vem em inglês.
+- **Consultas recentes:** a lista das consultas desta sessão, com hora, status, tempo, linhas e dados lidos. Clique numa delas para abri-la de novo no editor. O histórico vale enquanto a aba do navegador estiver aberta; recarregar a página zera.
 
 ## Views: os nomes que você usa no SQL
 
@@ -38,7 +70,7 @@ A view `silver` lê só as pastas `event_name=…`: as vizinhas `silver/itens/` 
 
 Se uma pasta tiver arquivos `.parquet` e `.jsonl` misturados, ela vira duas views, com o formato no fim do nome (ex.: `landing_jsonl` e `landing_parquet`).
 
-As views das pastas particionadas têm as colunas de partição (`event_name`, `year`, `month`, `day`), como texto (`month` é `'09'`). A lista completa de views e colunas aparece em "Views disponíveis", na aba de SQL.
+As views das pastas particionadas têm as colunas de partição (`event_name`, `year`, `month`, `day`), como texto (`month` é `'09'`). A lista completa de tabelas e colunas aparece na árvore à esquerda da tela **Athena · Editor de consultas**. No editor, as views aparecem como **tabelas** do banco `datalake`, como no Athena.
 
 Exemplos:
 

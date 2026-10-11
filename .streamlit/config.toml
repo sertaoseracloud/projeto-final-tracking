@@ -1,0 +1,8 @@
+# Tema do explorador (console do datalake): cores inspiradas no console da AWS.
+[theme]
+base = "light"
+primaryColor = "#ec7211"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f2f3f3"
+textColor = "#16191f"
+font = "sans serif"
