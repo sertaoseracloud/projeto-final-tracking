@@ -2,7 +2,7 @@
 
 Só é preciso o **Docker**. Python, Java, PySpark e o conector do Spark para S3 vêm dentro da imagem do projeto, e o S3 é emulado pelo floci. Nenhuma conta de nuvem é necessária.
 
-Tempo total: **cerca de 10 minutos** na primeira vez, a maior parte baixando imagens.
+Tempo total: **cerca de 20 minutos** na primeira vez, a maior parte baixando o que vai dentro da imagem (Spark, Java e o conector para o S3). Reserve uns **5 GB livres** no disco: a imagem do projeto tem perto de 3,5 GB.
 
 ```mermaid
 flowchart LR
@@ -39,7 +39,7 @@ O projeto usa três contêineres, chamados de **serviços** no `docker-compose.y
 | Serviço | Imagem | O que tem |
 | --- | --- | --- |
 | `floci` | `floci/floci:latest` | S3 emulado em `http://floci:4566` (e `localhost:4566` na sua máquina) |
-| `app` | construída pelo `Dockerfile` | Python 3.11, Java 17, PySpark 3.5.3, conector `s3a` (`hadoop-aws` 3.3.4), `boto3`, `pytest` |
+| `app` | construída pelo `Dockerfile` | Python 3.11, Java 17, PySpark 4.2.0 (com o Hadoop 3.5.0), conector `s3a` (`hadoop-aws` 3.5.0 e o AWS SDK v2), `boto3`, `pytest` |
 | `explorador` | a mesma imagem do `app` | console Streamlit em `http://localhost:8501`: olhar os buckets, ver o catálogo, rodar os seus jobs e workflows e fazer consultas SQL |
 
 Em outras palavras: o `floci` guarda os arquivos e o `app` roda o seu código. O `explorador` é um site para olhar os buckets e rodar os seus jobs sem digitar comandos (Passo 5). O conector `s3a` é a peça que permite ao Spark ler e gravar no S3 com caminhos que começam com `s3a://`.

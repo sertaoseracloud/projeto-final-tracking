@@ -601,7 +601,7 @@ def _tela_jobs() -> None:
     rodando = glue.em_execucao(pasta_exec, nome)
     titulo, botao = st.columns([4, 1], vertical_alignment="center")
     with titulo:
-        ui.titulo(nome, descricao="Tipo: Spark (PySpark 3.5.3, local) · o script vem do floci e roda no contêiner "
+        ui.titulo(nome, descricao="Tipo: Spark (PySpark 4.2.0, local) · o script vem do floci e roda no contêiner "
                   "do explorador · um job por vez")
     botao.button("Executar", key="executar_job", type="primary", disabled=rodando,
                  on_click=_executar_job, args=(nome, pasta_exec))

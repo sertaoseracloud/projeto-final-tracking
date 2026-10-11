@@ -37,8 +37,8 @@ def contar_etapas(flags: DataFrame, dims: list[str], etapas: list[str]) -> DataF
     linhas = somas.select(*dims, F.expr(f"stack({len(etapas)}, {pilha}) as (etapa, ordem, sessoes)"))
     w = Window.partitionBy(*dims).orderBy("ordem")
     return (linhas
-            .withColumn("conv_etapa_anterior", F.round(F.col("sessoes") / F.lag("sessoes").over(w), 4))
-            .withColumn("conv_topo", F.round(F.col("sessoes") / F.first("sessoes").over(w), 4)))
+            .withColumn("conv_etapa_anterior", F.round(F.try_divide(F.col("sessoes"), F.lag("sessoes").over(w)), 4))
+            .withColumn("conv_topo", F.round(F.try_divide(F.col("sessoes"), F.first("sessoes").over(w)), 4)))
 
 
 def _todos(df: DataFrame, dims: list[str]) -> DataFrame:
@@ -58,7 +58,7 @@ def funil_compra(eventos: DataFrame, atributos: DataFrame) -> DataFrame:
                      .withColumn("escopo", F.lit("canal_plano")))
     )
     taxa = total.unionByName(flags).groupBy(*DIMS).agg(
-        F.round(F.sum("view_item") / F.sum("select_item"), 4).alias("taxa_view_item"))
+        F.round(F.try_divide(F.sum("view_item"), F.sum("select_item")), 4).alias("taxa_view_item"))
     return funil.join(taxa, DIMS, "left")
 
 

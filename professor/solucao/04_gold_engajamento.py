@@ -25,7 +25,7 @@ def retencao_video(eventos: DataFrame) -> DataFrame:
                            *[F.sum((F.col("maximo") >= m).cast("int")).alias(f"m{m}") for m in MARCOS])
     pilha = ", ".join(f"{m}, m{m}" for m in MARCOS)
     return (somas.select("iniciaram", F.expr(f"stack({len(MARCOS)}, {pilha}) as (marco, sessoes)"))
-            .withColumn("percentual", F.round(F.col("sessoes") / F.col("iniciaram"), 4)))
+            .withColumn("percentual", F.round(F.try_divide(F.col("sessoes"), F.col("iniciaram")), 4)))
 
 
 def buscas_faq(eventos: DataFrame) -> DataFrame:

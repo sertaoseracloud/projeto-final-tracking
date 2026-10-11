@@ -6,7 +6,7 @@ Um **job** é um script Python que faz uma etapa do trabalho do começo ao fim: 
 
 ## Como rodar um job
 
-Todo código Python roda no contêiner `app`, que já tem PySpark 3.5.3 e o conector `s3a`:
+Todo código Python roda no contêiner `app`, que já tem PySpark 4.2.0 e o conector `s3a`:
 
 ```bash
 docker compose run --rm app python pipeline/<seu_job>.py
@@ -173,6 +173,25 @@ flowchart LR
         d2 --> d3["itens/ e eventos_rejeitados/<br/>continuam lá"]
     end
 ```
+
+## Spark 4: erro em vez de `null` (modo ANSI)
+
+O projeto usa o PySpark 4.2, que liga o **modo ANSI** por padrão. Nele, uma conta impossível **para o job com erro**, em vez de devolver `null` como no Spark 3:
+
+- dividir por zero: `F.col("compras") / F.col("sessoes")` com `sessoes = 0` dá `DIVIDE_BY_ZERO`;
+- converter texto que não é número ou data: `F.col("valor").cast("double")` com `"abc"`, ou `F.to_timestamp(...)` com uma data mal escrita, dá `CAST_INVALID_INPUT`.
+
+> **Pense assim:** o modo ANSI é um **caixa que confere cada nota**. Antes, uma nota falsa passava em branco (virava `null`) e você só descobria depois, no relatório. Agora o caixa para a fila e avisa na hora. É mais seguro, mas, quando você **sabe** que o dado pode vir sujo e quer o `null`, precisa dizer isso.
+
+Quando o `null` é o que você quer, use as funções `try_`:
+
+| Em vez de | Use | O que acontece com o dado ruim |
+| --- | --- | --- |
+| `a / b` | `F.try_divide(a, b)` | `null` quando `b` é zero |
+| `F.col("x").cast("double")` | `F.col("x").try_cast("double")` | `null` quando `x` não é número |
+| `F.to_timestamp("ts", formato)` | `F.try_to_timestamp("ts", F.lit(formato))` | `null` quando a data não segue o formato |
+
+Na Silver, isso é útil para **rejeitar** o dado sujo: converta com `try_`, e o que virou `null` vai para os rejeitados com o motivo. Na Gold, use `F.try_divide` nas taxas cujo denominador pode ser zero.
 
 ## Antes de começar
 

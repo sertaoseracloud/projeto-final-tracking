@@ -69,7 +69,7 @@ O mesmo pipeline como workflow (um grafo: as cinco Golds rodam lado a lado depoi
 docker compose run --rm app python -m explorador.workflows professor/solucao/workflows/medalhao.json
 ```
 
-Medido com os dados padrão: cerca de 11 minutos, todos os 8 jobs com sucesso.
+Medido com os dados padrão no Spark 3.5: cerca de 11 minutos como workflow, todos os 8 jobs com sucesso. No Spark 4.2, o `executar_pipeline.py` (um job por vez) levou cerca de 13 minutos, e todos os números do `GABARITO.md` continuaram iguais.
 
 Testes da solução:
 

@@ -102,7 +102,7 @@ Estes arquivos já existem no repositório. Você não precisa alterá-los.
 | --- | --- |
 | `site/index.html` | landing de exemplo que dispara os 20 eventos e exporta JSONL; serve para ver o evento nascer |
 | `gerador/` | simulador do coletor: popula `landing/` no S3 com semanas de eventos sintéticos |
-| `docker-compose.yml` + `Dockerfile` | três contêineres: `floci` (S3 emulado), `app` (Python 3.11, Java 17, PySpark 3.5.3 com o conector `s3a`, `boto3`, `pytest`) e `explorador` (um console em `http://localhost:8501`, feito com a mesma imagem do `app`, para olhar os buckets, ver o catálogo de tabelas, rodar os seus jobs, sozinhos ou juntos num workflow, e fazer consultas SQL). Nada é instalado na máquina além do Docker; nenhuma conta de nuvem é necessária |
+| `docker-compose.yml` + `Dockerfile` | três contêineres: `floci` (S3 emulado), `app` (Python 3.11, Java 17, PySpark 4.2.0 com o conector `s3a`, `boto3`, `pytest`) e `explorador` (um console em `http://localhost:8501`, feito com a mesma imagem do `app`, para olhar os buckets, ver o catálogo de tabelas, rodar os seus jobs, sozinhos ou juntos num workflow, e fazer consultas SQL). Nada é instalado na máquina além do Docker; nenhuma conta de nuvem é necessária |
 | `pipeline/comum.py` | peças prontas para os seus jobs: a `SparkSession` configurada para o floci, caminhos `s3a://`, conferir se uma camada existe (R2), ler e gravar as partições `event_name=…` sem misturar nem apagar as pastas vizinhas. Importe em vez de reescrever; o [pipeline/README.md](../pipeline/README.md#comumpy-as-peças-prontas) mostra como |
 | `infra/verificar_ambiente.py` | confere, de dentro do contêiner `app`, que o Spark lê e grava no floci por `s3a://` |
 | `SETUP.md` | ambiente do zero com Docker |

@@ -51,7 +51,7 @@ def receita_diaria(compras: DataFrame, reembolsos: DataFrame) -> DataFrame:
                  F.round(F.sum("valor_reembolsado"), 2).alias("receita_reembolsada"),
                  F.count("*").alias("pedidos"))
             .withColumn("receita_liquida", F.round(F.col("receita_bruta") - F.col("receita_reembolsada"), 2))
-            .withColumn("ticket_medio", F.round(F.col("receita_bruta") / F.col("pedidos"), 2)))
+            .withColumn("ticket_medio", F.round(F.try_divide(F.col("receita_bruta"), F.col("pedidos")), 2)))
 
 
 def taxa_reembolso(compras: DataFrame, reembolsos: DataFrame) -> DataFrame:
@@ -59,13 +59,13 @@ def taxa_reembolso(compras: DataFrame, reembolsos: DataFrame) -> DataFrame:
     return (base.groupBy("plano", "canal")
             .agg(F.count("*").alias("pedidos"),
                  F.sum((F.col("valor_reembolsado") > 0).cast("int")).alias("reembolsados"))
-            .withColumn("taxa_reembolso", F.round(F.col("reembolsados") / F.col("pedidos"), 4)))
+            .withColumn("taxa_reembolso", F.round(F.try_divide(F.col("reembolsados"), F.col("pedidos")), 4)))
 
 
 def adesao_order_bump(compras: DataFrame) -> DataFrame:
     return (_com_total(compras, ["plano"]).groupBy("plano")
             .agg(F.count("*").alias("pedidos"), F.sum("com_bump").alias("com_bump"))
-            .withColumn("adesao", F.round(F.col("com_bump") / F.col("pedidos"), 4)))
+            .withColumn("adesao", F.round(F.try_divide(F.col("com_bump"), F.col("pedidos")), 4)))
 
 
 def lead_para_compra(eventos: DataFrame, compras: DataFrame, atributos: DataFrame) -> DataFrame:
@@ -84,7 +84,7 @@ def lead_para_compra(eventos: DataFrame, compras: DataFrame, atributos: DataFram
     return (_com_total(base, ["canal"]).groupBy("canal")
             .agg(F.count("*").alias("leads"), F.count("compra_em").alias("compraram_depois"),
                  F.round(F.percentile_approx("dias", 0.5), 2).alias("mediana_dias"))
-            .withColumn("taxa_conversao", F.round(F.col("compraram_depois") / F.col("leads"), 4)))
+            .withColumn("taxa_conversao", F.round(F.try_divide(F.col("compraram_depois"), F.col("leads")), 4)))
 
 
 def main() -> None:
