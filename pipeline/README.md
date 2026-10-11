@@ -21,6 +21,8 @@ O pipeline acessa o bucket **só pelo Spark**, com caminhos `s3a://datalake-trac
 - `s3a://` é o prefixo que diz ao Spark "este caminho está num S3". É o conector `s3a` (biblioteca `hadoop-aws`) que faz a conversa com o floci.
 - `boto3` é o SDK da AWS para Python. O gerador usa `boto3`, mas o seu pipeline não pode usar (requisito R1).
 
+> **Pense assim:** `s3a://datalake-tracking/silver/` é um **endereço com CEP**: o `s3a://` diz "isto fica no S3", `datalake-tracking` é a cidade (o bucket) e o resto é a rua e o número (a pasta). O conector `s3a` é o carteiro que sabe entregar nesse endereço.
+
 ## `comum.py`: as peças prontas
 
 A parte repetitiva já vem pronta em [`comum.py`](comum.py), nesta mesma pasta. **Não reescreva:** importe. Como os seus jobs rodam como `python pipeline/<job>.py`, o Python já encontra o `comum.py` ao lado deles.
@@ -54,6 +56,22 @@ spark.stop()
 
 O `comum.py` usa só o Spark (R1). As seções abaixo explicam o que ele faz por baixo, para você entender e conseguir depurar.
 
+> **Pense assim:** a `SparkSession` é a **chave da cozinha**: sem ela, nada se lê nem se grava. O `comum.py` é a **caixa de ferramentas** que vem com a cozinha: em vez de forjar uma faca nova a cada receita, você pega a que já está afiada e gasta o tempo cozinhando.
+
+```mermaid
+flowchart LR
+    subgraph JOB["seu job (pipeline/silver.py)"]
+        a["criar_sessao('silver')"] --> b["exigir_camada(... bronze ...)"]
+        b --> c["ler_eventos(spark, 'bronze')"]
+        c --> d["SUAS transformações<br/>dedup, validação, sessões..."]
+        d --> e["gravar_eventos(df, 'silver', 'overwrite')"]
+    end
+    c <-->|s3a://| s3[("bucket")]
+    e -->|s3a://| s3
+```
+
+Só a caixa do meio é trabalho seu; as outras são uma linha cada, vindas do `comum.py`.
+
 ### Como `exigir_camada` confere se uma camada existe
 
 Ele usa o `FileSystem` do Hadoop pela JVM do Spark:
@@ -65,9 +83,13 @@ existe = bool(caminho.getFileSystem(spark._jsc.hadoopConfiguration()).globStatus
 
 O `*` é um **glob**, um "curinga": `event_name=*` casa com qualquer pasta que comece com `event_name=`. Por isso o trecho usa `globStatus` (que entende curingas) em vez de `exists`.
 
+> **Pense assim:** é o **coringa do baralho**, que vale qualquer carta. `event_name=*` vale `event_name=scroll`, `event_name=purchase` e todas as outras.
+
 ## Partições por nome do evento e por dia
 
 Uma **partição** é uma subpasta que agrupa os dados por um valor. Aqui há dois níveis: primeiro o nome do evento, depois o dia. Todas as rolagens de 3 de setembro de 2026 ficam em `event_name=scroll/year=2026/month=09/day=03/`. Assim, quem quer ler só as compras, ou só um dia, não precisa abrir o resto.
+
+> **Pense assim:** as partições são **gavetas etiquetadas** num arquivo de aço. A etiqueta da gaveta é o nome do evento; dentro dela, uma pasta por ano, mês e dia. Para achar as compras de 3 de setembro, você abre uma gaveta e uma pasta, e não o arquivo inteiro.
 
 A landing, a Bronze e a Silver guardam os eventos assim, **direto na raiz da camada** (não existe pasta `eventos`):
 
@@ -78,6 +100,18 @@ silver/event_name=scroll/year=2026/month=09/day=03/part-….parquet
 silver/itens/year=2026/month=09/day=03/part-….parquet      ← vizinha das pastas event_name=
 silver/eventos_rejeitados/part-….parquet                   ← vizinha também
 ```
+
+```mermaid
+flowchart TB
+    silver["silver/"] --> e1["event_name=page_view/"]
+    silver --> e2["event_name=purchase/"]
+    silver --> e3["… (uma por evento)"]
+    silver --> itens["itens/ (vizinha)"]
+    silver --> rej["eventos_rejeitados/ (vizinha)"]
+    e2 --> y["year=2026/month=09/day=03/<br/>part-….parquet"]
+```
+
+Na raiz da Silver convivem dois tipos de pasta: as partições de eventos (`event_name=…`) e as vizinhas (`itens/`, `eventos_rejeitados/`). É por isso que ler e gravar a raiz exige os cuidados abaixo.
 
 ### Os dois dígitos do mês
 
@@ -98,6 +132,8 @@ eventos = spark.read.option("basePath", raiz).parquet(f"{raiz}/event_name=*")
 
 A landing é igual, com `.json(...)` no lugar de `.parquet(...)`. O `event_name` que vem do caminho é o mesmo que está dentro de cada evento.
 
+> **Pense assim:** o `basePath` diz ao Spark **a partir de qual gaveta começar a contar**. Sem ele, o Spark acha que `event_name=scroll` é só o nome de uma pasta qualquer; com ele, entende que `event_name` é uma coluna e `scroll` é o valor dela.
+
 ### Gravar sem apagar as vizinhas (o que `gravar_eventos` faz)
 
 Na gravação, use `.partitionBy("event_name", "year", "month", "day")` com as quatro colunas como texto. O `partitionBy` cria uma subpasta por combinação de valores dessas colunas.
@@ -113,6 +149,20 @@ Cuidado com o `mode("overwrite")` na Silver: por padrão ele **apaga a pasta int
 
 Na Bronze, que é append-only (R4), use `mode("append")` com o mesmo `partitionBy`.
 
+> **Pense assim:** o `overwrite` normal **esvazia o armário inteiro** para guardar as roupas novas, inclusive as gavetas que você nem ia mexer (`itens/`, `eventos_rejeitados/`). O modo dinâmico **troca só as gavetas que mudaram** e deixa o resto onde estava.
+
+```mermaid
+flowchart LR
+    subgraph NORMAL["overwrite normal ❌"]
+        n1["apaga silver/ inteira"] --> n2["grava event_name=…"]
+        n2 --> n3["itens/ e eventos_rejeitados/<br/>sumiram"]
+    end
+    subgraph DINAMICO["overwrite dinâmico ✅"]
+        d1["apaga só as partições<br/>que estão no DataFrame"] --> d2["grava event_name=…"]
+        d2 --> d3["itens/ e eventos_rejeitados/<br/>continuam lá"]
+    end
+```
+
 ## Antes de começar
 
 Rode estes três comandos, nesta ordem:
@@ -126,6 +176,8 @@ Rode estes três comandos, nesta ordem:
 O requisito R11 pede um arquivo `site/mapa_calor.js` com os números do mapa de calor. Esse arquivo não fica no S3: o site lê do disco. Então o job lê a Gold pelo Spark e, no fim, grava um arquivo comum com Python.
 
 - **Trazer o resultado para o Python:** `collect()` traz as linhas de um DataFrame do Spark para uma lista do Python. Use só com tabelas pequenas, como as duas do mapa de calor, que têm poucas dezenas de linhas. **Nunca** faça isso com a Bronze ou a Silver: são dezenas de milhares de linhas e o job fica lento ou estoura a memória.
+
+  > **Pense assim:** o Spark é um **armazém** com muitos funcionários trabalhando em paralelo; o Python do seu script é a **sua mesa**. O `collect()` traz tudo do armazém para a sua mesa. Um envelope com 30 linhas cabe; um caminhão com 60 mil, não.
 - **Onde gravar:** o contêiner enxerga o repositório em `/projeto`, então `site/` é `/projeto/site/`. A partir de um arquivo em `pipeline/`, o caminho é `Path(__file__).resolve().parents[1] / "site" / "mapa_calor.js"`.
 
 ```python

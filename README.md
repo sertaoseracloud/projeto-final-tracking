@@ -9,6 +9,19 @@ O projeto é construir o **datalake em arquitetura medalhão** que transforma es
 - **Datalake** é um lugar central onde os dados ficam guardados como arquivos, prontos para análise.
 - **Arquitetura medalhão** organiza esse datalake em camadas, do dado mais cru ao mais refinado: Bronze (cópia fiel do que chegou), Silver (dado limpo e organizado) e Gold (tabelas que respondem perguntas do negócio).
 
+> **Pense assim:** o projeto é uma **fábrica de dados**. Os eventos são a matéria-prima que chega pelo portão (a landing). Cada camada é uma linha de produção que entrega algo mais acabado para a seguinte, até o produto final (as tabelas Gold), que é o que o gerente da empresa consegue usar para decidir.
+
+```mermaid
+flowchart LR
+    V["👤 Visitante<br/>na landing page"] -->|cada clique vira<br/>um evento| L["landing/<br/>eventos brutos"]
+    L --> B["🥉 Bronze<br/>cópia fiel"]
+    B --> S["🥈 Silver<br/>dado limpo"]
+    S --> G["🥇 Gold<br/>respostas do negócio"]
+    G --> R["📊 Relatório<br/>e mapa de calor"]
+```
+
+O desenho mostra o caminho de um evento: nasce no clique do visitante, entra pela landing e é refinado camada a camada até virar resposta.
+
 Os termos novos estão explicados no [glossário do enunciado](docs/ENUNCIADO.md#glossário).
 
 ## O que há aqui
@@ -24,6 +37,29 @@ A tabela abaixo mostra as pastas principais do repositório.
 | `docs/` | [enunciado](docs/ENUNCIADO.md) e [contrato do evento](docs/CONTRATO_EVENTO.md) |
 
 Em outras palavras: `site/` e `gerador/` produzem os dados; você escreve o código em `pipeline/`; `docs/` diz o que construir.
+
+```mermaid
+flowchart TB
+    subgraph PRONTO["Vem pronto (você só usa)"]
+        site["site/<br/>página de exemplo"]
+        gerador["gerador/<br/>simula 14 dias de visitas"]
+        comum["pipeline/comum.py<br/>peças reutilizáveis"]
+        explorador["explorador/<br/>olhar o bucket"]
+        docs["docs/<br/>enunciado e contrato"]
+    end
+    subgraph SEU["Você constrói"]
+        jobs["pipeline/&lt;seus jobs&gt;.py<br/>Bronze, Silver, Golds"]
+        relatorio["RELATORIO.md"]
+    end
+    gerador -->|grava eventos| bucket[("bucket S3<br/>datalake-tracking")]
+    site -->|exporta JSONL| bucket
+    comum --> jobs
+    jobs <-->|lê e grava pelo Spark| bucket
+    explorador -->|só lê| bucket
+    docs -.->|diz o que construir| jobs
+```
+
+O diagrama separa o que já existe do que é seu: as setas mostram quem grava e quem lê o bucket.
 
 ## Começar
 

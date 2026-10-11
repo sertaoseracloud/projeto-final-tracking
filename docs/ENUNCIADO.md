@@ -15,6 +15,8 @@ Traduzindo:
 
 Você vai **construir do zero** um datalake em arquitetura medalhão que responda a quatro perguntas da empresa. Um **datalake** é um repositório central de dados guardados como arquivos. A **arquitetura medalhão** organiza esse repositório em três camadas: Bronze (dado cru), Silver (dado limpo) e Gold (tabelas prontas para responder perguntas).
 
+> **Pense assim:** é a cozinha de um restaurante. A **Bronze** é a despensa: os ingredientes guardados exatamente como chegaram do fornecedor, até os amassados, com a nota fiscal de cada um. A **Silver** é a bancada de preparo: tudo lavado, cortado e separado, e o que estava estragado vai para uma caixa à parte com uma etiqueta dizendo por quê. A **Gold** é o prato servido: pronto para o cliente (o gerente da empresa) consumir sem saber como foi feito.
+
 As quatro perguntas:
 
 1. **Funil** — em que etapa a jornada de compra perde mais gente, por plano e por canal?
@@ -22,7 +24,20 @@ As quatro perguntas:
 3. **Receita e aquisição** — quanto entrou de fato, descontados os reembolsos, e qual canal traz cliente que não desiste?
 4. **Previsão** — quais sessões estão perto de comprar, e que perfis de visitante existem?
 
-Um **funil** é a sequência de etapas até a compra (ver os planos → escolher → pagar). Em cada etapa, parte das pessoas desiste. O **canal** é de onde o visitante veio, por exemplo `google / cpc` (anúncio pago no Google).
+Um **funil** é a sequência de etapas até a compra (ver os planos → escolher → pagar). Em cada etapa, parte das pessoas desiste.
+
+> **Pense assim:** um funil de cozinha é largo em cima e estreito embaixo. Muita gente entra no topo (vê os planos) e pouca chega ao fim (compra). O trabalho é descobrir em que altura o funil "vaza" mais.
+
+```mermaid
+flowchart TB
+    a["view_item_list<br/>viram os planos"] --> b["select_item<br/>escolheram um plano"]
+    b --> c["add_to_cart<br/>puseram no carrinho"]
+    c --> d["view_cart → begin_checkout"]
+    d --> e["add_payment_info<br/>escolheram o pagamento"]
+    e --> f["purchase<br/>compraram"]
+```
+
+O **canal** é de onde o visitante veio, por exemplo `google / cpc` (anúncio pago no Google).
 
 Competências avaliadas:
 
@@ -113,16 +128,31 @@ Por que isso importa: numa empresa, um número sem explicação não convence ni
 
 O desenho abaixo mostra o caminho do dado. À esquerda, o que você recebe pronto: a página e o gerador gravam eventos na landing. À direita, o que você constrói: as camadas Bronze, Silver e Gold.
 
-```text
- ┌──────────── recebido pronto ─────────────┐          ┌────────────── construído por você ────────────────┐
- │                                          │          │                                                    │
- │  site/index.html ──export JSONL──┐       │          │  bronze ─► silver ─┬─► gold funil                  │
- │                                  ▼       │          │                    ├─► gold engajamento            │
- │  gerador/ ──────► s3://<bucket>/landing/event_name=…/year=…/month=…/day=…/*.jsonl ─────► ├─► gold receita e aquisição     │
- │                                          │          │                    └─► gold ML                     │
- └──────────────────────────────────────────┘          └────────────────────────────────────────────────────┘
-                                 fronteira: formato do evento (CONTRATO_EVENTO.md) + prefixo landing/
+```mermaid
+flowchart LR
+    subgraph PRONTO["Recebido pronto"]
+        site["site/index.html"]
+        ger["gerador/"]
+    end
+    subgraph LAND["Fronteira: contrato do evento"]
+        landing[("landing/event_name=…/<br/>year=…/month=…/day=…/*.jsonl")]
+    end
+    subgraph SEU["Construído por você"]
+        bronze["Bronze"] --> silver["Silver"]
+        silver --> g1["Gold funil"]
+        silver --> g2["Gold engajamento"]
+        silver --> g3["Gold receita e aquisição"]
+        silver --> g4["Gold ML"]
+        silver --> g5["Gold mapa de calor"]
+        g5 --> js["site/mapa_calor.js"]
+    end
+    site -->|exportar JSONL| landing
+    ger -->|grava| landing
+    landing --> bronze
+    js -.->|botão Mapa de calor| site
 ```
+
+A fronteira entre o que é pronto e o que é seu é a landing: tudo o que você precisa saber dela está no [CONTRATO_EVENTO.md](CONTRATO_EVENTO.md). As cinco Golds leem a Silver; a do mapa de calor ainda volta para o site, num arquivo que o próprio site carrega.
 
 Todas as camadas ficam no **mesmo bucket**, em prefixos próprios, gravadas em Parquet:
 
@@ -136,6 +166,8 @@ s3://datalake-tracking/
 
 **Parquet** é um formato de arquivo para tabelas. Ele guarda os dados por coluna, com o tipo de cada uma, e é muito mais rápido de ler que JSON. Um **prefixo** é o começo do caminho de um arquivo no S3; funciona como uma pasta.
 
+> **Pense assim:** o JSON é uma pilha de fichas de papel, cada uma com todos os campos escritos à mão. Para somar só os valores, você precisa ler ficha por ficha. O Parquet é uma planilha arquivada por coluna: para somar os valores, você puxa só a coluna `value` e ignora o resto.
+
 ## 5. Requisitos
 
 Os requisitos são numerados de R1 a R11. Cada um vem com uma linha "Em outras palavras" que explica a ideia. A regra que vale é sempre o texto do requisito.
@@ -148,10 +180,37 @@ Os requisitos são numerados de R1 a R11. Cada um vem com uma linha "Em outras p
   - um job Bronze, um job Silver, **cinco jobs Gold, cada um num arquivo próprio** (funil, engajamento, receita e aquisição, ML, mapa de calor) e um job que exporta o mapa de calor para o site (R11);
   - cada job verifica que a camada de que depende existe e, se não existir, para com uma mensagem que diz o que rodar antes (a função `exigir_camada` do `pipeline/comum.py` já faz isso).
   - *Em outras palavras:* um **job** é um script que faz uma etapa inteira. São oito scripts. Exemplo: se alguém roda o job Silver antes do Bronze, o job Silver para e avisa "rode o job Bronze antes".
+
+  > **Pense assim:** cada job é uma **receita** de uma etapa do cardápio. A receita da Silver começa com "pegue a Bronze": se a geladeira estiver vazia, ela não improvisa, avisa o que precisa ser feito antes.
+
+  ```mermaid
+  flowchart LR
+      L[("landing")] --> B["job Bronze"]
+      B --> S["job Silver"]
+      S --> F["Gold funil"]
+      S --> E["Gold engajamento"]
+      S --> R["Gold receita e aquisição"]
+      S --> M["Gold ML"]
+      S --> C["Gold mapa de calor"]
+      C --> X["job de exportação<br/>site/mapa_calor.js"]
+  ```
+
+  Cada seta é uma dependência: um job só roda se a caixa de onde vem a seta já existe. O script do R3 roda os oito nessa ordem.
 - **R3.** Um script que roda os oito jobs em sequência. Ele **não** gera dados.
   - *Em outras palavras:* um único comando reconstrói o datalake inteiro, a partir da landing que já existe.
 - **R4.** Bronze append-only, com schema explícito (sem inferência), particionada por nome do evento e por data no formato `event_name=<nome>/year=AAAA/month=MM/day=DD` (o dia de coleta, tirado do caminho da landing) e com colunas de proveniência: arquivo de origem e instante da ingestão.
   - *Em outras palavras:* **append-only** quer dizer que a Bronze só recebe dados novos; nunca apaga nem altera o que já está lá. **Schema explícito** quer dizer que você escreve no código o nome e o tipo de cada campo, em vez de deixar o Spark adivinhar. **Particionada por nome do evento e por data** quer dizer que cada evento, em cada dia, fica numa subpasta própria, como `bronze/event_name=scroll/year=2026/month=09/day=03/`. **Proveniência** é a "etiqueta de origem" de cada linha: de qual arquivo da landing ela veio e quando foi lida.
+
+  > **Pense assim:** a Bronze é um **arquivo de cartório**: tudo o que chega é registrado, carimbado com a origem e a data, e nada é rasurado depois (append-only). As **partições** são as **gavetas etiquetadas** do arquivo: uma gaveta por tipo de evento e, dentro dela, uma pasta por dia. Quem procura "as compras de 3 de setembro" abre só uma gaveta e uma pasta.
+
+  ```mermaid
+  flowchart TB
+      bronze["bronze/"] --> pv["event_name=page_view/"]
+      bronze --> pu["event_name=purchase/"]
+      bronze --> etc["… uma gaveta por evento"]
+      pu --> y["year=2026/"] --> m["month=09/"] --> d1["day=03/<br/>part-….parquet"]
+      m --> d2["day=04/<br/>part-….parquet"]
+  ```
 
 ### 5.2 Silver
 
@@ -159,6 +218,8 @@ A Silver é a camada do dado limpo: sem repetições, com colunas tipadas, com o
 
 - **R5.** Deduplicação por `event_id`.
   - *Em outras palavras:* o mesmo evento pode chegar duas vezes (reenvio de lote). Na Silver, cada `event_id` aparece uma vez só.
+
+  > **Pense assim:** é como uma carta registrada que o carteiro entregou duas vezes por engano. O número de rastreio (`event_id`) é o mesmo nas duas: guarde uma e descarte a outra.
 - **R6.** Extração dos `params` para colunas tipadas.
   - *Em outras palavras:* as chaves que estão dentro de `params` (como `value` ou `percent_scrolled`) viram colunas próprias, cada uma com o tipo certo (número, texto, booleano). Inclui `element_id`, que diz em que elemento da página foi o clique (veja o [contrato](CONTRATO_EVENTO.md#element_id-onde-foi-o-clique)).
 - **R7.** Validação com **motivo de rejeição**. Os rejeitados são gravados numa tabela separada, um motivo por linha. As regras mínimas estão abaixo; você pode acrescentar outras, justificando no relatório.
@@ -175,10 +236,36 @@ A Silver é a camada do dado limpo: sem repetições, com colunas tipadas, com o
   | reembolso sem compra | `refund` cujo `transaction_id` não existe em nenhum `purchase` válido |
 
   - *Em outras palavras:* um evento inválido não é jogado fora em silêncio. Ele vai para uma tabela de rejeitados com o motivo escrito. Exemplo: um `scroll` com `percent_scrolled = 40` vai para os rejeitados com o motivo "marco fora do padrão". O símbolo ∉ significa "não pertence a".
+
+  > **Pense assim:** é o controle de qualidade da linha de produção. A peça com defeito não vai para o lixo escondida: ela sai da esteira para uma caixa separada, com uma etiqueta dizendo o defeito. Assim dá para contar quantas peças falharam e por quê.
+
+  ```mermaid
+  flowchart LR
+      ev["evento da Bronze<br/>(sem duplicatas)"] --> q{"passa nas<br/>6 regras?"}
+      q -->|sim| ok["silver/event_name=…"]
+      q -->|não| rej["silver/eventos_rejeitados<br/>+ motivo_rejeicao"]
+  ```
 - **R8.** Sessionização própria: uma sessão nova começa quando o mesmo `user_pseudo_id` fica mais de 30 minutos sem evento. **`session_hint` não pode ser usado.**
   - *Em outras palavras:* uma **sessão** é uma visita. Você ordena os eventos de cada visitante pelo horário e corta onde houver uma pausa de mais de 30 minutos. Exemplo: eventos às 10h00, 10h05 e 10h50 do mesmo `user_pseudo_id` formam duas sessões (10h00–10h05 e 10h50), porque entre 10h05 e 10h50 passaram 45 minutos. As **window functions** do Spark ajudam a comparar cada evento com o anterior.
+
+  > **Pense assim:** é uma visita a uma loja. Enquanto a pessoa anda pelos corredores, é a mesma visita. Se ela sai e volta depois de mais de meia hora, conta como uma visita nova, mesmo sendo a mesma pessoa.
+
+  ```mermaid
+  flowchart LR
+      a["10h00<br/>page_view"] -->|5 min| b["10h05<br/>scroll"]
+      b -->|"45 min: pausa > 30 min<br/>✂ corta aqui"| c["10h50<br/>page_view"]
+      subgraph S1["sessão 1"]
+          a
+          b
+      end
+      subgraph S2["sessão 2"]
+          c
+      end
+  ```
 - **R9.** Identity stitching: todo evento de um `user_pseudo_id` que em algum momento tenha `user_id` recebe esse `user_id`, inclusive os eventos anteriores ao login.
   - *Em outras palavras:* **identity stitching** ("costura de identidade") é ligar o visitante anônimo à pessoa. Exemplo: o navegador `anon-9a46b593` visitou a página na segunda, sem login. Na quarta, fez `login` como `u-…`. Todos os eventos desse navegador, inclusive os de segunda, passam a ter esse `user_id`.
+
+  > **Pense assim:** um cliente passeia pela loja sem se identificar, mas no caixa mostra o CPF. A partir do CPF, a loja consegue dizer que aquele mesmo cliente tinha passeado pelos corredores mais cedo, e liga todos os passos dele a uma pessoa só.
 - **R10.** Uma tabela de itens com `items[]` explodido, uma linha por item por evento.
   - *Em outras palavras:* **explodir** uma lista é transformar cada elemento dela numa linha. Exemplo: um `purchase` com o Plano Pro e a Mentoria em grupo vira duas linhas na tabela de itens.
 
@@ -229,6 +316,21 @@ Em outras palavras, a pergunta que cada tabela responde:
 **Restrição do modelo de propensão:** as features só podem usar o comportamento na landing **antes do primeiro `add_to_cart` da sessão**: rolagem, vídeo, tabela de planos vista, plano selecionado, detalhe aberto, buscas, downloads, cliques, canal e dispositivo. Qualquer evento do checkout (`view_cart` em diante) já praticamente revela a compra.
 
 Por que isso importa: **features** são as informações que o modelo usa para prever. Se você der ao modelo um evento que só acontece em quem já está comprando, ele "acerta" sem aprender nada útil. Isso é **vazamento de informação**. Exemplo: um evento do checkout (de `view_cart` em diante) só aparece em quem já decidiu comprar; usá-lo daria um modelo com nota altíssima e inútil para a empresa, que quer prever a compra **antes** do checkout.
+
+> **Pense assim:** é como um aluno que tira 10 na prova porque recebeu o gabarito junto. A nota é linda, mas na próxima prova, sem gabarito, ele não sabe nada. O modelo só pode olhar o que acontece **antes** do primeiro `add_to_cart`, do mesmo jeito que a empresa só vai ter essa informação na hora de agir.
+
+```mermaid
+flowchart LR
+    subgraph PODE["✅ Pode virar feature (antes do carrinho)"]
+        f1["rolagem, vídeo,<br/>planos vistos, buscas,<br/>canal, dispositivo"]
+    end
+    subgraph NAO["❌ Vazamento (já é o checkout)"]
+        f2["view_cart, begin_checkout,<br/>add_payment_info, purchase"]
+    end
+    f1 --> m["modelo de<br/>propensão"]
+    f2 -.->|"proibido"| m
+    m --> p["chance de comprar"]
+```
 
 **Recomendação:** como compradores são raros, registre também precisão e recall em `metricas_modelo`, além de AUC e F1. Isso ajuda a interpretar o modelo.
 
@@ -285,6 +387,22 @@ Por que isso importa: "receita" ou "canal" podem ser calculados de vários jeito
 
   - Cada linha é um objeto JSON com os nomes de coluna **exatos** da tabela 5.3: `pagina`, `element_id`, `cliques`, `sessoes`, `sessoes_na_pagina`, `taxa_clique`, `intensidade` em `cliques`; `pagina`, `marco`, `sessoes_que_chegaram`, `pct_sessoes` em `rolagem`. O site lê esses nomes; com outro nome, o mapa não acende.
   - Se a sua landing foi gerada antes do campo `element_id` existir, o mapa sai sem cliques. Rode de novo o gerador (`python gerador/gerar_eventos.py`) e o pipeline inteiro.
+
+  > **Pense assim:** o mapa de calor é a **câmera térmica** da página. Onde muita gente clica, a imagem fica vermelha; onde quase ninguém clica, fica azul. O seu job de exportação é o fio que liga a câmera (a Gold) à tela (o site).
+
+  ```mermaid
+  sequenceDiagram
+      participant S as Silver
+      participant G as Gold mapa de calor
+      participant X as Job de exportação
+      participant A as site/mapa_calor.js
+      participant N as Navegador
+      S->>G: eventos com element_id e page_location
+      G->>X: mapa_calor_cliques e mapa_calor_rolagem (pelo Spark)
+      X->>A: collect() + json.dumps → window.MAPA_CALOR = {...}
+      N->>A: abre site/index.html (carrega o arquivo)
+      N->>N: botão "Mapa de calor" desenha as manchas
+  ```
   - O job lê a Gold pelo Spark (R1) e só grava o arquivo local no fim. `site/mapa_calor.js` é um resultado gerado: não entra no git.
   - *Em outras palavras:* o site de exemplo já tem o botão **Mapa de calor** pronto no painel lateral. Ele só precisa de um arquivo com os números da sua Gold. As duas tabelas têm poucas dezenas de linhas, então o job pode trazê-las do Spark para o Python com `collect()` e escrever o arquivo com `json.dumps`. O [pipeline/README.md](../pipeline/README.md#exportar-um-resultado-pequeno-para-o-site) mostra como.
 
