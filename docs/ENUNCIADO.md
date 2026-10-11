@@ -321,11 +321,11 @@ Por que isso importa: **features** são as informações que o modelo usa para p
 
 ```mermaid
 flowchart LR
-    subgraph PODE["✅ Pode virar feature (antes do carrinho)"]
-        f1["rolagem, vídeo,<br/>planos vistos, buscas,<br/>canal, dispositivo"]
+    subgraph PODE["✅ Pode usar"]
+        f1["antes do carrinho:<br/>rolagem, vídeo,<br/>planos vistos, buscas,<br/>canal, dispositivo"]
     end
-    subgraph NAO["❌ Vazamento (já é o checkout)"]
-        f2["view_cart, begin_checkout,<br/>add_payment_info, purchase"]
+    subgraph NAO["❌ Vazamento"]
+        f2["checkout em diante:<br/>view_cart, begin_checkout,<br/>add_payment_info, purchase"]
     end
     f1 --> m["modelo de<br/>propensão"]
     f2 -.->|"proibido"| m

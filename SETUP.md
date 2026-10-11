@@ -6,10 +6,10 @@ Tempo total: **cerca de 10 minutos** na primeira vez, a maior parte baixando ima
 
 ```mermaid
 flowchart LR
-    P1["1. Instalar<br/>o Docker"] --> P2["2. Construir a imagem<br/>e ligar o floci"]
-    P2 --> P3["3. Gerar os eventos<br/>(landing)"]
-    P3 --> P4["4. Conferir o Spark<br/>3 linhas [ok]"]
-    P4 --> P5["5. Abrir o explorador<br/>localhost:8501"]
+    P1["Passo 1<br/>instalar o Docker"] --> P2["Passo 2<br/>construir a imagem<br/>e ligar o floci"]
+    P2 --> P3["Passo 3<br/>gerar os eventos<br/>(landing)"]
+    P3 --> P4["Passo 4<br/>conferir o Spark<br/>3 linhas [ok]"]
+    P4 --> P5["Passo 5<br/>abrir o explorador<br/>localhost:8501"]
 ```
 
 Os cinco passos abaixo seguem esta ordem. Só avance quando o passo atual mostrar o resultado esperado.

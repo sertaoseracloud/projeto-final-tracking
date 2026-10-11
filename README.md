@@ -48,7 +48,7 @@ flowchart TB
         docs["docs/<br/>enunciado e contrato"]
     end
     subgraph SEU["Você constrói"]
-        jobs["pipeline/&lt;seus jobs&gt;.py<br/>Bronze, Silver, Golds"]
+        jobs["pipeline/seus_jobs.py<br/>Bronze, Silver, Golds"]
         relatorio["RELATORIO.md"]
     end
     gerador -->|grava eventos| bucket[("bucket S3<br/>datalake-tracking")]
