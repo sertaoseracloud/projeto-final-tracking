@@ -111,7 +111,7 @@ Além das chaves da tabela, os eventos que nascem de um clique trazem `element_i
 | `video_start` | `btn-play` |
 | `file_download` | `dl-ementa` |
 | `select_item` | o cartão do plano: `plano-basico`, `plano-pro`, `plano-premium` |
-| `add_to_cart` / `remove_from_cart` de plano | `modal-comprar` (botão do detalhe do plano) ou o cartão (`plano-…`), quando a compra vem do botão do próprio cartão |
+| `add_to_cart` / `remove_from_cart` de plano | o botão do próprio cartão (`plano-…`), ou `modal-comprar` quando a pessoa abriu o detalhe do plano antes (`add_to_cart` logo depois de `view_item`). Numa troca de plano, os dois eventos levam o cartão do plano novo |
 | `add_to_cart` / `remove_from_cart` do order bump | `bump` |
 | `generate_lead` | `form-lead` |
 | `site_search` | `faq-busca` |

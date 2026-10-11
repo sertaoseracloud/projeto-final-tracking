@@ -20,7 +20,7 @@ def _ev(nome, params=None, items=None):
     (_ev("click", {"link_domain": "wa.me", "outbound": True}), "social-whatsapp"),
     (_ev("click", {"link_id": "hero_ver_planos", "outbound": False}), "cta-hero-ver-planos"),
     (_ev("select_item", items=[{"item_id": "PLANO-PRO"}]), "plano-pro"),
-    (_ev("add_to_cart", items=[{"item_id": "PLANO-BASICO"}]), "modal-comprar"),
+    (_ev("add_to_cart", items=[{"item_id": "PLANO-BASICO"}]), "plano-basico"),   # sem contexto: botão do cartão
     (_ev("remove_from_cart", items=[{"item_id": "BUMP-MENTORIA"}]), "bump"),
     (_ev("add_shipping_info", {"shipping_tier": "SEDEX"}), "frete-sedex"),
     (_ev("add_payment_info", {"payment_type": "cartao_parcelado"}), "pagto-cartao-parcelado"),
@@ -57,3 +57,32 @@ def test_marcar_elementos_nao_consome_o_rng_nem_muda_outros_campos():
     assert marcar_elementos(eventos) == 1
     assert eventos[0]["params"] == {"video_percent": 0, "element_id": "btn-play"}
     assert eventos[1] == antes[1]
+
+
+def _do(usuario, nome, item=None):
+    return {"event_name": nome, "user_pseudo_id": usuario, "params": {},
+            "items": [{"item_id": item}] if item else []}
+
+
+def test_compra_pelo_modal_ou_pelo_cartao_segue_o_site():
+    eventos = [
+        _do("a", "select_item", "PLANO-PRO"), _do("a", "view_item", "PLANO-PRO"), _do("a", "add_to_cart", "PLANO-PRO"),
+        _do("b", "select_item", "PLANO-BASICO"), _do("b", "add_to_cart", "PLANO-BASICO"),
+        _do("b", "remove_from_cart", "PLANO-BASICO"), _do("b", "add_to_cart", "PLANO-PREMIUM"),
+    ]
+    marcar_elementos(eventos)
+    ids = [e["params"].get("element_id") for e in eventos]
+    assert ids == ["plano-pro", None, "modal-comprar",            # detalhe aberto → botão do modal
+                   "plano-basico", "plano-basico",                # direto do cartão
+                   "plano-premium", "plano-premium"]              # troca: cartão do plano novo
+
+
+def test_contexto_e_do_mesmo_visitante():
+    eventos = [_do("a", "view_item", "PLANO-PRO"), _do("b", "add_to_cart", "PLANO-PRO")]
+    marcar_elementos(eventos)
+    assert eventos[1]["params"]["element_id"] == "plano-pro"
+
+
+def test_plano_desconhecido_fica_sem_element_id():
+    assert elemento(_ev("add_to_cart", items=[{"item_id": "PLANO-X"}])) is None
+    assert elemento(_ev("add_to_cart")) is None

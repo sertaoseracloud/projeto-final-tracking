@@ -204,7 +204,7 @@ A tabela abaixo diz, para cada uma das 15 tabelas, o que ela precisa conter. As 
 | ML | `propensao_sessao` | probabilidade de compra por sessão, com modelo de classificação |
 | | `metricas_modelo` | AUC e F1 no conjunto de teste, e a lista de features usadas |
 | | `segmentos_visitantes` | grupo de cada visitante (clusterização) e perfil médio de cada grupo |
-| Mapa de calor | `mapa_calor_cliques` | uma linha por `pagina` (5.4) e `element_id`, só com eventos que têm `element_id`: `cliques` (eventos), `sessoes` (sessões distintas que clicaram), `sessoes_na_pagina` (sessões com `page_view` na página), `taxa_clique` = `sessoes ÷ sessoes_na_pagina` (nulo se o divisor for 0) e `intensidade` = `cliques ÷` o maior `cliques` da mesma página (0 a 1). Taxas arredondadas a 4 casas. **Nomes de coluna exatos** (R11). |
+| Mapa de calor | `mapa_calor_cliques` | uma linha por `pagina` (5.4) e `element_id`, só com eventos que têm `element_id` e `page_location` (sem página, não há onde desenhar): `cliques` (eventos), `sessoes` (sessões distintas que clicaram), `sessoes_na_pagina` (sessões com `page_view` na página), `taxa_clique` = `sessoes ÷ sessoes_na_pagina` (nulo se o divisor for 0) e `intensidade` = `cliques ÷` o maior `cliques` da mesma página (0 a 1). Taxas arredondadas a 4 casas. **Nomes de coluna exatos** (R11). |
 | | `mapa_calor_rolagem` | uma linha por marco (0, 25, 50, 75, 90) da landing (`pagina = "/"`): entre as sessões com `page_view` na landing, `sessoes_que_chegaram` (marco 0 = todas; os outros = as que têm `scroll` na landing com `percent_scrolled` ≥ marco) e `pct_sessoes` = `sessoes_que_chegaram ÷` as do marco 0, a 4 casas. **Nomes de coluna exatos** (R11). |
 
 Em outras palavras, a pergunta que cada tabela responde:

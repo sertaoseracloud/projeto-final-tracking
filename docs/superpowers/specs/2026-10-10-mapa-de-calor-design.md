@@ -42,7 +42,7 @@ Vale para o aluno (requisito novo no enunciado) e para a solução de referênci
 | `video_start` | `btn-play` |
 | `file_download` | `dl-ementa` |
 | `select_item` | `plano-basico`, `plano-pro`, `plano-premium` (o cartão do plano) |
-| `add_to_cart` / `remove_from_cart` de plano | `modal-comprar` (no site, quando a compra vem do botão "Quero este plano" do próprio cartão, vale o cartão: `plano-…`; o gerador usa sempre `modal-comprar`) |
+| `add_to_cart` / `remove_from_cart` de plano | o botão do próprio cartão (`plano-…`), ou `modal-comprar` quando a pessoa abriu o detalhe do plano antes (`add_to_cart` logo depois de `view_item`). Numa troca de plano, os dois eventos levam o cartão do plano novo. O gerador decide pelos eventos vizinhos do mesmo visitante. A troca de plano do gerador é uma simplificação: no site, a troca passa de novo pela tabela de planos (um `select_item` antes) |
 | `add_to_cart` / `remove_from_cart` do order bump | `bump` |
 | `generate_lead` | `form-lead` |
 | `site_search` | `faq-busca` |
@@ -84,7 +84,7 @@ Uma linha por `pagina` e `element_id`, considerando só eventos com `element_id`
 
 | coluna | definição |
 | --- | --- |
-| `pagina` | caminho de `page_location`, sem domínio, `#` nem `?`: `/`, `/checkout`, `/obrigado`, `/membros` |
+| `pagina` | caminho de `page_location`, sem domínio, `#` nem `?`: `/`, `/checkout`, `/obrigado`, `/membros`. Eventos sem `page_location` ficam fora do mapa |
 | `element_id` | texto |
 | `cliques` | número de eventos |
 | `sessoes` | `session_id` distintos com clique nesse elemento |
