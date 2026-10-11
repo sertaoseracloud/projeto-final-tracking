@@ -14,6 +14,24 @@ docker compose up -d floci explorador
 
 Abra **http://localhost:8501** no navegador. Para desligar: `docker compose stop explorador`.
 
+## Tutorial em cada tela
+
+Na primeira vez que você abre cada tela, aparece um **tour em modal**: a tela escurece, um contorno laranja destaca um elemento (o menu, a lista de buckets, o editor de SQL…) e um balão explica para que ele serve. Use **Próximo** e **Anterior** para andar pelos passos e **✕** (ou a tecla Esc) para fechar.
+
+> **Pense assim:** é o **guia de um museu** que para em frente a cada peça e conta para que ela serve. Na primeira visita ele te acompanha; depois você anda sozinho e chama o guia só quando quiser.
+
+- **Rever o tour:** no menu lateral, clique em **🎓 Abrir tutorial desta tela**. Funciona mesmo com o tutorial desligado.
+- **Desligar:** marque **Não mostrar mais o tutorial** no balão, ou desligue a chave **Mostrar tutorial** no menu lateral. A escolha fica gravada em `.explorador/preferencias.json` (fora do git) e vale também depois de reiniciar o explorador. Para religar, ligue a chave de novo.
+
+```mermaid
+flowchart LR
+    abrir["você abre uma tela"] --> ligado{"tutorial<br/>ligado?"}
+    ligado -->|sim, primeira visita| tour["tour em modal<br/>destaca e explica cada parte"]
+    ligado -->|não| tela["só a tela"]
+    botao["🎓 Abrir tutorial<br/>desta tela"] --> tour
+    tour -->|Não mostrar mais| desliga["chave Mostrar tutorial<br/>fica desligada"]
+```
+
 ## As quatro telas: S3, Glue e Athena
 
 O explorador imita o jeito de trabalhar do console da AWS, para você treinar o fluxo que vai usar no mercado. O menu lateral (**Serviços**) tem quatro telas:

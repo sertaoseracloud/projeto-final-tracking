@@ -70,7 +70,7 @@ def _executar(at, sql, aba="Consulta 1"):
 def test_abre_no_s3_com_a_lista_de_buckets_e_entra_no_bucket(bucket_local):
     at = _rodar()
     assert not at.exception
-    assert at.radio(key="tela").options == ["S3 · Buckets", "Glue · Data Catalog", "Glue · Jobs ETL", ATHENA]
+    assert at.radio(key="tela").options[:4] == ["🪣  Buckets", "🗂  Data Catalog", "⚙  Jobs ETL", "🔎  Editor de consultas"]
     assert at.button(key="abrir_bucket").label.endswith(s3.BUCKET)
     at.button(key="abrir_bucket").click().run()
     assert [t.label for t in at.tabs] == ["Objetos", "Partições", "Propriedades"]
@@ -183,7 +183,7 @@ def test_catalogo_navega_banco_tabela_e_abre_no_athena(bucket_local):
     assert not at.exception
     at.button(key="banco:silver").click().run()
     at.button(key="tabela:silver.eventos").click().run()
-    assert [t.label for t in at.tabs] == ["Esquema", "Partições", "Propriedades"]
+    assert [t.label for t in at.tabs] == ["Esquema", "Partições"]     # propriedades viraram o painel "Visão geral"
     esquema = next(d.value for d in at.dataframe if "Coluna" in d.value.columns)
     assert "event_id" in esquema["Coluna"].tolist()
     assert esquema.set_index("Coluna").loc["event_name", "Chave de partição"] == "sim"
@@ -208,8 +208,61 @@ def test_jobs_lista_executa_e_mostra_o_log(bucket_local, tmp_path, monkeypatch):
     at.button(key="executar_job").click().run()
     for _ in range(100):
         at.run()
-        if any("Sucesso" in str(d.value) for d in at.dataframe):
+        if any("Sucesso" in str(m.value) for m in at.markdown):
             break
         time.sleep(0.2)
-    assert any("Sucesso" in d.value.to_string() for d in at.dataframe)
+    assert any("✔ Sucesso" in str(m.value) for m in at.markdown)
     assert any("bronze gravada" in c.value for c in at.code)
+
+
+@pytest.fixture(autouse=True)
+def preferencias_isoladas(tmp_path, monkeypatch):
+    arquivo = tmp_path / "prefs" / "preferencias.json"
+    monkeypatch.setenv("EXPLORADOR_PREFERENCIAS", str(arquivo))
+    return arquivo
+
+
+def test_cada_tela_escolhe_o_seu_roteiro_do_tutorial(bucket_local):
+    at = _rodar()
+    assert at.session_state["contexto_tour"] == "s3-buckets"
+    at.button(key="abrir_bucket").click().run()
+    assert at.session_state["contexto_tour"] == "s3-bucket"
+    at.radio(key="tela").set_value(ATHENA).run()
+    assert at.session_state["contexto_tour"] == "athena"
+    at.radio(key="tela").set_value(CATALOGO).run()
+    assert at.session_state["contexto_tour"] == "catalogo-bancos"
+
+
+def test_botao_abre_o_tutorial_mesmo_desligado(bucket_local):
+    at = _rodar()
+    at.toggle(key="pref_tutorial").set_value(False).run()
+    at.button(key="tour-abrir").click().run()
+    assert not at.exception
+    primeiro = at.session_state["tour_forcar"]
+    assert primeiro
+    at.button(key="tour-abrir").click().run()
+    assert at.session_state["tour_forcar"] != primeiro                # cada clique gera um pedido novo
+
+
+def test_desligar_o_tutorial_lembra_a_escolha(bucket_local, preferencias_isoladas):
+    at = _rodar()
+    assert at.toggle(key="pref_tutorial").value is True
+    at.toggle(key="pref_tutorial").set_value(False).run()
+    assert '"tutorial": false' in preferencias_isoladas.read_text(encoding="utf-8")
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    assert _rodar().toggle(key="pref_tutorial").value is False        # nova sessão: continua desligado
+
+
+def test_nao_mostrar_mais_do_modal_grava_a_preferencia(bucket_local, preferencias_isoladas):
+    at = _rodar()
+    at.button(key="tour-desligar").click().run()                      # é o botão que o modal clica
+    assert at.toggle(key="pref_tutorial").value is False
+    assert '"tutorial": false' in preferencias_isoladas.read_text(encoding="utf-8")
+
+
+def test_abrir_o_console_nao_grava_preferencias(bucket_local, preferencias_isoladas):
+    at = _rodar()
+    at.radio(key="tela").set_value(ATHENA).run()
+    assert not at.exception
+    assert not preferencias_isoladas.exists()           # só grava quando a pessoa muda a chave
