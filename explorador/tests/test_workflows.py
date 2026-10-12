@@ -127,12 +127,16 @@ def test_jobs_independentes_rodam_ao_mesmo_tempo_respeitando_o_limite(pastas):
     marcas.mkdir()
     for nome in ("a", "b", "c"):
         _job(jobs, nome, espera=1.0, marca=marcas)
-    inicio = time.time()
     codigo, ex = _rodar(_wf(("a", []), ("b", []), ("c", []), paralelo=2), pastas)
     assert codigo == 0
-    assert time.time() - inicio < 2.9                     # 3 jobs de 1 s, 2 por vez: ~2 s, não ~3 s
-    inicios = sorted(e.inicio for e in ex.etapas.values())
-    assert inicios[1] - inicios[0] < 0.5 and inicios[2] - inicios[0] > 0.8
+    # 3 jobs de 1 s, 2 por vez: os dois primeiros começam juntos e o terceiro só depois que um deles termina.
+    # Compara os instantes de início com o fim real dos jobs (e não o relógio do teste todo): a máquina
+    # lenta atrasa tudo junto e o teste não fica instável.
+    _, execucoes, _ = pastas
+    jobs = sorted((glue.execucao(execucoes, e.execucao) for e in ex.etapas.values()), key=lambda j: j.inicio)
+    fim = [j.inicio + j.duracao for j in jobs]
+    assert jobs[1].inicio < fim[0]                                           # os dois primeiros se sobrepõem
+    assert jobs[2].inicio >= min(fim[0], fim[1])                             # o 3º espera uma vaga
 
 
 def test_job_que_sumiu_falha_a_etapa_com_explicacao(pastas):
@@ -204,3 +208,24 @@ def test_orquestrador_morto_mostra_o_status_real_de_cada_job(pastas):
     assert ex.status == workflows.FALHOU
     assert {n: e.status for n, e in ex.etapas.items()} == {"bronze": workflows.SUCESSO,
                                                            "silver": workflows.NAO_EXECUTADO}
+
+
+def test_historico_do_workflow_guarda_so_as_execucoes_mais_recentes(pastas):
+    jobs, execucoes, _ = pastas
+    _job(jobs, "bronze")
+    ids = []
+    for _ in range(3):
+        ids.append(_rodar(_wf(("bronze", [])), pastas)[1].id)
+        time.sleep(0.01)
+    workflows.podar(execucoes, "medalhao", manter=1)
+    assert [e.id for e in workflows.execucoes(execucoes, "medalhao")] == [ids[-1]]
+
+
+def test_orquestrador_do_console_apaga_a_copia_dos_scripts_no_fim(pastas):
+    _, execucoes, raiz = pastas
+    copia = raiz / "copia"
+    copia.mkdir()
+    _job(copia, "bronze")
+    id_execucao = workflows.preparar(_wf(("bronze", [])), execucoes)
+    assert workflows.main(["--execucao", id_execucao, str(copia), str(execucoes), str(raiz), "--descartar"]) == 0
+    assert not copia.exists()

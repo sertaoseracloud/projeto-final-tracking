@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -199,20 +200,31 @@ def preparar(wf: Workflow, pasta_exec: Path) -> str:
     """Registra uma execução nova (com uma cópia do workflow: editar depois não muda a que já começou)."""
     pasta = _pasta_execucoes(pasta_exec)
     pasta.mkdir(parents=True, exist_ok=True)
-    agora = time.time()
-    id_execucao = f"{wf.nome}-{time.strftime('%Y%m%d-%H%M%S', time.localtime(agora))}-{int(agora * 1000) % 1000:03d}"
-    _gravar(pasta / f"{id_execucao}.json", {"workflow": wf.para_dict(), "inicio": agora, "pid": None})
+    id_execucao = glue.novo_id(wf.nome)
+    _gravar(pasta / f"{id_execucao}.json", {"workflow": wf.para_dict(), "inicio": time.time(), "pid": None})
+    podar(pasta_exec, wf.nome)
     return id_execucao
 
 
-def iniciar(wf: Workflow, pasta_jobs: Path, pasta_exec: Path, raiz: Path) -> str:
-    """Começa a execução em segundo plano (um processo orquestrador) e devolve o id dela."""
+def podar(pasta_exec: Path, workflow: str, manter: int = glue.HISTORICO) -> None:
+    """Apaga as execuções terminadas mais antigas do workflow, deixando as `manter` mais recentes."""
+    pasta = _pasta_execucoes(pasta_exec)
+    for antiga in execucoes(pasta_exec, workflow)[manter:]:
+        if antiga.status != EM_EXECUCAO:
+            for sufixo in (".json", ".estado.json", ".fim", ".parar"):
+                (pasta / f"{antiga.id}{sufixo}").unlink(missing_ok=True)
+
+
+def iniciar(wf: Workflow, pasta_jobs: Path, pasta_exec: Path, raiz: Path, descartar: bool = False) -> str:
+    """Começa a execução em segundo plano (um processo orquestrador) e devolve o id dela.
+
+    `descartar`: apaga `pasta_jobs` no fim (a cópia dos scripts baixada do floci só para esta execução)."""
     id_execucao = preparar(wf, pasta_exec)
     ambiente = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(Path(__file__).resolve().parents[1]),
                                                                            os.environ.get("PYTHONPATH")]))}
     processo = subprocess.Popen(
         [sys.executable, "-m", "explorador.workflows", "--execucao", id_execucao, str(pasta_jobs), str(pasta_exec),
-         str(raiz)], cwd=str(raiz), env=ambiente, start_new_session=True,
+         str(raiz)] + (["--descartar"] if descartar else []), cwd=str(raiz), env=ambiente, start_new_session=True,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     arquivo = _pasta_execucoes(pasta_exec) / f"{id_execucao}.json"
     _gravar(arquivo, {**json.loads(arquivo.read_text(encoding="utf-8")), "pid": processo.pid})
@@ -346,7 +358,11 @@ def em_execucao(pasta_exec: Path, workflow: str) -> bool:
 def main(argumentos: list[str]) -> int:
     if argumentos[:1] == ["--execucao"]:                # chamado pelo console (iniciar)
         id_execucao, pasta_jobs, pasta_exec, raiz = argumentos[1:5]
-        return orquestrar(Path(pasta_exec), id_execucao, Path(pasta_jobs), Path(raiz))
+        try:
+            return orquestrar(Path(pasta_exec), id_execucao, Path(pasta_jobs), Path(raiz))
+        finally:
+            if "--descartar" in argumentos[5:]:          # a cópia dos scripts era só desta execução
+                shutil.rmtree(pasta_jobs, ignore_errors=True)
     if len(argumentos) != 1:
         print("uso: python -m explorador.workflows <pasta de jobs>/workflows/<nome>.json")
         return 2
