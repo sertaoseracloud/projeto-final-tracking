@@ -549,8 +549,8 @@ def _painel_execucoes(nome: str, pasta: Path, rodando_antes: bool = False) -> No
         st.rerun()                                  # terminou: redesenha a página toda (reativa o botão Executar)
     execucoes = glue.execucoes(pasta, nome)
     with ui.painel("execucoes", "Execuções", len(execucoes)):
-        ui.tabela("execucoes", [("Execução", 3), ("Status", 1.4), ("Início", 2), ("Duração", 1), ("Código de saída", 1),
-                                ("Origem", 1.6)],
+        ui.tabela("execucoes", [("Execução", 2.6), ("Status", 1.3), ("Início", 1.8), ("Duração", 1), ("Código de saída", 1.1),
+                                ("Origem", 2)],
                   [[e.id, ui.selo(e.status), _quando(e.inicio), f"{e.duracao:.1f} s".replace(".", ","),
                     "—" if e.codigo is None else str(e.codigo), e.origem] for e in execucoes],
                   vazio="Nenhuma execução ainda. Clique em Executar.")

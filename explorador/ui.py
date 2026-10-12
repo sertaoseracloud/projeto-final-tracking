@@ -94,7 +94,9 @@ CSS = """
   [class*="st-key-tablinha-"]:hover { background: #f6f6f9; }
   [class*="st-key-tabcab-"] [data-testid="stMarkdownContainer"] p,
   [class*="st-key-tablinha-"] [data-testid="stMarkdownContainer"] p { margin: 0; }
-  .tab-titulo { font-weight: 700; color: #424650; font-size: .875rem; white-space: nowrap; }
+  /* o título quebra linha quando não cabe na coluna (em vez de invadir a vizinha) */
+  .tab-titulo { font-weight: 700; color: #424650; font-size: .875rem; display: block; line-height: 1.25;
+                white-space: normal; overflow-wrap: break-word; }
   .tab-texto { font-size: .875rem; color: #0f141a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
   [class*="st-key-tablinha-"] [data-testid="stMarkdown"], [class*="st-key-tabcab-"] [data-testid="stMarkdown"],
   [class*="st-key-tablinha-"] [data-testid="stMarkdownContainer"], [class*="st-key-tabcab-"] [data-testid="stMarkdownContainer"] {
