@@ -1,4 +1,4 @@
-"""Peças visuais do console (CSS e componentes), no estilo do console da AWS.
+"""Peças visuais do console (CSS e componentes), no estilo de um console de nuvem (sem marcas).
 
 O Streamlit põe a classe `st-key-<chave>` em todo contêiner com `key`; o CSS abaixo usa isso para
 desenhar tabelas, painéis e faixas iguais aos do console, sem depender de componentes externos.
@@ -7,6 +7,7 @@ desenhar tabelas, painéis e faixas iguais aos do console, sem depender de compo
 from __future__ import annotations
 
 import html
+import json
 import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
@@ -19,7 +20,7 @@ from explorador import tipos
 CSS = """
 <style>
   html, body, .stApp, .stMarkdown, button, input, textarea, select {
-    font-family: "Amazon Ember", "Helvetica Neue", Roboto, Arial, sans-serif; }
+    font-family: "Helvetica Neue", Roboto, Arial, sans-serif; }
   .stApp { background: #ffffff; color: #0f141a; }
 
   /* cabeçalho do Streamlit: transparente, logo abaixo da barra; ficam só os botões do menu lateral */
@@ -141,10 +142,8 @@ CSS = """
     line-height: 1.55; padding-left: 52px !important; border-radius: 8px;
     background: linear-gradient(to right, #f6f6f9 0, #f6f6f9 40px, #e9ebed 40px, #e9ebed 41px, #fff 41px) local; }
 
-  /* tutorial: o botão que grava "não mostrar mais" fica escondido; o componente do tour não ocupa espaço */
-  [class*="st-key-tour-desligar"] { display: none !important; }
-  [data-testid="stElementContainer"]:has(> iframe[height="0"]),
-  [data-testid="stElementContainer"]:has(iframe[title="st.iframe"][height="0"]) { display: none; }
+  /* tutorial: o botão que grava "não mostrar mais" fica escondido; os scripts (tour e acessibilidade) não ocupam espaço */
+  [class*="st-key-tour-desligar"], [class*="st-key-script-"] { display: none !important; }
 
   /* botões flutuantes no canto inferior direito: topo, tutorial e o menu ♿ (tutorial e acessibilidade) */
   .st-key-dock { position: fixed; right: 20px; bottom: 20px; z-index: 1000005; width: 44px !important;
@@ -326,6 +325,14 @@ def tabela(chave: str, colunas: list[tuple[str, float]], linhas: list[list[Any]]
 
 # ------------------------------------------------------------------ tour ------------------------------------------------------------------
 
+def _script(chave: str, codigo: str) -> None:
+    """Roda um <script> nosso num iframe invisível (mesma origem: ele mexe na página do console pelo window.parent).
+
+    Só código escrito aqui entra: o st.iframe executa o HTML como está."""
+    with st.container(key=f"script-{chave}"):
+        st.iframe(codigo, height=1)
+
+
 _TOUR_JS = r"""
 <script>
 (function () {
@@ -351,7 +358,7 @@ _TOUR_JS = r"""
       outline: 3px solid #ff9900; transition: all .2s ease; pointer-events: none; }
     #tour-raiz .balao { position: fixed; width: min(380px, calc(100vw - 32px)); background: #fff; color: #0f141a;
       border-radius: 16px; box-shadow: 0 8px 40px rgba(0,7,22,.35); padding: 18px 20px 14px; pointer-events: auto;
-      font: .875rem/1.5 "Amazon Ember","Helvetica Neue",Roboto,Arial,sans-serif; }
+      font: .875rem/1.5 "Helvetica Neue",Roboto,Arial,sans-serif; }
     #tour-raiz .contagem { color: #656871; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
     #tour-raiz h3 { margin: 4px 0 6px; font-size: 1.125rem; font-weight: 700; }
     #tour-raiz p { margin: 0 0 12px; color: #424650; }
@@ -456,12 +463,9 @@ def tour(contexto: str, passos: list, auto: bool, forcar: int = 0) -> None:
 
     `auto`: abre sozinho na primeira visita a esta tela (nesta aba do navegador).
     `forcar`: um número que muda a cada clique em "Abrir tutorial desta tela" (abre mesmo já visto)."""
-    import json
-    import streamlit.components.v1 as componentes
-
     config = {"contexto": contexto, "auto": auto, "forcar": forcar,
               "passos": [{"seletor": p.seletor, "titulo": p.titulo, "texto": p.texto} for p in passos]}
-    componentes.html(_TOUR_JS.replace("__CONFIG__", json.dumps(config, ensure_ascii=False)), height=0)
+    _script("tour", _TOUR_JS.replace("__CONFIG__", json.dumps(config, ensure_ascii=False)))
 
 
 def css_acessibilidade(escolhas: dict) -> str:
@@ -600,8 +604,5 @@ _APOIO_JS = r"""
 def apoio_acessibilidade(reduzir_movimento: bool) -> None:
     """Script de acessibilidade na página: idioma pt-BR, regiões (topo, menu, conteúdo), tabelas que o leitor
     de tela entende, nomes nos botões só com ícone, avisos do que muda sozinho e o botão "Topo"."""
-    import json
-    import streamlit.components.v1 as componentes
-
     config = {"reduzirMovimento": bool(reduzir_movimento)}
-    componentes.html(_APOIO_JS.replace("__CONFIG__", json.dumps(config)), height=0)
+    _script("apoio", _APOIO_JS.replace("__CONFIG__", json.dumps(config)))

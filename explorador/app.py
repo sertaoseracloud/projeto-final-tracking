@@ -2,9 +2,9 @@
 
     docker compose up -d explorador      # e abra http://localhost:8501
 
-S3, Data Catalog e Athena só leem. Jobs ETL roda os scripts de pipeline/ (o mesmo que o
-terminal faz). É uma ferramenta de estudo que imita o fluxo do console da AWS; não usa
-nenhuma marca nem serviço da AWS.
+S3, Data Catalog e Athena só leem. Jobs ETL e Workflows rodam os scripts guardados no bucket
+glue-assets do floci (o botão Sincronizar envia para lá o que está em pipeline/). É uma ferramenta
+de estudo que imita o fluxo de um console de nuvem; não usa nenhuma marca nem serviço de nuvem.
 """
 
 from __future__ import annotations
@@ -413,6 +413,8 @@ def _tela_catalogo(objetos, datasets, colunas) -> None:
     tabela = st.session_state.get("cat_tabela")
     if banco not in bancos:
         banco, tabela = None, None
+    elif tabela not in {d.nome_view for d in bancos[banco]}:
+        tabela = None                               # sumiu ou ficou ilegível depois do Recarregar: volta ao banco
     trilha = [("Glue", None, None, {}), ("Data Catalog", "cat:inicio", _escolher, {"cat_banco": None, "cat_tabela": None})]
     if banco:
         trilha.append((banco, "cat:banco", _escolher, {"cat_tabela": None}))
@@ -551,7 +553,7 @@ def _painel_execucoes(nome: str, pasta: Path, rodando_antes: bool = False) -> No
     with ui.painel("execucoes", "Execuções", len(execucoes)):
         ui.tabela("execucoes", [("Execução", 2.6), ("Status", 1.3), ("Início", 1.8), ("Duração", 1), ("Código de saída", 1.1),
                                 ("Origem", 2)],
-                  [[e.id, ui.selo(e.status), _quando(e.inicio), f"{e.duracao:.1f} s".replace(".", ","),
+                  [[e.id, ui.selo(e.status), _quando(e.inicio), _duracao(e.duracao),
                     "—" if e.codigo is None else str(e.codigo), e.origem] for e in execucoes],
                   vazio="Nenhuma execução ainda. Clique em Executar.")
     if not execucoes:
@@ -675,7 +677,11 @@ def _salvar_form(pasta_jobs: Path, disponiveis: set[str], editando: bool) -> Non
 
 
 def _excluir_workflow(pasta_jobs: Path, nome: str) -> None:
-    recursos.excluir_workflow(nome)
+    try:
+        recursos.excluir_workflow(nome)
+    except s3.S3Indisponivel as erro:
+        st.session_state["wf_flash_erro"] = f"Não excluí o workflow {nome}: {erro}"
+        return
     workflows.excluir(pasta_jobs, nome)
     st.session_state.update(wf_sel=None, wf_flash=f"Workflow {nome} excluído do floci e da pasta local. "
                                                   "O histórico de execuções continua guardado.")
@@ -729,7 +735,7 @@ def _painel_execucao_workflow(wf: workflows.Workflow, pasta_exec: Path, rodando_
                         f"duração {_duracao(escolhida.duracao)}", unsafe_allow_html=True)
         else:
             st.caption("Nenhuma execução ainda: o grafo aparece sem cores. Clique em Executar.")
-        st.graphviz_chart(workflows.dot(grafo, status), use_container_width=True)
+        st.graphviz_chart(workflows.dot(grafo, status), width="stretch")
 
     linhas = []
     for etapa in grafo.etapas:
@@ -795,7 +801,7 @@ def _form_workflow(pasta_jobs: Path, disponiveis: list[str]) -> None:
                     st.caption(" → ".join(" + ".join(c) for c in workflows.niveis(wf)))
                 except workflows.WorkflowInvalido as erro:
                     st.warning(str(erro))
-                st.graphviz_chart(workflows.dot(wf), use_container_width=True)
+                st.graphviz_chart(workflows.dot(wf), width="stretch")
             else:
                 st.caption("O grafo aparece aqui quando você escolher os jobs.")
     if erro := st.session_state.pop("wf_form_erro", None):

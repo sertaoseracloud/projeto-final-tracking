@@ -209,6 +209,16 @@ def test_catalogo_navega_banco_tabela_e_abre_no_athena(bucket_local):
     assert at.text_area(key="sql:Consulta 2").value == "SELECT * FROM silver.eventos LIMIT 10"
 
 
+def test_catalogo_com_tabela_que_sumiu_volta_para_o_banco_sem_erro(bucket_local):
+    at = _rodar()
+    at.radio(key="tela").set_value(CATALOGO).run()
+    at.session_state["cat_banco"] = "silver"
+    at.session_state["cat_tabela"] = "silver.nao_existe_mais"          # escolhida antes do Recarregar
+    at.run()
+    assert not at.exception and not at.error
+    assert any(b.key == "tabela:silver.eventos" for b in at.button)    # mostra as tabelas do banco
+
+
 def test_jobs_lista_executa_e_mostra_o_log(bucket_local, tmp_path, monkeypatch):
     jobs = tmp_path / "meus_jobs"
     jobs.mkdir()

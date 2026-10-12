@@ -300,10 +300,23 @@ def execucao(pasta_exec: Path, id_execucao: str) -> ExecucaoWorkflow:
     if fim.exists():
         final = json.loads(fim.read_text(encoding="utf-8"))
         return ExecucaoWorkflow(id_execucao, wf, dados["inicio"], final["status"], final["fim"] - dados["inicio"], etapas)
-    for s in etapas.values():                           # duração das etapas que ainda rodam
-        if s.status == EM_EXECUCAO and s.inicio:
-            s.duracao = agora - s.inicio
-    status = EM_EXECUCAO if _vivo(dados.get("pid")) else FALHOU     # orquestrador morreu (contêiner reiniciado…)
+    vivo = _vivo(dados.get("pid"))
+    for s in etapas.values():
+        if vivo:
+            if s.status == EM_EXECUCAO and s.inicio:    # duração das etapas que ainda rodam
+                s.duracao = agora - s.inicio
+            continue
+        # orquestrador morreu (contêiner reiniciado, kill…): o status de cada job vem da execução dele,
+        # que pode ter terminado (ou seguir rodando) sozinha; quem nem começou não vai mais rodar
+        if s.status == EM_EXECUCAO and s.execucao:
+            try:
+                job = glue.execucao(pasta_exec, s.execucao)
+                s.status, s.duracao = job.status, job.duracao
+            except (OSError, ValueError, KeyError, TypeError):
+                s.status = FALHOU
+        elif s.status == AGUARDANDO:
+            s.status = NAO_EXECUTADO
+    status = EM_EXECUCAO if vivo else FALHOU
     return ExecucaoWorkflow(id_execucao, wf, dados["inicio"], status, agora - dados["inicio"], etapas)
 
 
@@ -312,8 +325,14 @@ def execucoes(pasta_exec: Path, workflow: str | None = None) -> list[ExecucaoWor
     pasta = _pasta_execucoes(pasta_exec)
     if not pasta.is_dir():
         return []
-    todas = [execucao(pasta_exec, p.name[:-len(".json")]) for p in pasta.glob("*.json")
-             if not p.name.endswith(".estado.json")]
+    todas = []
+    for arquivo in pasta.glob("*.json"):
+        if arquivo.name.endswith(".estado.json"):
+            continue
+        try:
+            todas.append(execucao(pasta_exec, arquivo.name[:-len(".json")]))
+        except (OSError, ValueError, KeyError, TypeError):
+            continue                                # arquivo estragado (contêiner caiu no meio da gravação): pula
     return sorted((e for e in todas if workflow is None or e.workflow.nome == workflow), key=lambda e: e.inicio,
                   reverse=True)
 
