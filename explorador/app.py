@@ -12,6 +12,7 @@ from __future__ import annotations
 import html
 import json
 import os
+import shutil
 import sys
 import time
 from dataclasses import asdict, replace
@@ -499,7 +500,10 @@ def _relativo(caminho: Path) -> str:
 
 
 def _copia_dos_scripts(pasta_exec: Path, nome: str) -> Path:
-    """Baixa os scripts do floci para uma pasta só desta execução, como o Glue faz antes de rodar."""
+    """Baixa os scripts do floci para uma pasta só desta execução, como o Glue faz antes de rodar.
+
+    A execução apaga a cópia ao terminar; as esquecidas (processo morto no meio) saem depois de um dia."""
+    glue.limpar_copias(pasta_exec / "scripts")
     return recursos.baixar_scripts(pasta_exec / "scripts" / f"{nome}-{time.time_ns()}")
 
 
@@ -539,11 +543,13 @@ def _botao_sync(alvo, pasta_jobs: Path, chave: str) -> None:
 def _executar_job(nome: str, pasta: Path) -> None:
     if glue.em_execucao(pasta, nome):
         return
-    script = _copia_dos_scripts(pasta, nome) / f"{nome}.py"
+    copia = _copia_dos_scripts(pasta, nome)
+    script = copia / f"{nome}.py"
     if not script.exists():
+        shutil.rmtree(copia, ignore_errors=True)
         st.session_state["job_erro"] = f"O script {nome}.py não está mais no floci. Clique em Sincronizar."
         return
-    st.session_state["execucao_sel"] = glue.iniciar(glue.Job(nome, script), pasta, RAIZ)
+    st.session_state["execucao_sel"] = glue.iniciar(glue.Job(nome, script), pasta, RAIZ, descartar=copia)
 
 
 def _painel_execucoes(nome: str, pasta: Path, rodando_antes: bool = False) -> None:
@@ -695,7 +701,7 @@ def _executar_workflow(wf: workflows.Workflow, pasta_exec: Path, disponiveis: se
         return
     if not workflows.em_execucao(pasta_exec, wf.nome):
         copia = _copia_dos_scripts(pasta_exec, f"workflow-{wf.nome}")   # os jobs rodam com a cópia do floci
-        st.session_state["wf_exec_sel"] = workflows.iniciar(wf, copia, pasta_exec, RAIZ)
+        st.session_state["wf_exec_sel"] = workflows.iniciar(wf, copia, pasta_exec, RAIZ, descartar=True)
 
 
 def _parar_workflow(pasta_exec: Path, nome: str) -> None:

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -21,6 +22,7 @@ from explorador.particoes import CAMPOS, SEM_PARTICAO, Dataset, Objeto, banco_e_
 ORDEM_CAMADAS = ["landing", "bronze", "silver", "gold"]
 IGNORADOS = {"comum.py", "__init__.py"}
 EM_EXECUCAO, SUCESSO, FALHOU = "Em execução", "Sucesso", "Falhou"
+HISTORICO = 30                                      # execuções guardadas por job; as mais antigas saem
 
 
 # ------------------------------------------------------------- catálogo -------------------------------------------------------------
@@ -81,32 +83,66 @@ def listar_jobs(pasta: Path) -> list[Job]:
             if p.name not in IGNORADOS and not p.name.startswith("_")]
 
 
-# Roda o script, grava stdout+stderr no .log e, no fim, o código de saída no .fim.
+# Roda o script, grava stdout+stderr no .log e, no fim, o código de saída no .fim. Com um 5º argumento,
+# apaga essa pasta ao terminar (a cópia dos scripts baixada do floci só para esta execução).
 _EXECUTOR = """
-import json, subprocess, sys, time
+import json, os, shutil, subprocess, sys, time
 script, log, fim, raiz = sys.argv[1:5]
-with open(log, "w", encoding="utf-8") as saida:
-    codigo = subprocess.run([sys.executable, "-u", script], stdout=saida, stderr=subprocess.STDOUT, cwd=raiz).returncode
-with open(fim + ".tmp", "w", encoding="utf-8") as f:
-    json.dump({"codigo": codigo, "fim": time.time()}, f)
-import os; os.replace(fim + ".tmp", fim)
+try:
+    with open(log, "w", encoding="utf-8") as saida:
+        codigo = subprocess.run([sys.executable, "-u", script], stdout=saida, stderr=subprocess.STDOUT, cwd=raiz).returncode
+    with open(fim + ".tmp", "w", encoding="utf-8") as f:
+        json.dump({"codigo": codigo, "fim": time.time()}, f)
+    os.replace(fim + ".tmp", fim)
+finally:
+    if len(sys.argv) > 5:
+        shutil.rmtree(sys.argv[5], ignore_errors=True)
 """
 
 
-def iniciar(job: Job, pasta: Path, raiz: Path, origem: str = "console") -> str:
-    """Começa uma execução em segundo plano e devolve o id dela."""
+def novo_id(nome: str) -> str:
+    """<nome>-AAAAMMDD-HHMMSS-mmm, com a hora de agora."""
+    agora = time.time()
+    return f"{nome}-{time.strftime('%Y%m%d-%H%M%S', time.localtime(agora))}-{int(agora * 1000) % 1000:03d}"
+
+
+def iniciar(job: Job, pasta: Path, raiz: Path, origem: str = "console", descartar: Path | None = None) -> str:
+    """Começa uma execução em segundo plano e devolve o id dela.
+
+    `descartar`: pasta apagada quando a execução termina (a cópia dos scripts feita só para ela)."""
     pasta = Path(pasta)
     pasta.mkdir(parents=True, exist_ok=True)
     agora = time.time()
-    id_execucao = f"{job.nome}-{time.strftime('%Y%m%d-%H%M%S', time.localtime(agora))}-{int(agora * 1000) % 1000:03d}"
+    id_execucao = novo_id(job.nome)
     base = pasta / id_execucao
+    argumentos = [str(job.script), f"{base}.log", f"{base}.fim", str(raiz)] + ([str(descartar)] if descartar else [])
     processo = subprocess.Popen(
-        [sys.executable, "-c", _EXECUTOR, str(job.script), f"{base}.log", f"{base}.fim", str(raiz)],
+        [sys.executable, "-c", _EXECUTOR, *argumentos],
         cwd=str(raiz), start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     (pasta / f"{id_execucao}.json").write_text(
         json.dumps({"job": job.nome, "script": str(job.script), "inicio": agora, "pid": processo.pid, "origem": origem}),
         encoding="utf-8")
+    podar(pasta, job.nome)
     return id_execucao
+
+
+def podar(pasta: Path, job: str, manter: int = HISTORICO) -> None:
+    """Apaga as execuções terminadas mais antigas do job, deixando as `manter` mais recentes."""
+    for antiga in execucoes(pasta, job)[manter:]:
+        if antiga.status != EM_EXECUCAO:
+            for sufixo in (".json", ".log", ".fim"):
+                (Path(pasta) / f"{antiga.id}{sufixo}").unlink(missing_ok=True)
+
+
+def limpar_copias(pasta: Path, idade: float = 24 * 3600) -> None:
+    """Apaga as cópias de scripts esquecidas (o processo morreu antes de apagar a sua) com mais de `idade` segundos."""
+    pasta = Path(pasta)
+    if not pasta.is_dir():
+        return
+    limite = time.time() - idade
+    for copia in pasta.iterdir():
+        if copia.is_dir() and copia.stat().st_mtime < limite:
+            shutil.rmtree(copia, ignore_errors=True)
 
 
 def _vivo(pid: int) -> bool:

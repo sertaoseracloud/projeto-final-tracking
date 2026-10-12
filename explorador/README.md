@@ -142,7 +142,8 @@ flowchart LR
   - **Script:** o código que está no floci, só para leitura. Para mudar, edite o arquivo em `pipeline/` e sincronize.
 - Como o script roda de uma pasta temporária, um job que grava um arquivo do projeto (como o `site/mapa_calor.js`) deve usar `arquivo_do_projeto("site/mapa_calor.js")`, do `comum.py`, e não `Path(__file__)`. Veja o [pipeline/README.md](../pipeline/README.md#exportar-um-resultado-pequeno-para-o-site).
 - O floci guarda tudo na memória: se ele reiniciar, o `glue-assets` some junto com o datalake. É só clicar em Sincronizar de novo.
-- O histórico de execuções fica dentro do contêiner do explorador: se ele reiniciar, o histórico zera (os dados gravados no bucket continuam lá).
+- O histórico de execuções fica dentro do contêiner do explorador, com as 30 execuções mais recentes de cada job (as mais antigas saem sozinhas). Se o contêiner for recriado (`docker compose down` ou depois de um `build`), o histórico zera; os dados gravados no bucket continuam lá.
+- As primeiras linhas de todo log são o Spark ligando e são normais: `Using incubator modules`, `Using Spark's default log4j profile`, `Setting default log level to "WARN"` e `WARN NativeCodeLoader: Unable to load native-hadoop library`. O que importa vem depois delas.
 - Esta tela e a de Workflows são as únicas que **gravam** no bucket, e só através do código dos seus jobs. As outras três só leem.
 - A coluna **Origem** diz quem começou a execução: `console` (o botão Executar desta tela) ou `workflow <nome>`.
 
@@ -185,7 +186,7 @@ flowchart LR
 - **Executar:** baixa os scripts do floci e começa uma execução nova. A aba **Execução** mostra o grafo com as cores do status de cada job (azul rodando, verde sucesso, vermelho falhou, tracejado não executado), a tabela de **Etapas** (dependências, status, início e duração) e o **log** da etapa escolhida. Tudo se atualiza sozinho a cada 2 segundos.
 - **Se um job falha:** nenhum job novo começa. Os que já estavam rodando terminam, e quem dependia do que falhou fica como **Não executado**. O log da etapa que falhou já aparece escolhido.
 - **Parar:** não começa jobs novos; os que já rodam terminam. A execução termina como **Parado**.
-- **Histórico:** todas as execuções do workflow, com status, duração e quantos jobs terminaram com sucesso. Cada etapa também aparece no histórico do job, na tela Jobs ETL, com a origem `workflow <nome>`.
+- **Histórico:** as 30 execuções mais recentes do workflow, com status, duração e quantos jobs terminaram com sucesso. Cada etapa também aparece no histórico do job, na tela Jobs ETL, com a origem `workflow <nome>`.
 - **Definição:** o `.json` que está no floci e o comando para rodar a cópia local pelo terminal, sem o explorador:
 
 ```bash

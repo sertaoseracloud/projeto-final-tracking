@@ -96,3 +96,40 @@ def test_arquivo_de_execucao_estragado_e_pulado_sem_derrubar_a_lista(tmp_path):
     boa = _esperar(pasta, glue.iniciar(glue.listar_jobs(tmp_path)[0], pasta, raiz=tmp_path)).id
     (pasta / "a-quebrada.json").write_text('{"job": "a", "ini')          # o contêiner caiu no meio da gravação
     assert [e.id for e in glue.execucoes(pasta, "a")] == [boa]
+
+
+def test_execucao_apaga_a_copia_dos_scripts_ao_terminar(tmp_path):
+    copia = tmp_path / "copia"
+    copia.mkdir()
+    (copia / "a.py").write_text("print('ok')\n")
+    pasta = tmp_path / "execucoes"
+    execucao = _esperar(pasta, glue.iniciar(glue.Job("a", copia / "a.py"), pasta, raiz=tmp_path, descartar=copia))
+    assert execucao.status == glue.SUCESSO and "ok" in glue.log(pasta, execucao.id)
+    for _ in range(50):                                   # o .fim sai um instante antes da cópia ser apagada
+        if not copia.exists():
+            break
+        time.sleep(0.05)
+    assert not copia.exists()
+
+
+def test_historico_guarda_so_as_execucoes_mais_recentes(tmp_path):
+    (tmp_path / "a.py").write_text("pass\n")
+    job = glue.listar_jobs(tmp_path)[0]
+    pasta = tmp_path / "execucoes"
+    ids = []
+    for _ in range(4):
+        ids.append(_esperar(pasta, glue.iniciar(job, pasta, raiz=tmp_path)).id)
+        time.sleep(0.01)
+    glue.podar(pasta, "a", manter=2)
+    assert [e.id for e in glue.execucoes(pasta, "a")] == ids[:1:-1]          # as duas últimas, mais recente primeiro
+    assert not list(pasta.glob(f"{ids[0]}.*"))                              # .json, .log e .fim saíram
+
+
+def test_limpar_copias_apaga_so_as_esquecidas(tmp_path):
+    import os
+    velha, nova = tmp_path / "bronze-1", tmp_path / "bronze-2"
+    velha.mkdir()
+    nova.mkdir()
+    os.utime(velha, (time.time() - 2 * 24 * 3600,) * 2)
+    glue.limpar_copias(tmp_path)
+    assert not velha.exists() and nova.exists()
