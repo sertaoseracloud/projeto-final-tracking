@@ -1,6 +1,6 @@
 import pytest
 
-from explorador import recursos, workflows
+from explorador import recursos, s3, workflows
 from explorador.tests.s3_falso import S3Falso
 
 
@@ -89,3 +89,18 @@ def test_workflow_estragado_no_bucket_vira_aviso(floci, projeto):
 
 def test_bucket_ainda_nao_existe_e_tudo_vazio(floci):
     assert recursos.listar_jobs() == [] and recursos.listar_workflows() == ([], [])
+
+
+class EndpointConnectionError(Exception):
+    """Mesmo nome da falha de rede do botocore: é pelo nome que o explorador a reconhece."""
+
+
+def test_floci_fora_do_ar_ao_excluir_ou_ler_vira_mensagem_amigavel(floci, monkeypatch):
+    def sem_rede(*args, **kwargs):
+        raise EndpointConnectionError("floci desligado")
+    monkeypatch.setattr(floci, "delete_object", sem_rede, raising=False)
+    monkeypatch.setattr(floci, "get_object", sem_rede, raising=False)
+    with pytest.raises(s3.S3Indisponivel):
+        recursos.excluir_workflow("medalhao")
+    with pytest.raises(s3.S3Indisponivel):
+        recursos.ler("scripts/bronze.py")

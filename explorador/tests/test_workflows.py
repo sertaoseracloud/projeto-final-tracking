@@ -1,4 +1,6 @@
 import json
+import subprocess
+import sys
 import time
 
 import pytest
@@ -169,3 +171,36 @@ def test_iniciar_em_segundo_plano_e_acompanhar(pastas):
     assert ex.status == workflows.SUCESSO
     assert [e.id for e in workflows.execucoes(execucoes, "medalhao")] == [id_execucao]
     assert not workflows.em_execucao(execucoes, "medalhao")
+
+
+def test_arquivo_de_execucao_estragado_e_pulado(pastas):
+    jobs, execucoes, _ = pastas
+    _job(jobs, "bronze")
+    _, ex = _rodar(_wf(("bronze", [])), pastas)
+    (execucoes / workflows.PASTA / "medalhao-quebrada.json").write_text("{")
+    assert [e.id for e in workflows.execucoes(execucoes, "medalhao")] == [ex.id]
+
+
+def test_orquestrador_morto_mostra_o_status_real_de_cada_job(pastas):
+    jobs, execucoes, raiz = pastas
+    _job(jobs, "bronze")
+    bronze = glue.iniciar(glue.listar_jobs(jobs)[0], execucoes, raiz, origem="workflow medalhao")
+    for _ in range(100):                                  # o job termina sozinho, sem o orquestrador
+        if glue.execucao(execucoes, bronze).status != glue.EM_EXECUCAO:
+            break
+        time.sleep(0.1)
+    morto = subprocess.Popen([sys.executable, "-c", "pass"])
+    morto.wait()                                          # um pid que já não existe
+    wf = _wf(("bronze", []), ("silver", ["bronze"]))
+    id_execucao = workflows.preparar(wf, execucoes)
+    pasta = execucoes / workflows.PASTA
+    dados = json.loads((pasta / f"{id_execucao}.json").read_text(encoding="utf-8"))
+    (pasta / f"{id_execucao}.json").write_text(json.dumps({**dados, "pid": morto.pid}), encoding="utf-8")
+    (pasta / f"{id_execucao}.estado.json").write_text(json.dumps({
+        "bronze": {"status": workflows.EM_EXECUCAO, "execucao": bronze, "inicio": time.time(), "duracao": None, "erro": ""},
+        "silver": {"status": workflows.AGUARDANDO, "execucao": None, "inicio": None, "duracao": None, "erro": ""}}),
+        encoding="utf-8")
+    ex = workflows.execucao(execucoes, id_execucao)
+    assert ex.status == workflows.FALHOU
+    assert {n: e.status for n, e in ex.etapas.items()} == {"bronze": workflows.SUCESSO,
+                                                           "silver": workflows.NAO_EXECUTADO}

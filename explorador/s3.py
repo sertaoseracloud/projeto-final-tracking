@@ -1,4 +1,4 @@
-"""Lista os buckets do floci com boto3. O explorador só lê: nada aqui grava ou apaga.
+"""Lista os buckets do floci com boto3. Este módulo só lê; quem grava (no bucket de recursos) é o recursos.py.
 
 O bucket do datalake (AWS_S3_BUCKET) é o que alimenta o Data Catalog e o Athena; a tela S3
 mostra todos os buckets que existirem no floci.

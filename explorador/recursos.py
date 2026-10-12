@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -44,6 +45,19 @@ def _cliente():
 
 def _sem_conexao(erro: Exception) -> bool:
     return s3._sem_conexao(erro)
+
+
+@contextmanager
+def _floci():
+    """Falha de rede vira S3Indisponivel, com a mensagem que a tela mostra."""
+    try:
+        yield
+    except s3.S3Indisponivel:
+        raise
+    except Exception as erro:
+        if _sem_conexao(erro):
+            raise s3._indisponivel() from None
+        raise
 
 
 def _listar(prefixo: str) -> dict[str, dict]:
@@ -104,15 +118,17 @@ def sincronizar(pasta_jobs: Path, comum: Path) -> Resumo:
     _garantir_bucket(cliente)
     resumo = pendencias(pasta_jobs, comum)
     locais = _locais(pasta_jobs, comum)
-    for chave in resumo.enviados:
-        cliente.put_object(Bucket=BUCKET, Key=chave, Body=locais[chave])
-    for chave in resumo.removidos:
-        cliente.delete_object(Bucket=BUCKET, Key=chave)
+    with _floci():
+        for chave in resumo.enviados:
+            cliente.put_object(Bucket=BUCKET, Key=chave, Body=locais[chave])
+        for chave in resumo.removidos:
+            cliente.delete_object(Bucket=BUCKET, Key=chave)
     return resumo
 
 
 def ler(chave: str) -> str:
-    return _cliente().get_object(Bucket=BUCKET, Key=chave)["Body"].read().decode("utf-8")
+    with _floci():
+        return _cliente().get_object(Bucket=BUCKET, Key=chave)["Body"].read().decode("utf-8")
 
 
 def caminho(chave: str) -> str:
@@ -153,10 +169,12 @@ def salvar_workflow(wf: workflows.Workflow) -> str:
     texto = json.dumps(wf.para_dict(), ensure_ascii=False, indent=2) + "\n"
     cliente = _cliente()
     _garantir_bucket(cliente)
-    cliente.put_object(Bucket=BUCKET, Key=chave, Body=texto.encode("utf-8"))
+    with _floci():
+        cliente.put_object(Bucket=BUCKET, Key=chave, Body=texto.encode("utf-8"))
     return caminho(chave)
 
 
 def excluir_workflow(nome: str) -> None:
     if workflows.NOME_VALIDO.match(nome):                # nunca apaga nada fora de workflows/
-        _cliente().delete_object(Bucket=BUCKET, Key=f"{WORKFLOWS}{nome}.json")
+        with _floci():
+            _cliente().delete_object(Bucket=BUCKET, Key=f"{WORKFLOWS}{nome}.json")

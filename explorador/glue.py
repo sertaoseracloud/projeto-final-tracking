@@ -1,8 +1,8 @@
 """Lógica das telas "Data Catalog" e "Jobs ETL" (no estilo do Glue), sem Streamlit.
 
 Catálogo: os datasets do bucket viram bancos (um por camada) e tabelas.
-Jobs: os scripts de pipeline/ rodam como `python <script>` num processo separado;
-cada execução deixa na pasta de execuções um .json (início), um .log (saída) e,
+Jobs: cada script roda como `python <script>` num processo separado (o console usa a cópia
+baixada do floci; o workflow pelo terminal, a pasta local); cada execução deixa na pasta de execuções um .json (início), um .log (saída) e,
 ao terminar, um .fim (código de saída).
 """
 
@@ -140,7 +140,12 @@ def execucoes(pasta: Path, job: str | None = None) -> list[Execucao]:
     pasta = Path(pasta)
     if not pasta.is_dir():
         return []
-    todas = [execucao(pasta, p.stem) for p in pasta.glob("*.json")]
+    todas = []
+    for arquivo in pasta.glob("*.json"):
+        try:
+            todas.append(execucao(pasta, arquivo.stem))
+        except (OSError, ValueError, KeyError, TypeError):
+            continue                                # arquivo estragado (contêiner caiu no meio da gravação): pula
     return sorted((e for e in todas if job is None or e.job == job), key=lambda e: e.inicio, reverse=True)
 
 

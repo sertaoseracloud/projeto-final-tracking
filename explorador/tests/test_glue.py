@@ -88,3 +88,11 @@ def test_banco_de_outro_bucket_vem_depois_das_camadas_e_aponta_para_o_bucket_del
     assert glue.local_do_banco(bancos["rascunho_turma"], "datalake-tracking") == "s3://rascunho-turma/"
     assert glue.local_do_banco(bancos["silver"], "datalake-tracking") == "s3://datalake-tracking/silver/"
     assert glue.localizacao(outros[0], "datalake-tracking") == "s3://rascunho-turma/notas/"
+
+
+def test_arquivo_de_execucao_estragado_e_pulado_sem_derrubar_a_lista(tmp_path):
+    (tmp_path / "a.py").write_text("pass\n")
+    pasta = tmp_path / "execucoes"
+    boa = _esperar(pasta, glue.iniciar(glue.listar_jobs(tmp_path)[0], pasta, raiz=tmp_path)).id
+    (pasta / "a-quebrada.json").write_text('{"job": "a", "ini')          # o contêiner caiu no meio da gravação
+    assert [e.id for e in glue.execucoes(pasta, "a")] == [boa]

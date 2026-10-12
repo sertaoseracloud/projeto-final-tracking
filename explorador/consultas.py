@@ -97,7 +97,7 @@ class Resultado:
 
 
 EXPLICACOES_DE_ERRO = (
-    ("CatalogException", "Essa tabela ou view não existe. Confira o nome em \"Views disponíveis\"."),
+    ("CatalogException", "Essa tabela ou view não existe. Confira o nome na lista de tabelas, à esquerda do editor."),
     ("BinderException", "Alguma coluna ou função não foi encontrada. Confira os nomes das colunas da view."),
     ("ParserException", "O SQL tem um erro de escrita (vírgula, parêntese ou palavra fora do lugar)."),
     ("ConversionException", "Um valor não pôde ser convertido para o tipo pedido (ex.: texto para número)."),
